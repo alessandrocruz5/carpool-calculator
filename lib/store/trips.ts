@@ -15,15 +15,29 @@ export interface StoredTrip {
 
 interface TripsStore {
   trips: StoredTrip[];
-  upsert: (trip: StoredTrip) => void;
-  remove: (id: string) => void;
+  hydrated: boolean;
+  hydrate: () => Promise<void>;
+  upsert: (trip: StoredTrip) => Promise<void>;
+  remove: (id: string) => Promise<void>;
 }
 
 export const useTrips = create<TripsStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       trips: [],
-      upsert: (trip) =>
+      hydrated: false,
+      hydrate: async () => {
+        try {
+          const res = await fetch("/api/trips", { cache: "no-store" });
+          if (!res.ok) throw new Error(await res.text());
+          const data = (await res.json()) as StoredTrip[];
+          set({ trips: data, hydrated: true });
+        } catch (err) {
+          console.error("trips.hydrate failed", err);
+          set({ hydrated: true });
+        }
+      },
+      upsert: async (trip) => {
         set((s) => {
           const idx = s.trips.findIndex((t) => t.date === trip.date);
           if (idx >= 0) {
@@ -32,9 +46,33 @@ export const useTrips = create<TripsStore>()(
             return { trips: next };
           }
           return { trips: [...s.trips, trip] };
-        }),
-      remove: (id) => set((s) => ({ trips: s.trips.filter((t) => t.id !== id) })),
+        });
+        try {
+          const res = await fetch("/api/trips", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(trip),
+          });
+          if (!res.ok) throw new Error(await res.text());
+          await get().hydrate();
+        } catch (err) {
+          console.error("trips.upsert failed", err);
+          await get().hydrate();
+        }
+      },
+      remove: async (id) => {
+        set((s) => ({ trips: s.trips.filter((t) => t.id !== id) }));
+        try {
+          const res = await fetch(`/api/trips?id=${encodeURIComponent(id)}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) throw new Error(await res.text());
+        } catch (err) {
+          console.error("trips.remove failed", err);
+          await get().hydrate();
+        }
+      },
     }),
-    { name: "carpool-trips" }
+    { name: "carpool-trips", partialize: (s) => ({ trips: s.trips }) }
   )
 );

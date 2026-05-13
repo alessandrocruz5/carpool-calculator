@@ -5,21 +5,61 @@ import type { Fillup } from "@/lib/mileage";
 
 interface FillupsStore {
   fillups: Fillup[];
-  add: (f: Omit<Fillup, "id">) => void;
-  remove: (id: string) => void;
+  hydrated: boolean;
+  hydrate: () => Promise<void>;
+  add: (f: Omit<Fillup, "id">) => Promise<void>;
+  remove: (id: string) => Promise<void>;
 }
 
 export const useFillups = create<FillupsStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       fillups: [],
-      add: (f) =>
-        set((s) => ({
-          fillups: [...s.fillups, { ...f, id: crypto.randomUUID() }],
-        })),
-      remove: (id) =>
-        set((s) => ({ fillups: s.fillups.filter((x) => x.id !== id) })),
+      hydrated: false,
+      hydrate: async () => {
+        try {
+          const res = await fetch("/api/fillups", { cache: "no-store" });
+          if (!res.ok) throw new Error(await res.text());
+          const data = (await res.json()) as Fillup[];
+          set({ fillups: data, hydrated: true });
+        } catch (err) {
+          console.error("fillups.hydrate failed", err);
+          set({ hydrated: true });
+        }
+      },
+      add: async (f) => {
+        const id =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random()}`;
+        const optimistic: Fillup = { ...f, id };
+        set((s) => ({ fillups: [...s.fillups, optimistic] }));
+        try {
+          const res = await fetch("/api/fillups", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ...f, id }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+        } catch (err) {
+          console.error("fillups.add failed", err);
+          await get().hydrate();
+        }
+      },
+      remove: async (id) => {
+        const prev = get().fillups;
+        set({ fillups: prev.filter((x) => x.id !== id) });
+        try {
+          const res = await fetch(`/api/fillups?id=${encodeURIComponent(id)}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) throw new Error(await res.text());
+        } catch (err) {
+          console.error("fillups.remove failed", err);
+          await get().hydrate();
+        }
+      },
     }),
-    { name: "carpool-fillups" }
+    { name: "carpool-fillups", partialize: (s) => ({ fillups: s.fillups }) }
   )
 );

@@ -16,3 +16,4 @@ public/workbox-*.js.map
 public/worker-*.js.map
 public/fallback-*.js
 next-env.d.ts
+*.tsbuildinfo
