@@ -6,7 +6,7 @@ import type { DbGasPrice } from "@/lib/supabase/types";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("gas_prices")
     .select("*")
@@ -20,7 +20,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const body = (await req.json()) as { price: number; effectiveDate?: string };
   const date = body.effectiveDate ?? new Date().toISOString().slice(0, 10);
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("gas_prices")
     .upsert(

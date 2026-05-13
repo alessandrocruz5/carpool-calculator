@@ -10,7 +10,7 @@ const TRIP_SELECT =
   "*, trip_legs(*, trip_leg_riders(*))";
 
 export async function GET() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("trips")
     .select(TRIP_SELECT)
@@ -32,7 +32,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const body = (await req.json()) as StoredTrip;
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Find the gas_prices row effective for this trip's date (latest with effective_date <= trip.date)
   const { data: gpRow } = await supabase
@@ -107,7 +107,7 @@ export async function DELETE(req: Request) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("trips").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

@@ -7,7 +7,7 @@ import type { CalcSettings } from "@/lib/calc";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("settings")
     .select("*")
@@ -20,7 +20,7 @@ export async function GET() {
 
 export async function PATCH(req: Request) {
   const body = (await req.json()) as Partial<CalcSettings>;
-  const supabase = createClient();
+  const supabase = await createClient();
   const patch = { ...toDbSettingsPatch(body), updated_at: new Date().toISOString() };
   const { data, error } = await supabase
     .from("settings")
