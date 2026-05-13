@@ -65,16 +65,22 @@ interface TripJoin extends DbTrip {
 
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceKey =
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
   console.log(
     `[backfill] NEXT_PUBLIC_SUPABASE_URL=${url ? "set" : "MISSING"}, ` +
-      `SUPABASE_SERVICE_ROLE_KEY=${serviceKey ? "set" : "MISSING"}`
+      `SUPABASE_SECRET_KEY=${process.env.SUPABASE_SECRET_KEY ? "set" : "unset"}, ` +
+      `SUPABASE_SERVICE_ROLE_KEY=${
+        process.env.SUPABASE_SERVICE_ROLE_KEY ? "set" : "unset"
+      }`
   );
   if (!url || !serviceKey) {
     console.error(
-      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. " +
-        "Inline workaround: " +
-        "NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx scripts/backfill-payments.ts"
+      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY / " +
+        "SUPABASE_SERVICE_ROLE_KEY. Inline workaround: " +
+        "NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SECRET_KEY=... " +
+        "npx tsx scripts/backfill-payments.ts"
     );
     process.exit(1);
   }
