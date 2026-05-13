@@ -4,10 +4,17 @@
  * Usage:
  *   npx tsx scripts/backfill-payments.ts
  *
+<<<<<<< HEAD
  * Requires SUPABASE_SECRET_KEY and NEXT_PUBLIC_SUPABASE_URL in env.
+=======
+ * Requires SUPABASE_SERVICE_ROLE_KEY and NEXT_PUBLIC_SUPABASE_URL in env.
+ * Loads .env.local then .env automatically.
+>>>>>>> claude/trip-payment-tracking-Uz64c
  * Idempotent: existing rows are left alone; only missing (trip_id, passenger_id)
  * pairs are inserted with paid=false.
  */
+import { readFileSync } from "fs";
+import { resolve } from "path";
 import { createClient } from "@supabase/supabase-js";
 import { calcDay, DEFAULT_SETTINGS, type CalcSettings } from "../lib/calc";
 import { fromDbSettings } from "../lib/supabase/mappers";
@@ -19,15 +26,72 @@ import type {
   DbTripLegRider,
 } from "../lib/supabase/types";
 
+function loadEnvFile(path: string): boolean {
+  try {
+    const content = readFileSync(path, "utf8");
+    let loaded = 0;
+    for (const rawLine of content.split("\n")) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq === -1) continue;
+      const key = line.slice(0, eq).trim();
+      let value = line.slice(eq + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      if (!(key in process.env) || process.env[key] === "") {
+        process.env[key] = value;
+        loaded++;
+      }
+    }
+    console.log(`[backfill] loaded ${loaded} vars from ${path}`);
+    return true;
+  } catch {
+    console.log(`[backfill] no env file at ${path}`);
+    return false;
+  }
+}
+
+const scriptDir = resolve(__dirname);
+const repoRoot = resolve(scriptDir, "..");
+loadEnvFile(resolve(repoRoot, ".env.local"));
+loadEnvFile(resolve(repoRoot, ".env"));
+loadEnvFile(resolve(process.cwd(), ".env.local"));
+loadEnvFile(resolve(process.cwd(), ".env"));
+
 interface TripJoin extends DbTrip {
   trip_legs: (DbTripLeg & { trip_leg_riders: DbTripLegRider[] })[];
 }
 
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+<<<<<<< HEAD
   const serviceKey = process.env.SUPABASE_SECRET_KEY;
   if (!url || !serviceKey) {
     console.error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY");
+=======
+  const serviceKey =
+    process.env.SUPABASE_SECRET_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+  console.log(
+    `[backfill] NEXT_PUBLIC_SUPABASE_URL=${url ? "set" : "MISSING"}, ` +
+      `SUPABASE_SECRET_KEY=${process.env.SUPABASE_SECRET_KEY ? "set" : "unset"}, ` +
+      `SUPABASE_SERVICE_ROLE_KEY=${
+        process.env.SUPABASE_SERVICE_ROLE_KEY ? "set" : "unset"
+      }`
+  );
+  if (!url || !serviceKey) {
+    console.error(
+      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY / " +
+        "SUPABASE_SERVICE_ROLE_KEY. Inline workaround: " +
+        "NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SECRET_KEY=... " +
+        "npx tsx scripts/backfill-payments.ts"
+    );
+>>>>>>> claude/trip-payment-tracking-Uz64c
     process.exit(1);
   }
   const supabase = createClient(url, serviceKey);
