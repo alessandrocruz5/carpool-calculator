@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fromDbTrip, type DbTripWithLegs } from "@/lib/supabase/mappers";
+import { fromDbTrip, fromDbSettings, type DbTripWithLegs } from "@/lib/supabase/mappers";
 import type { StoredTrip } from "@/lib/store/trips";
-import type { DbGasPrice } from "@/lib/supabase/types";
+import type { DbGasPrice, DbSettings } from "@/lib/supabase/types";
+import { calcDay, DEFAULT_SETTINGS } from "@/lib/calc";
+import { assertDriver } from "@/lib/auth/driverKey";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const denied = assertDriver(req);
+  if (denied) return denied;
   const body = (await req.json()) as StoredTrip;
   const supabase = await createClient();
 
@@ -100,10 +104,70 @@ export async function POST(req: Request) {
     if (ridErr) return NextResponse.json({ error: ridErr.message }, { status: 500 });
   }
 
+  // Compute per-passenger amounts for this trip and upsert trip_payments.
+  // Preserve existing paid status; only update amount + insert new rows.
+  const { data: settingsRow } = await supabase
+    .from("settings")
+    .select("*")
+    .eq("id", 1)
+    .maybeSingle();
+  const calcSettings = settingsRow
+    ? fromDbSettings(settingsRow as DbSettings)
+    : DEFAULT_SETTINGS;
+
+  const breakdown = calcDay(
+    {
+      date: body.date,
+      gasPricePhpPerL: body.gasPrice,
+      morning: body.morning,
+      evening: body.evening,
+    },
+    calcSettings
+  );
+
+  const passengerIds = Object.keys(breakdown.perPassenger);
+
+  // Remove payment rows for passengers no longer on this trip.
+  if (passengerIds.length === 0) {
+    await supabase.from("trip_payments").delete().eq("trip_id", tripId);
+  } else {
+    await supabase
+      .from("trip_payments")
+      .delete()
+      .eq("trip_id", tripId)
+      .not("passenger_id", "in", `(${passengerIds.map((id) => `"${id}"`).join(",")})`);
+  }
+
+  if (passengerIds.length > 0) {
+    // Fetch existing rows to preserve paid status; update amount.
+    const { data: existing } = await supabase
+      .from("trip_payments")
+      .select("passenger_id, paid, paid_at")
+      .eq("trip_id", tripId);
+    const existingMap = new Map(
+      ((existing ?? []) as Array<{ passenger_id: string; paid: boolean; paid_at: string | null }>).map(
+        (r) => [r.passenger_id, r]
+      )
+    );
+    const payments = passengerIds.map((pid) => ({
+      trip_id: tripId,
+      passenger_id: pid,
+      amount_php: breakdown.perPassenger[pid],
+      paid: existingMap.get(pid)?.paid ?? false,
+      paid_at: existingMap.get(pid)?.paid_at ?? null,
+    }));
+    const { error: payErr } = await supabase
+      .from("trip_payments")
+      .upsert(payments, { onConflict: "trip_id,passenger_id" });
+    if (payErr) return NextResponse.json({ error: payErr.message }, { status: 500 });
+  }
+
   return NextResponse.json({ id: tripId, date: body.date });
 }
 
 export async function DELETE(req: Request) {
+  const denied = assertDriver(req);
+  if (denied) return denied;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });

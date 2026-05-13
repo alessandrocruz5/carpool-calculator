@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fromDbFillup, toDbFillupInsert } from "@/lib/supabase/mappers";
 import type { DbFillup } from "@/lib/supabase/types";
 import type { Fillup } from "@/lib/mileage";
+import { assertDriver } from "@/lib/auth/driverKey";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const denied = assertDriver(req);
+  if (denied) return denied;
   const body = (await req.json()) as Omit<Fillup, "id"> & { id?: string };
   const supabase = await createClient();
   const insert: Partial<DbFillup> = toDbFillupInsert(body);
@@ -31,6 +34,8 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const denied = assertDriver(req);
+  if (denied) return denied;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });

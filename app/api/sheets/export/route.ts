@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import dayjs from "dayjs";
 import { calcLeg, type CalcSettings, type Route } from "@/lib/calc";
-import { appendRows, type ExportRow } from "@/lib/sheets";
+import { appendRows, replaceRows, type ExportRow } from "@/lib/sheets";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +73,54 @@ export async function POST(req: Request) {
 
     const tab = dayjs(body.weekStart).format("YYYY-MM");
     const written = await appendRows(tab, rows, namesAll);
+
+    // Also refresh the Payments-YYYY-MM tab (per trip per rider, with paid status).
+    const monthStart = dayjs(body.weekStart).startOf("month").format("YYYY-MM-DD");
+    const monthEnd = dayjs(body.weekStart).endOf("month").format("YYYY-MM-DD");
+    const supabase = await createClient();
+    const { data: payRows, error: payErr } = await supabase
+      .from("trip_payments")
+      .select("trip_id, passenger_id, amount_php, paid, paid_at, trips!inner(date)")
+      .gte("trips.date", monthStart)
+      .lte("trips.date", monthEnd);
+
+    if (!payErr) {
+      const paymentTabHeaders = [
+        "date",
+        "passenger",
+        "amount_php",
+        "paid",
+        "paid_at",
+        "trip_id",
+        "passenger_id",
+      ];
+      type PayJoin = {
+        trip_id: string;
+        passenger_id: string;
+        amount_php: number;
+        paid: boolean;
+        paid_at: string | null;
+        trips: { date: string } | null;
+      };
+      const sortedRows = ((payRows ?? []) as PayJoin[])
+        .map((r) => ({
+          date: r.trips?.date ?? "",
+          passenger: nameById.get(r.passenger_id) ?? r.passenger_id,
+          amount_php: Number(r.amount_php),
+          paid: r.paid,
+          paid_at: r.paid_at ?? "",
+          trip_id: r.trip_id,
+          passenger_id: r.passenger_id,
+        }))
+        .sort(
+          (a, b) =>
+            a.date.localeCompare(b.date) || a.passenger.localeCompare(b.passenger)
+        );
+      await replaceRows(`Payments-${tab}`, paymentTabHeaders, sortedRows);
+    } else {
+      console.error("payments export query failed", payErr);
+    }
+
     return NextResponse.json({ ok: true, rows: written });
   } catch (e) {
     console.error("sheets export failed", e);
