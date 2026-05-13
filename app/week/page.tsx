@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
 import { useTrips } from "@/lib/store/trips";
 import { useRoster } from "@/lib/store/roster";
@@ -15,6 +15,22 @@ export default function WeekPage() {
   const { settings } = useSettings();
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
+  const [exportConfigured, setExportConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/sheets/export")
+      .then((r) => r.json())
+      .then((j: { configured: boolean }) => {
+        if (!cancelled) setExportConfigured(Boolean(j.configured));
+      })
+      .catch(() => {
+        if (!cancelled) setExportConfigured(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const days = weekdays(weekRef);
   const liveSettings = { ...settings, mileageKmPerL: settings.mileageKmPerL || 10.5 };
@@ -113,15 +129,24 @@ export default function WeekPage() {
 
       <button
         onClick={exportToSheets}
-        disabled={exporting}
+        disabled={exporting || exportConfigured === false}
+        title={
+          exportConfigured === false
+            ? "Set GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_SHEET_ID to enable."
+            : undefined
+        }
         className={
-          "w-full rounded-lg px-3 py-2 font-medium " +
-          (isFriday()
+          "w-full rounded-lg px-3 py-2 font-medium disabled:opacity-50 " +
+          (isFriday() && exportConfigured !== false
             ? "bg-brand-600 text-white"
             : "bg-white border border-slate-300 text-slate-700")
         }
       >
-        {exporting ? "Exporting…" : "Export to Google Sheets"}
+        {exporting
+          ? "Exporting…"
+          : exportConfigured === false
+          ? "Export to Google Sheets (not configured)"
+          : "Export to Google Sheets"}
       </button>
       {exportMsg && <p className="text-xs text-slate-600 text-center">{exportMsg}</p>}
     </div>

@@ -3,6 +3,8 @@ import dayjs from "dayjs";
 import { calcLeg, type CalcSettings, type Route } from "@/lib/calc";
 import { appendRows, type ExportRow } from "@/lib/sheets";
 
+export const dynamic = "force-dynamic";
+
 interface Body {
   weekStart: string;
   trips: Array<{
@@ -16,7 +18,26 @@ interface Body {
   settings: CalcSettings;
 }
 
+function isConfigured(): boolean {
+  return Boolean(
+    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
+      process.env.GOOGLE_PRIVATE_KEY &&
+      process.env.GOOGLE_SHEET_ID
+  );
+}
+
+export async function GET() {
+  return NextResponse.json({ configured: isConfigured() });
+}
+
 export async function POST(req: Request) {
+  if (!isConfigured()) {
+    return NextResponse.json(
+      { ok: false, disabled: true, reason: "sheets_export_not_configured" },
+      { status: 503 }
+    );
+  }
+
   try {
     const body = (await req.json()) as Body;
     const nameById = new Map(body.passengers.map((p) => [p.id, p.name]));
@@ -53,8 +74,9 @@ export async function POST(req: Request) {
     const written = await appendRows(tab, rows, namesAll);
     return NextResponse.json({ ok: true, rows: written });
   } catch (e) {
+    console.error("sheets export failed", e);
     return NextResponse.json(
-      { ok: false, error: (e as Error).message },
+      { ok: false, error: "export_failed" },
       { status: 500 }
     );
   }
