@@ -30,7 +30,7 @@ export async function GET(req: Request) {
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const rows = ((data ?? []) as PaymentWithDate[]).map((r) => ({
+  const rows = ((data ?? []) as unknown as PaymentWithDate[]).map((r) => ({
     tripId: r.trip_id,
     passengerId: r.passenger_id,
     amountPhp: Number(r.amount_php),
