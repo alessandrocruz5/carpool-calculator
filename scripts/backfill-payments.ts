@@ -22,9 +22,10 @@ import type {
   DbTripLegRider,
 } from "../lib/supabase/types";
 
-function loadEnvFile(path: string) {
+function loadEnvFile(path: string): boolean {
   try {
     const content = readFileSync(path, "utf8");
+    let loaded = 0;
     for (const rawLine of content.split("\n")) {
       const line = rawLine.trim();
       if (!line || line.startsWith("#")) continue;
@@ -38,13 +39,23 @@ function loadEnvFile(path: string) {
       ) {
         value = value.slice(1, -1);
       }
-      if (!(key in process.env)) process.env[key] = value;
+      if (!(key in process.env) || process.env[key] === "") {
+        process.env[key] = value;
+        loaded++;
+      }
     }
+    console.log(`[backfill] loaded ${loaded} vars from ${path}`);
+    return true;
   } catch {
-    // file missing is fine
+    console.log(`[backfill] no env file at ${path}`);
+    return false;
   }
 }
 
+const scriptDir = resolve(__dirname);
+const repoRoot = resolve(scriptDir, "..");
+loadEnvFile(resolve(repoRoot, ".env.local"));
+loadEnvFile(resolve(repoRoot, ".env"));
 loadEnvFile(resolve(process.cwd(), ".env.local"));
 loadEnvFile(resolve(process.cwd(), ".env"));
 
@@ -55,8 +66,16 @@ interface TripJoin extends DbTrip {
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  console.log(
+    `[backfill] NEXT_PUBLIC_SUPABASE_URL=${url ? "set" : "MISSING"}, ` +
+      `SUPABASE_SERVICE_ROLE_KEY=${serviceKey ? "set" : "MISSING"}`
+  );
   if (!url || !serviceKey) {
-    console.error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+    console.error(
+      "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. " +
+        "Inline workaround: " +
+        "NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx scripts/backfill-payments.ts"
+    );
     process.exit(1);
   }
   const supabase = createClient(url, serviceKey);
