@@ -1,33 +1,40 @@
 "use client";
 import { useState } from "react";
 import dayjs from "dayjs";
-import { useFillups } from "@/lib/store/fillups";
-import { useSettings } from "@/lib/store/settings";
+import { useFillups } from "@/lib/hooks/useFillups";
+import { useSettings } from "@/lib/hooks/useSettings";
 import { rollingMileage } from "@/lib/mileage";
 import { PHP } from "@/components/PHP";
 
 export default function MileagePage() {
-  const { fillups, add, remove } = useFillups();
-  const { settings, setSettings } = useSettings();
+  const { fillups, add, remove, loading } = useFillups();
+  const { raw, update } = useSettings();
 
   const [date, setDate] = useState(dayjs().format("YYYY-MM-DD"));
   const [liters, setLiters] = useState("");
   const [total, setTotal] = useState("");
   const [odo, setOdo] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const rolling = rollingMileage(fillups);
+  const override = raw?.mileage_kml_override ?? "";
 
-  function submit() {
+  async function submit() {
     if (!liters || !total || !odo) return;
-    add({
-      date,
-      liters: parseFloat(liters),
-      totalPhp: parseFloat(total),
-      odometerKm: parseFloat(odo),
-    });
-    setLiters("");
-    setTotal("");
-    setOdo("");
+    setBusy(true);
+    try {
+      await add({
+        date,
+        liters: parseFloat(liters),
+        totalPhp: parseFloat(total),
+        odometerKm: parseFloat(odo),
+      });
+      setLiters("");
+      setTotal("");
+      setOdo("");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -42,14 +49,17 @@ export default function MileagePage() {
           </span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-slate-500">Manual override</span>
+          <span className="text-slate-500">Manual override (km/L)</span>
           <input
             type="number"
             step="0.01"
-            value={settings.mileageKmPerL}
+            value={override}
             onChange={(e) =>
-              setSettings({ mileageKmPerL: parseFloat(e.target.value) || 0 })
+              update({
+                mileage_kml_override: e.target.value ? parseFloat(e.target.value) : null,
+              })
             }
+            placeholder="auto"
             className="w-24 border border-slate-300 rounded px-2 py-0.5 text-right"
           />
         </div>
@@ -98,39 +108,39 @@ export default function MileagePage() {
         </label>
         <button
           onClick={submit}
-          className="w-full bg-brand-600 text-white rounded-lg px-3 py-2 font-medium"
+          disabled={busy}
+          className="w-full bg-brand-600 text-white rounded-lg px-3 py-2 font-medium disabled:opacity-50"
         >
-          Add fill-up
+          {busy ? "Saving…" : "Add fill-up"}
         </button>
       </section>
 
       <section className="bg-white rounded-xl border border-slate-200 p-4">
         <h2 className="font-semibold mb-2">History</h2>
-        {fillups.length === 0 && (
+        {loading && <p className="text-sm text-slate-500">Loading…</p>}
+        {!loading && fillups.length === 0 && (
           <p className="text-sm text-slate-500">No fill-ups logged.</p>
         )}
         <ul className="divide-y divide-slate-100">
-          {[...fillups]
-            .sort((a, b) => b.odometerKm - a.odometerKm)
-            .map((f) => (
-              <li key={f.id} className="py-2 text-sm flex justify-between items-center">
-                <div>
-                  <div>{dayjs(f.date).format("MMM D")}</div>
-                  <div className="text-xs text-slate-500">
-                    {f.liters}L · {f.odometerKm.toFixed(1)} km
-                  </div>
+          {fillups.map((f) => (
+            <li key={f.id} className="py-2 text-sm flex justify-between items-center">
+              <div>
+                <div>{dayjs(f.date).format("MMM D")}</div>
+                <div className="text-xs text-slate-500">
+                  {f.liters}L · {f.odometerKm.toFixed(1)} km
                 </div>
-                <div className="flex items-center gap-3">
-                  <PHP value={f.totalPhp} />
-                  <button
-                    onClick={() => remove(f.id)}
-                    className="text-xs text-red-600 underline"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </li>
-            ))}
+              </div>
+              <div className="flex items-center gap-3">
+                <PHP value={f.totalPhp} />
+                <button
+                  onClick={() => remove(f.id)}
+                  className="text-xs text-red-600 underline"
+                >
+                  Remove
+                </button>
+              </div>
+            </li>
+          ))}
         </ul>
       </section>
     </div>

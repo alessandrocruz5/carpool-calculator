@@ -1,16 +1,17 @@
 "use client";
 import { useState } from "react";
 import dayjs from "dayjs";
-import { useSettings } from "@/lib/store/settings";
+import { useGasPrice } from "@/lib/hooks/useGasPrice";
 import { PHP } from "@/components/PHP";
 import { daysSince, isTuesday } from "@/lib/week";
 
 export default function GasPage() {
-  const { gasPrice, gasPriceUpdatedAt, setGasPrice } = useSettings();
-  const [draft, setDraft] = useState(gasPrice.toString());
+  const { gasPrice, updatedAt, set, loading } = useGasPrice();
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const updated = gasPriceUpdatedAt ? dayjs(gasPriceUpdatedAt) : null;
-  const age = gasPriceUpdatedAt ? daysSince(gasPriceUpdatedAt) : null;
+  const updated = updatedAt ? dayjs(updatedAt) : null;
+  const age = updatedAt ? daysSince(updatedAt) : null;
   const stale = age === null || age > 7;
 
   return (
@@ -29,7 +30,9 @@ export default function GasPage() {
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <div className="flex justify-between text-sm">
           <span className="text-slate-500">Current</span>
-          <span className="font-medium"><PHP value={gasPrice} /> /L</span>
+          <span className="font-medium">
+            {loading ? "…" : <><PHP value={gasPrice} /> /L</>}
+          </span>
         </div>
         <div className="flex justify-between text-xs text-slate-500">
           <span>Last updated</span>
@@ -49,10 +52,19 @@ export default function GasPage() {
           />
         </label>
         <button
-          onClick={() => setGasPrice(parseFloat(draft) || 0)}
-          className="w-full bg-brand-600 text-white rounded-lg px-3 py-2 font-medium"
+          disabled={busy || !draft}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await set(dayjs().format("YYYY-MM-DD"), parseFloat(draft));
+              setDraft("");
+            } finally {
+              setBusy(false);
+            }
+          }}
+          className="w-full bg-brand-600 text-white rounded-lg px-3 py-2 font-medium disabled:opacity-50"
         >
-          Save
+          {busy ? "Saving…" : "Save"}
         </button>
       </section>
     </div>

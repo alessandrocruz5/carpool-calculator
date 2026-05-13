@@ -12,7 +12,9 @@ Calculated per leg, so partial-day ridership (someone misses morning or evening)
 
 ## Stack
 
-Next.js 14 (App Router) · TypeScript · Tailwind · Supabase (Postgres + Auth, optional in v1) · `@ducanh2912/next-pwa` · `google-spreadsheet` · Zustand (localStorage persistence)
+Next.js 14 (App Router) · TypeScript · Tailwind · Supabase (Postgres + Auth) · `@ducanh2912/next-pwa` · `google-spreadsheet`
+
+All app data lives in Supabase — passengers, gas prices, fill-ups, settings, and trips are read/written through `lib/db/*` and surfaced via `lib/hooks/*`. You need a Supabase project (and the env vars set) for the app to load past the loading state.
 
 ## Setup
 

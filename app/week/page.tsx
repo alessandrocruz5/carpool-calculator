@@ -1,41 +1,38 @@
 "use client";
 import { useMemo, useState } from "react";
 import dayjs from "dayjs";
-import { useTrips } from "@/lib/store/trips";
-import { useRoster } from "@/lib/store/roster";
-import { useSettings } from "@/lib/store/settings";
+import { useWeekTrips } from "@/lib/hooks/useTrips";
+import { usePassengers } from "@/lib/hooks/usePassengers";
+import { useSettings } from "@/lib/hooks/useSettings";
 import { calcDay, calcWeek } from "@/lib/calc";
-import { weekStart, weekdays, isFriday } from "@/lib/week";
+import { weekStart as weekStartFn, weekdays, isFriday } from "@/lib/week";
 import { PHP } from "@/components/PHP";
 
 export default function WeekPage() {
-  const [weekRef, setWeekRef] = useState(weekStart());
-  const { trips } = useTrips();
-  const { passengers } = useRoster();
+  const [weekRef, setWeekRef] = useState(weekStartFn());
+  const days = weekdays(weekRef);
+  const { trips, loading } = useWeekTrips(days[0], days[4]);
+  const { passengers } = usePassengers();
   const { settings } = useSettings();
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
 
-  const days = weekdays(weekRef);
   const liveSettings = { ...settings, mileageKmPerL: settings.mileageKmPerL || 10.5 };
 
   const summary = useMemo(() => {
-    const calcs = days
-      .map((d) => trips.find((t) => t.date === d))
-      .filter(Boolean)
-      .map((t) =>
-        calcDay(
-          {
-            date: t!.date,
-            gasPricePhpPerL: t!.gasPrice,
-            morning: t!.morning,
-            evening: t!.evening,
-          },
-          liveSettings
-        )
-      );
+    const calcs = trips.map((t) =>
+      calcDay(
+        {
+          date: t.date,
+          gasPricePhpPerL: t.gas_price,
+          morning: t.morning,
+          evening: t.evening,
+        },
+        liveSettings
+      )
+    );
     return calcWeek(calcs);
-  }, [days, trips, liveSettings]);
+  }, [trips, liveSettings]);
 
   async function exportToSheets() {
     setExporting(true);
@@ -44,14 +41,7 @@ export default function WeekPage() {
       const res = await fetch("/api/sheets/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          weekStart: weekRef,
-          trips: days
-            .map((d) => trips.find((t) => t.date === d))
-            .filter(Boolean),
-          passengers,
-          settings: liveSettings,
-        }),
+        body: JSON.stringify({ weekStart: weekRef }),
       });
       const json = await res.json();
       setExportMsg(res.ok ? `Exported ${json.rows} rows.` : `Error: ${json.error}`);
@@ -76,7 +66,7 @@ export default function WeekPage() {
             ←
           </button>
           <button
-            onClick={() => setWeekRef(weekStart())}
+            onClick={() => setWeekRef(weekStartFn())}
             className="px-2 py-1 border border-slate-300 rounded"
           >
             This week
@@ -98,16 +88,21 @@ export default function WeekPage() {
 
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
         <h2 className="font-semibold mb-1">Totals</h2>
-        <Row label="Driver collects" value={summary.driverTotal} bold />
-        {Object.entries(summary.perPassenger).map(([id, amt]) => (
-          <Row
-            key={id}
-            label={passengers.find((p) => p.id === id)?.name ?? id}
-            value={amt}
-          />
-        ))}
-        {Object.keys(summary.perPassenger).length === 0 && (
-          <p className="text-sm text-slate-500">No trips logged this week yet.</p>
+        {loading && <p className="text-sm text-slate-500">Loading…</p>}
+        {!loading && (
+          <>
+            <Row label="Driver collects" value={summary.driverTotal} bold />
+            {Object.entries(summary.perPassenger).map(([id, amt]) => (
+              <Row
+                key={id}
+                label={passengers.find((p) => p.id === id)?.name ?? id}
+                value={amt}
+              />
+            ))}
+            {Object.keys(summary.perPassenger).length === 0 && (
+              <p className="text-sm text-slate-500">No trips logged this week yet.</p>
+            )}
+          </>
         )}
       </section>
 

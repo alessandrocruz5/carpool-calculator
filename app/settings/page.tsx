@@ -1,11 +1,12 @@
 "use client";
 import { useState } from "react";
-import { useSettings } from "@/lib/store/settings";
-import { useRoster } from "@/lib/store/roster";
+import { useSettings } from "@/lib/hooks/useSettings";
+import { usePassengers } from "@/lib/hooks/usePassengers";
+import type { DbSettings } from "@/lib/supabase/types";
 
 export default function SettingsPage() {
-  const { settings, setSettings } = useSettings();
-  const { passengers, add, remove, toggleActive } = useRoster();
+  const { raw, update } = useSettings();
+  const { passengers, add, remove, toggleActive } = usePassengers();
   const [newName, setNewName] = useState("");
 
   return (
@@ -22,9 +23,9 @@ export default function SettingsPage() {
             className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm"
           />
           <button
-            onClick={() => {
+            onClick={async () => {
               if (newName.trim()) {
-                add(newName);
+                await add(newName);
                 setNewName("");
               }
             }}
@@ -39,7 +40,7 @@ export default function SettingsPage() {
               <span className={p.active ? "" : "text-slate-400 line-through"}>{p.name}</span>
               <div className="flex gap-2">
                 <button
-                  onClick={() => toggleActive(p.id)}
+                  onClick={() => toggleActive(p.id, !p.active)}
                   className="text-xs text-slate-600 underline"
                 >
                   {p.active ? "Disable" : "Enable"}
@@ -56,74 +57,48 @@ export default function SettingsPage() {
         </ul>
       </section>
 
-      <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-        <h2 className="font-semibold">Trip defaults</h2>
-        <Field
-          label="Round-trip km"
-          value={settings.roundTripKm}
-          onChange={(v) => setSettings({ roundTripKm: v })}
-        />
-        <Field
-          label="Mileage (km/L)"
-          value={settings.mileageKmPerL}
-          onChange={(v) => setSettings({ mileageKmPerL: v })}
-        />
-        <Field
-          label="Parking (net)"
-          value={settings.parkingFeePhp}
-          onChange={(v) => setSettings({ parkingFeePhp: v })}
-        />
-        <Field
-          label="Toll Skyway"
-          value={settings.tollSkywayPhp}
-          onChange={(v) => setSettings({ tollSkywayPhp: v })}
-        />
-        <Field
-          label="Toll SLEX"
-          value={settings.tollSlexPhp}
-          onChange={(v) => setSettings({ tollSlexPhp: v })}
-        />
-      </section>
+      {raw && (
+        <>
+          <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+            <h2 className="font-semibold">Trip defaults</h2>
+            <DbField label="Round-trip km" field="round_trip_km" raw={raw} update={update} />
+            <DbField label="Parking (net)" field="parking_fee_php" raw={raw} update={update} />
+            <DbField label="Toll Skyway" field="toll_skyway_php" raw={raw} update={update} />
+            <DbField label="Toll SLEX" field="toll_slex_php" raw={raw} update={update} />
+          </section>
 
-      <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-        <h2 className="font-semibold">Split (driver %)</h2>
-        <Field
-          label="1 passenger"
-          value={settings.split1pDriver}
-          onChange={(v) => setSettings({ split1pDriver: v })}
-        />
-        <Field
-          label="2 passengers"
-          value={settings.split2pDriver}
-          onChange={(v) => setSettings({ split2pDriver: v })}
-        />
-        <Field
-          label="3 passengers"
-          value={settings.split3pDriver}
-          onChange={(v) => setSettings({ split3pDriver: v })}
-        />
-      </section>
+          <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+            <h2 className="font-semibold">Split (driver %)</h2>
+            <DbField label="1 passenger" field="split_1p_driver" raw={raw} update={update} />
+            <DbField label="2 passengers" field="split_2p_driver" raw={raw} update={update} />
+            <DbField label="3 passengers" field="split_3p_driver" raw={raw} update={update} />
+          </section>
+        </>
+      )}
     </div>
   );
 }
 
-function Field({
+function DbField({
   label,
-  value,
-  onChange,
+  field,
+  raw,
+  update,
 }: {
   label: string;
-  value: number;
-  onChange: (n: number) => void;
+  field: keyof DbSettings;
+  raw: DbSettings;
+  update: (patch: Partial<DbSettings>) => Promise<void>;
 }) {
+  const value = raw[field];
   return (
     <label className="flex items-center justify-between text-sm">
       <span className="text-slate-600">{label}</span>
       <input
         type="number"
-        value={value}
+        defaultValue={value as number}
         step="0.01"
-        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+        onBlur={(e) => update({ [field]: parseFloat(e.target.value) || 0 } as Partial<DbSettings>)}
         className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-right"
       />
     </label>
