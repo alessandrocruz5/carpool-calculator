@@ -5,9 +5,12 @@
  *   npx tsx scripts/backfill-payments.ts
  *
  * Requires SUPABASE_SERVICE_ROLE_KEY and NEXT_PUBLIC_SUPABASE_URL in env.
+ * Loads .env.local then .env automatically.
  * Idempotent: existing rows are left alone; only missing (trip_id, passenger_id)
  * pairs are inserted with paid=false.
  */
+import { readFileSync } from "fs";
+import { resolve } from "path";
 import { createClient } from "@supabase/supabase-js";
 import { calcDay, DEFAULT_SETTINGS, type CalcSettings } from "../lib/calc";
 import { fromDbSettings } from "../lib/supabase/mappers";
@@ -18,6 +21,32 @@ import type {
   DbTripLeg,
   DbTripLegRider,
 } from "../lib/supabase/types";
+
+function loadEnvFile(path: string) {
+  try {
+    const content = readFileSync(path, "utf8");
+    for (const rawLine of content.split("\n")) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq === -1) continue;
+      const key = line.slice(0, eq).trim();
+      let value = line.slice(eq + 1).trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      if (!(key in process.env)) process.env[key] = value;
+    }
+  } catch {
+    // file missing is fine
+  }
+}
+
+loadEnvFile(resolve(process.cwd(), ".env.local"));
+loadEnvFile(resolve(process.cwd(), ".env"));
 
 interface TripJoin extends DbTrip {
   trip_legs: (DbTripLeg & { trip_leg_riders: DbTripLegRider[] })[];
