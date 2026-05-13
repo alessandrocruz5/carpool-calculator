@@ -55,3 +55,11 @@ export interface DbTripLegRider {
   trip_leg_id: string;
   passenger_id: string;
 }
+
+export interface DbTripPayment {
+  trip_id: string;
+  passenger_id: string;
+  amount_php: number;
+  paid: boolean;
+  paid_at: string | null;
+}

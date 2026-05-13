@@ -66,3 +66,33 @@ export async function appendRows(
   await sheet.addRows(flat);
   return flat.length;
 }
+
+export async function replaceRows(
+  sheetTabName: string,
+  headers: string[],
+  rows: Record<string, string | number | boolean | null>[]
+) {
+  const sheetId = process.env.GOOGLE_SHEET_ID;
+  if (!sheetId) throw new Error("Missing GOOGLE_SHEET_ID");
+
+  const doc = new GoogleSpreadsheet(sheetId, getJwt());
+  await doc.loadInfo();
+
+  let sheet = doc.sheetsByTitle[sheetTabName];
+  if (!sheet) {
+    sheet = await doc.addSheet({ title: sheetTabName, headerValues: headers });
+  } else {
+    await sheet.clear();
+    await sheet.setHeaderRow(headers);
+  }
+  if (rows.length > 0) {
+    // google-spreadsheet's addRows expects string-keyed records; coerce nulls to "".
+    const normalized = rows.map((r) =>
+      Object.fromEntries(
+        Object.entries(r).map(([k, v]) => [k, v === null ? "" : (v as string | number | boolean)])
+      )
+    );
+    await sheet.addRows(normalized);
+  }
+  return rows.length;
+}

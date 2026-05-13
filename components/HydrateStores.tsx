@@ -4,13 +4,17 @@ import { useFillups } from "@/lib/store/fillups";
 import { useRoster } from "@/lib/store/roster";
 import { useSettings } from "@/lib/store/settings";
 import { useTrips } from "@/lib/store/trips";
+import { usePayments } from "@/lib/store/payments";
+import { captureDriverKeyFromUrl } from "@/lib/auth/clientDriverKey";
 
 export function HydrateStores() {
   useEffect(() => {
+    captureDriverKeyFromUrl();
     useFillups.getState().hydrate();
     useRoster.getState().hydrate();
     useSettings.getState().hydrate();
     useTrips.getState().hydrate();
+    usePayments.getState().hydrate();
   }, []);
   return null;
 }

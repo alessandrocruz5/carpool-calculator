@@ -1,6 +1,7 @@
 "use client";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { fetchWithDriverKey } from "@/lib/auth/clientDriverKey";
 
 export interface Passenger {
   id: string;
@@ -43,7 +44,7 @@ export const useRoster = create<RosterStore>()(
           passengers: [...s.passengers, { id, name: trimmed, active: true }],
         }));
         try {
-          const res = await fetch("/api/passengers", {
+          const res = await fetchWithDriverKey("/api/passengers", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ id, name: trimmed, active: true }),
@@ -57,7 +58,7 @@ export const useRoster = create<RosterStore>()(
       remove: async (id) => {
         set((s) => ({ passengers: s.passengers.filter((p) => p.id !== id) }));
         try {
-          const res = await fetch(`/api/passengers?id=${encodeURIComponent(id)}`, {
+          const res = await fetchWithDriverKey(`/api/passengers?id=${encodeURIComponent(id)}`, {
             method: "DELETE",
           });
           if (!res.ok) throw new Error(await res.text());
@@ -74,7 +75,7 @@ export const useRoster = create<RosterStore>()(
           ),
         }));
         try {
-          const res = await fetch("/api/passengers", {
+          const res = await fetchWithDriverKey("/api/passengers", {
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ id, active: next }),

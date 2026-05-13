@@ -4,20 +4,25 @@ import dayjs from "dayjs";
 import { useTrips } from "@/lib/store/trips";
 import { useRoster } from "@/lib/store/roster";
 import { useSettings } from "@/lib/store/settings";
+import { usePayments } from "@/lib/store/payments";
 import { calcDay, calcWeek } from "@/lib/calc";
 import { weekStart, weekdays, isFriday } from "@/lib/week";
 import { PHP } from "@/components/PHP";
+import { getDriverKey } from "@/lib/auth/clientDriverKey";
 
 export default function WeekPage() {
   const [weekRef, setWeekRef] = useState(weekStart());
   const { trips } = useTrips();
   const { passengers } = useRoster();
   const { settings } = useSettings();
+  const { payments, markPaid } = usePayments();
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
   const [exportConfigured, setExportConfigured] = useState<boolean | null>(null);
+  const [isDriver, setIsDriver] = useState(false);
 
   useEffect(() => {
+    setIsDriver(Boolean(getDriverKey()));
     let cancelled = false;
     fetch("/api/sheets/export")
       .then((r) => r.json())
@@ -52,6 +57,28 @@ export default function WeekPage() {
       );
     return calcWeek(calcs);
   }, [days, trips, liveSettings]);
+
+  // Build per-passenger breakdown of this week's unpaid days from payments store.
+  const weekPayments = useMemo(() => {
+    const inWeek = (d: string | null) =>
+      d != null && days.includes(d);
+    return payments.filter((p) => inWeek(p.date));
+  }, [payments, days]);
+
+  const byPassenger = useMemo(() => {
+    const m = new Map<
+      string,
+      { unpaid: number; paid: number; rows: typeof weekPayments }
+    >();
+    for (const p of weekPayments) {
+      const cur = m.get(p.passengerId) ?? { unpaid: 0, paid: 0, rows: [] };
+      cur.rows.push(p);
+      if (p.paid) cur.paid += p.amountPhp;
+      else cur.unpaid += p.amountPhp;
+      m.set(p.passengerId, cur);
+    }
+    return m;
+  }, [weekPayments]);
 
   async function exportToSheets() {
     setExporting(true);
@@ -127,6 +154,69 @@ export default function WeekPage() {
         )}
       </section>
 
+      {byPassenger.size > 0 && (
+        <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+          <h2 className="font-semibold">Payment status</h2>
+          {Array.from(byPassenger.entries()).map(([passengerId, info]) => {
+            const name =
+              passengers.find((p) => p.id === passengerId)?.name ?? passengerId;
+            const sorted = [...info.rows].sort((a, b) =>
+              (a.date ?? "").localeCompare(b.date ?? "")
+            );
+            return (
+              <div key={passengerId} className="space-y-1">
+                <div className="flex justify-between text-sm font-medium">
+                  <span>{name}</span>
+                  <span className="text-slate-700">
+                    Unpaid: <PHP value={info.unpaid} />
+                  </span>
+                </div>
+                <ul className="text-xs divide-y divide-slate-100">
+                  {sorted.map((p) => (
+                    <li
+                      key={`${p.tripId}-${p.passengerId}`}
+                      className="flex items-center justify-between py-1.5"
+                    >
+                      <span className="text-slate-600">
+                        {p.date ? dayjs(p.date).format("ddd, MMM D") : "—"}
+                      </span>
+                      <span className="flex items-center gap-2">
+                        <PHP value={p.amountPhp} />
+                        {p.paid ? (
+                          <span className="text-emerald-600 text-[11px]">
+                            paid{p.paidAt ? ` ${dayjs(p.paidAt).format("MMM D")}` : ""}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">unpaid</span>
+                        )}
+                        {isDriver && (
+                          <button
+                            onClick={() => markPaid(p.tripId, p.passengerId, !p.paid)}
+                            className={
+                              "ml-1 px-2 py-0.5 rounded border text-[11px] " +
+                              (p.paid
+                                ? "border-slate-300 text-slate-600"
+                                : "bg-brand-600 text-white border-brand-600")
+                            }
+                          >
+                            {p.paid ? "Undo" : "Mark paid"}
+                          </button>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+          {!isDriver && (
+            <p className="text-[11px] text-slate-500">
+              Open the app with <code>?key=…</code> to mark payments.
+            </p>
+          )}
+        </section>
+      )}
+
       <button
         onClick={exportToSheets}
         disabled={exporting || exportConfigured === false}
@@ -146,7 +236,7 @@ export default function WeekPage() {
           ? "Exporting…"
           : exportConfigured === false
           ? "Export to Google Sheets (not configured)"
-          : "Export to Google Sheets"}
+          : "Export to Google Sheets (includes payment status)"}
       </button>
       {exportMsg && <p className="text-xs text-slate-600 text-center">{exportMsg}</p>}
     </div>
