@@ -36,7 +36,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <header className="bg-brand-600 text-white px-4 py-3 shadow">
             <div className="max-w-3xl mx-auto flex items-center justify-between">
               <Link href="/" className="font-semibold">Carpool</Link>
-              <span className="text-xs opacity-80">₱ per-leg split</span>
+              <div className="flex items-center gap-3 text-xs opacity-90">
+                <Link href="/admin/members" className="hover:underline">Members</Link>
+                <form action="/auth/signout" method="post">
+                  <button type="submit" className="hover:underline">Sign out</button>
+                </form>
+              </div>
             </div>
           </header>
           <main className="flex-1 max-w-3xl w-full mx-auto p-4 pb-24">{children}</main>

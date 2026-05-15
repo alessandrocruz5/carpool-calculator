@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fromDbPassenger } from "@/lib/supabase/mappers";
 import type { DbPassenger } from "@/lib/supabase/types";
-import { assertDriver } from "@/lib/auth/driverKey";
+import { requireDriver } from "@/lib/auth/requireDriver";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +17,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const denied = assertDriver(req);
+  const supabase = await createClient();
+  const denied = await requireDriver(supabase);
   if (denied) return denied;
   const body = (await req.json()) as { id?: string; name: string; active?: boolean };
-  const supabase = await createClient();
   const insert: Partial<DbPassenger> = {
     name: body.name.trim(),
     active: body.active ?? true,
@@ -36,10 +36,10 @@ export async function POST(req: Request) {
 }
 
 export async function PATCH(req: Request) {
-  const denied = assertDriver(req);
+  const supabase = await createClient();
+  const denied = await requireDriver(supabase);
   if (denied) return denied;
   const body = (await req.json()) as { id: string; active: boolean };
-  const supabase = await createClient();
   const { data, error } = await supabase
     .from("passengers")
     .update({ active: body.active })
@@ -51,12 +51,12 @@ export async function PATCH(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const denied = assertDriver(req);
+  const supabase = await createClient();
+  const denied = await requireDriver(supabase);
   if (denied) return denied;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
-  const supabase = await createClient();
   const { error } = await supabase.from("passengers").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

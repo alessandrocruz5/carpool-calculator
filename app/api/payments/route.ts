@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { assertDriver } from "@/lib/auth/driverKey";
+import { requireDriver } from "@/lib/auth/requireDriver";
 import type { DbTripPayment } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
@@ -81,7 +81,8 @@ interface PatchItem {
 }
 
 export async function PATCH(req: Request) {
-  const denied = assertDriver(req);
+  const supabase = await createClient();
+  const denied = await requireDriver(supabase);
   if (denied) return denied;
 
   const body = (await req.json()) as
@@ -104,7 +105,6 @@ export async function PATCH(req: Request) {
     }
   }
 
-  const supabase = await createClient();
   const updated: Array<{
     tripId: string;
     passengerId: string;

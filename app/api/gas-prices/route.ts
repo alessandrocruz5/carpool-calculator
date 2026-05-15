@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { gasPriceFromDb } from "@/lib/supabase/mappers";
 import type { DbGasPrice } from "@/lib/supabase/types";
-import { assertDriver } from "@/lib/auth/driverKey";
+import { requireDriver } from "@/lib/auth/requireDriver";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +19,11 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const denied = assertDriver(req);
+  const supabase = await createClient();
+  const denied = await requireDriver(supabase);
   if (denied) return denied;
   const body = (await req.json()) as { price: number; effectiveDate?: string };
   const date = body.effectiveDate ?? new Date().toISOString().slice(0, 10);
-  const supabase = await createClient();
   const { data, error } = await supabase
     .from("gas_prices")
     .upsert(
