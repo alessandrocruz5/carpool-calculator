@@ -15,7 +15,8 @@ export default function LoginPage() {
     setErrMsg(null);
     try {
       const supabase = createClient();
-      const redirectTo = `${window.location.origin}/auth/confirm`;
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
+      const redirectTo = `${siteUrl}/auth/confirm`;
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: { emailRedirectTo: redirectTo },
