@@ -21,6 +21,7 @@
     "dayjs": "^1.11.13",
     "google-auth-library": "^9.14.1",
     "google-spreadsheet": "^4.1.4",
+    "idb": "^8.0.3",
     "idb-keyval": "^6.2.1",
     "lucide-react": "^1.14.0",
     "next": "^14.2.18",

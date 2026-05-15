@@ -25,8 +25,11 @@ export default function WeekPage() {
   useEffect(() => {
     let cancelled = false;
     fetch("/api/sheets/export")
-      .then((r) => r.json())
-      .then((j: { configured: boolean }) => {
+      .then(async (r) => {
+        if (r.status === 503) return { configured: false } as { configured: boolean };
+        return (await r.json()) as { configured: boolean };
+      })
+      .then((j) => {
         if (!cancelled) setExportConfigured(Boolean(j.configured));
       })
       .catch(() => {
@@ -101,6 +104,11 @@ export default function WeekPage() {
           settings: liveSettings,
         }),
       });
+      if (res.status === 503) {
+        setExportConfigured(false);
+        setExportMsg(null);
+        return;
+      }
       const json = await res.json();
       setExportMsg(res.ok ? `Exported ${json.rows} rows.` : `Error: ${json.error}`);
     } catch (e) {
@@ -254,6 +262,9 @@ export default function WeekPage() {
           ? "Export to Google Sheets (not configured)"
           : "Export to Google Sheets (includes payment status)"}
       </button>
+      {exportConfigured === false && (
+        <p className="text-xs text-slate-400 text-center">Sheets export not configured</p>
+      )}
       {exportMsg && <p className="text-xs text-slate-600 text-center">{exportMsg}</p>}
     </div>
   );

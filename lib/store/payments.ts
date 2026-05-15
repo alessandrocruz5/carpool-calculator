@@ -1,6 +1,7 @@
 "use client";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { resilientFetch } from "@/lib/outbox";
 
 export interface PaymentRow {
   tripId: string;
@@ -48,7 +49,7 @@ export const usePayments = create<PaymentsStore>()(
           ),
         }));
         try {
-          const res = await fetch("/api/payments", {
+          const res = await resilientFetch("/api/payments", {
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ tripId, passengerId, paid }),
@@ -71,7 +72,7 @@ export const usePayments = create<PaymentsStore>()(
           ),
         }));
         try {
-          const res = await fetch("/api/payments", {
+          const res = await resilientFetch("/api/payments", {
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({

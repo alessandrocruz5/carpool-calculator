@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 import { HydrateStores } from "@/components/HydrateStores";
+import { ToastProvider } from "@/components/Toast";
 
 export const metadata: Metadata = {
   title: "Carpool Calculator",
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={cn("font-sans", inter.variable)}>
       <body>
+        <ToastProvider>
         <HydrateStores />
         <div className="min-h-screen flex flex-col">
           <header className="bg-brand-600 text-white px-4 py-3 shadow">
@@ -59,6 +61,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </nav>
         </div>
+        </ToastProvider>
       </body>
     </html>
   );
