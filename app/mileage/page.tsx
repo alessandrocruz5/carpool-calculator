@@ -6,6 +6,50 @@ import { useSettings } from "@/lib/store/settings";
 import { rollingMileage } from "@/lib/mileage";
 import { PHP } from "@/components/PHP";
 
+function Sparkline({
+  values,
+  className,
+  width = 160,
+  height = 32,
+}: {
+  values: number[];
+  className?: string;
+  width?: number;
+  height?: number;
+}) {
+  if (values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const stepX = width / (values.length - 1);
+  const points = values
+    .map((v, i) => {
+      const x = i * stepX;
+      const y = height - ((v - min) / span) * height;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <svg
+      role="img"
+      aria-label="rolling mileage trend"
+      data-testid="mileage-sparkline"
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      className={className}
+    >
+      <polyline
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        className="text-brand-600"
+        points={points}
+      />
+    </svg>
+  );
+}
+
 export default function MileagePage() {
   const { fillups, add, remove } = useFillups();
   const { settings, setSettings } = useSettings();
@@ -16,6 +60,23 @@ export default function MileagePage() {
   const [odo, setOdo] = useState("");
 
   const rolling = rollingMileage(fillups);
+
+  // Build a series of rolling MPG values to plot a small sparkline.
+  // Each point is the rolling avg up to (and including) that fill-up.
+  const sortedFillups = [...fillups].sort((a, b) => a.odometerKm - b.odometerKm);
+  const series: number[] = [];
+  for (let i = 1; i < sortedFillups.length; i++) {
+    const slice = sortedFillups.slice(0, i + 1);
+    const v = rollingMileage(slice);
+    if (v != null) series.push(v);
+  }
+
+  const override = settings.mileageKmPerL;
+  const divergencePct =
+    rolling && override
+      ? Math.abs(override - rolling) / rolling
+      : null;
+  const overrideOff = divergencePct != null && divergencePct > 0.15;
 
   function submit() {
     if (!liters || !total || !odo) return;
@@ -41,6 +102,9 @@ export default function MileagePage() {
             {rolling ? `${rolling.toFixed(2)} km/L` : "Need 2+ fill-ups"}
           </span>
         </div>
+        {series.length >= 2 && (
+          <Sparkline values={series} className="mt-1 mb-2" />
+        )}
         <div className="flex justify-between text-sm">
           <span className="text-slate-500">Manual override</span>
           <input
@@ -53,6 +117,18 @@ export default function MileagePage() {
             className="w-24 border border-slate-300 rounded px-2 py-0.5 text-right"
           />
         </div>
+        {overrideOff && (
+          <div
+            role="alert"
+            data-testid="mileage-override-warning"
+            className="mt-2 flex items-start justify-between gap-3 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2 text-sm text-yellow-900"
+          >
+            <span>
+              Manual override is {(divergencePct! * 100).toFixed(0)}% off the rolling
+              average ({rolling!.toFixed(2)} km/L). Consider updating it.
+            </span>
+          </div>
+        )}
       </section>
 
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
