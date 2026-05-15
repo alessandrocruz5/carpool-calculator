@@ -5,6 +5,9 @@ const withPWA = withPWAInit({
   register: true,
   skipWaiting: true,
   disable: process.env.NODE_ENV === "development",
+  // Custom push + notificationclick handlers (worker/index.js) get
+  // bundled into the generated service worker.
+  customWorkerSrc: "worker",
 });
 
 /** @type {import('next').NextConfig} */
