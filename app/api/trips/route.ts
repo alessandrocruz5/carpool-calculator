@@ -38,7 +38,8 @@ export async function POST(req: Request) {
   const body = (await req.json()) as StoredTrip;
   const supabase = await createClient();
 
-  // Find the gas_prices row effective for this trip's date (latest with effective_date <= trip.date)
+  // Find the gas_prices row effective for this trip's date (latest with effective_date <= trip.date).
+  // If none exists, snapshot body.gasPrice into a new gas_prices row so the Log renders correctly.
   const { data: gpRow } = await supabase
     .from("gas_prices")
     .select("id")
@@ -46,7 +47,20 @@ export async function POST(req: Request) {
     .order("effective_date", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const gasPriceId = (gpRow as { id: string } | null)?.id ?? null;
+  let gasPriceId = (gpRow as { id: string } | null)?.id ?? null;
+  if (!gasPriceId && body.gasPrice > 0) {
+    const { data: newGp, error: newGpErr } = await supabase
+      .from("gas_prices")
+      .upsert(
+        { effective_date: body.date, price_per_liter: body.gasPrice },
+        { onConflict: "effective_date" }
+      )
+      .select("id")
+      .single();
+    if (newGpErr)
+      return NextResponse.json({ error: newGpErr.message }, { status: 500 });
+    gasPriceId = (newGp as { id: string }).id;
+  }
 
   const { data: tripRow, error: tripErr } = await supabase
     .from("trips")
