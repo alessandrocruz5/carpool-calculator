@@ -1,23 +1,66 @@
 "use client";
 import { useState } from "react";
 import dayjs from "dayjs";
-import { useTrips } from "@/lib/store/trips";
+import { useTrips, type StoredTrip } from "@/lib/store/trips";
 import { useRoster } from "@/lib/store/roster";
 import { useSettings } from "@/lib/store/settings";
 import { calcDay } from "@/lib/calc";
 import { PHP } from "@/components/PHP";
+import { useToast } from "@/components/Toast";
 
 export default function LogPage() {
-  const { trips, remove } = useTrips();
+  const { trips, remove, upsert } = useTrips();
   const { passengers } = useRoster();
   const { settings } = useSettings();
   const [open, setOpen] = useState<string | null>(null);
+  const toast = useToast();
 
   const sorted = [...trips].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const mostRecent = sorted[0];
+
+  function copyYesterday() {
+    if (!mostRecent) return;
+    const today = dayjs().format("YYYY-MM-DD");
+    const newTrip: StoredTrip = {
+      ...mostRecent,
+      id:
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}`,
+      date: today,
+    };
+    upsert(newTrip);
+    toast.show({ message: `Copied ${dayjs(mostRecent.date).format("MMM D")} → today` });
+  }
+
+  async function handleDelete(t: StoredTrip) {
+    const snapshot = t;
+    await remove(t.id);
+    toast.show({
+      message: `Deleted trip for ${dayjs(snapshot.date).format("MMM D")}`,
+      action: {
+        label: "Undo",
+        onClick: () => {
+          upsert(snapshot);
+        },
+      },
+      durationMs: 5000,
+    });
+  }
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Trip log</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Trip log</h1>
+        {mostRecent && (
+          <button
+            onClick={copyYesterday}
+            className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+          >
+            Copy yesterday&apos;s trip
+          </button>
+        )}
+      </div>
       {sorted.length === 0 && (
         <p className="text-sm text-slate-500">No trips saved yet.</p>
       )}
@@ -62,7 +105,7 @@ export default function LogPage() {
                     AM: {t.morning.route} · PM: {t.evening.route} · Gas <PHP value={t.gasPrice} />/L
                   </div>
                   <button
-                    onClick={() => remove(t.id)}
+                    onClick={() => handleDelete(t)}
                     className="text-xs text-red-600 underline"
                   >
                     Delete

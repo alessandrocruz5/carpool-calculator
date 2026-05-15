@@ -1,7 +1,7 @@
 "use client";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { fetchWithDriverKey } from "@/lib/auth/clientDriverKey";
+import { resilientFetch } from "@/lib/outbox";
 
 export interface PaymentRow {
   tripId: string;
@@ -17,6 +17,10 @@ interface PaymentsStore {
   hydrated: boolean;
   hydrate: () => Promise<void>;
   markPaid: (tripId: string, passengerId: string, paid: boolean) => Promise<void>;
+  markManyPaid: (
+    items: { tripId: string; passengerId: string }[],
+    paid: boolean
+  ) => Promise<void>;
 }
 
 export const usePayments = create<PaymentsStore>()(
@@ -45,7 +49,7 @@ export const usePayments = create<PaymentsStore>()(
           ),
         }));
         try {
-          const res = await fetchWithDriverKey("/api/payments", {
+          const res = await resilientFetch("/api/payments", {
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ tripId, passengerId, paid }),
@@ -53,6 +57,31 @@ export const usePayments = create<PaymentsStore>()(
           if (!res.ok) throw new Error(await res.text());
         } catch (err) {
           console.error("payments.markPaid failed", err);
+          await get().hydrate();
+        }
+      },
+      markManyPaid: async (items, paid) => {
+        if (items.length === 0) return;
+        const now = new Date().toISOString();
+        const keys = new Set(items.map((i) => `${i.tripId}:${i.passengerId}`));
+        set((s) => ({
+          payments: s.payments.map((p) =>
+            keys.has(`${p.tripId}:${p.passengerId}`)
+              ? { ...p, paid, paidAt: paid ? now : null }
+              : p
+          ),
+        }));
+        try {
+          const res = await resilientFetch("/api/payments", {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              items: items.map((i) => ({ ...i, paid })),
+            }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+        } catch (err) {
+          console.error("payments.markManyPaid failed", err);
           await get().hydrate();
         }
       },
