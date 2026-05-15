@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fromDbSettings, toDbSettingsPatch } from "@/lib/supabase/mappers";
 import type { DbSettings } from "@/lib/supabase/types";
 import type { CalcSettings } from "@/lib/calc";
-import { assertDriver } from "@/lib/auth/driverKey";
+import { requireDriver } from "@/lib/auth/requireDriver";
 
 export const dynamic = "force-dynamic";
 
@@ -20,10 +20,10 @@ export async function GET() {
 }
 
 export async function PATCH(req: Request) {
-  const denied = assertDriver(req);
+  const supabase = await createClient();
+  const denied = await requireDriver(supabase);
   if (denied) return denied;
   const body = (await req.json()) as Partial<CalcSettings>;
-  const supabase = await createClient();
   const patch = { ...toDbSettingsPatch(body), updated_at: new Date().toISOString() };
   const { data, error } = await supabase
     .from("settings")

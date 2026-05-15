@@ -1,21 +1,17 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import dayjs from "dayjs";
 import { usePayments } from "@/lib/store/payments";
 import { useRoster } from "@/lib/store/roster";
 import { PHP } from "@/components/PHP";
-import { getDriverKey } from "@/lib/auth/clientDriverKey";
+import { useIsDriver } from "@/lib/auth/useIsDriver";
 
 export default function PaymentsPage() {
   const { payments, markPaid, markManyPaid } = usePayments();
   const { passengers } = useRoster();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [isDriver, setIsDriver] = useState(false);
-
-  useEffect(() => {
-    setIsDriver(Boolean(getDriverKey()));
-  }, []);
+  const isDriver = useIsDriver();
 
   const byPassenger = useMemo(() => {
     const m = new Map<

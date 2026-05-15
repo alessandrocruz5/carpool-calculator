@@ -1,7 +1,6 @@
 "use client";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { fetchWithDriverKey } from "@/lib/auth/clientDriverKey";
 
 export interface PaymentRow {
   tripId: string;
@@ -49,7 +48,7 @@ export const usePayments = create<PaymentsStore>()(
           ),
         }));
         try {
-          const res = await fetchWithDriverKey("/api/payments", {
+          const res = await fetch("/api/payments", {
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ tripId, passengerId, paid }),
@@ -72,7 +71,7 @@ export const usePayments = create<PaymentsStore>()(
           ),
         }));
         try {
-          const res = await fetchWithDriverKey("/api/payments", {
+          const res = await fetch("/api/payments", {
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({

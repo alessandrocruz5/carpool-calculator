@@ -4,7 +4,7 @@ import { fromDbTrip, fromDbSettings, type DbTripWithLegs } from "@/lib/supabase/
 import type { StoredTrip } from "@/lib/store/trips";
 import type { DbGasPrice, DbSettings } from "@/lib/supabase/types";
 import { calcDay, DEFAULT_SETTINGS } from "@/lib/calc";
-import { assertDriver } from "@/lib/auth/driverKey";
+import { requireDriver } from "@/lib/auth/requireDriver";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +33,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const denied = assertDriver(req);
+  const supabase = await createClient();
+  const denied = await requireDriver(supabase);
   if (denied) return denied;
   const body = (await req.json()) as StoredTrip;
-  const supabase = await createClient();
 
   // Find the gas_prices row effective for this trip's date (latest with effective_date <= trip.date)
   const { data: gpRow } = await supabase
@@ -166,12 +166,12 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const denied = assertDriver(req);
+  const supabase = await createClient();
+  const denied = await requireDriver(supabase);
   if (denied) return denied;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
-  const supabase = await createClient();
   const { error } = await supabase.from("trips").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

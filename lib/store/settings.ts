@@ -2,7 +2,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { DEFAULT_SETTINGS, type CalcSettings } from "@/lib/calc";
-import { fetchWithDriverKey } from "@/lib/auth/clientDriverKey";
 
 interface SettingsStore {
   settings: CalcSettings;
@@ -47,7 +46,7 @@ export const useSettings = create<SettingsStore>()(
       setSettings: async (s) => {
         set((state) => ({ settings: { ...state.settings, ...s } }));
         try {
-          const res = await fetchWithDriverKey("/api/settings", {
+          const res = await fetch("/api/settings", {
             method: "PATCH",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(s),
@@ -62,7 +61,7 @@ export const useSettings = create<SettingsStore>()(
         const now = new Date().toISOString();
         set({ gasPrice: price, gasPriceUpdatedAt: now });
         try {
-          const res = await fetchWithDriverKey("/api/gas-prices", {
+          const res = await fetch("/api/gas-prices", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ price }),

@@ -9,7 +9,7 @@ import { usePayments } from "@/lib/store/payments";
 import { calcDay, calcWeek } from "@/lib/calc";
 import { weekStart, weekdays, isFriday } from "@/lib/week";
 import { PHP } from "@/components/PHP";
-import { getDriverKey } from "@/lib/auth/clientDriverKey";
+import { useIsDriver } from "@/lib/auth/useIsDriver";
 
 export default function WeekPage() {
   const [weekRef, setWeekRef] = useState(weekStart());
@@ -20,10 +20,9 @@ export default function WeekPage() {
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
   const [exportConfigured, setExportConfigured] = useState<boolean | null>(null);
-  const [isDriver, setIsDriver] = useState(false);
+  const isDriver = useIsDriver();
 
   useEffect(() => {
-    setIsDriver(Boolean(getDriverKey()));
     let cancelled = false;
     fetch("/api/sheets/export")
       .then((r) => r.json())
