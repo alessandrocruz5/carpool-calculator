@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
+import Link from "next/link";
 import { useTrips } from "@/lib/store/trips";
 import { useRoster } from "@/lib/store/roster";
 import { useSettings } from "@/lib/store/settings";
@@ -39,6 +40,11 @@ export default function WeekPage() {
 
   const days = weekdays(weekRef);
   const liveSettings = { ...settings, mileageKmPerL: settings.mileageKmPerL || 10.5 };
+
+  const totalUnpaid = useMemo(
+    () => payments.filter((p) => !p.paid).reduce((s, p) => s + p.amountPhp, 0),
+    [payments]
+  );
 
   const summary = useMemo(() => {
     const calcs = days
@@ -108,7 +114,18 @@ export default function WeekPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Week summary</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold">Week summary</h1>
+          {totalUnpaid > 0 && (
+            <Link
+              href="/payments"
+              className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200"
+              title="Outstanding payments"
+            >
+              Unpaid <PHP value={totalUnpaid} />
+            </Link>
+          )}
+        </div>
         <div className="flex gap-1 text-sm">
           <button
             onClick={() =>
