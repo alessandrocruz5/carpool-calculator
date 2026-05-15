@@ -4,12 +4,8 @@
  * Usage:
  *   npx tsx scripts/backfill-payments.ts
  *
-<<<<<<< HEAD
- * Requires SUPABASE_SECRET_KEY and NEXT_PUBLIC_SUPABASE_URL in env.
-=======
- * Requires SUPABASE_SERVICE_ROLE_KEY and NEXT_PUBLIC_SUPABASE_URL in env.
- * Loads .env.local then .env automatically.
->>>>>>> claude/trip-payment-tracking-Uz64c
+ * Requires NEXT_PUBLIC_SUPABASE_URL and one of SUPABASE_SECRET_KEY or
+ * SUPABASE_SERVICE_ROLE_KEY in env. Loads .env.local then .env automatically.
  * Idempotent: existing rows are left alone; only missing (trip_id, passenger_id)
  * pairs are inserted with paid=false.
  */
@@ -29,7 +25,6 @@ import type {
 function loadEnvFile(path: string): boolean {
   try {
     const content = readFileSync(path, "utf8");
-    let loaded = 0;
     for (const rawLine of content.split("\n")) {
       const line = rawLine.trim();
       if (!line || line.startsWith("#")) continue;
@@ -45,13 +40,10 @@ function loadEnvFile(path: string): boolean {
       }
       if (!(key in process.env) || process.env[key] === "") {
         process.env[key] = value;
-        loaded++;
       }
     }
-    console.log(`[backfill] loaded ${loaded} vars from ${path}`);
     return true;
   } catch {
-    console.log(`[backfill] no env file at ${path}`);
     return false;
   }
 }
@@ -72,19 +64,10 @@ async function main() {
   const serviceKey =
     process.env.SUPABASE_SECRET_KEY ||
     process.env.SUPABASE_SERVICE_ROLE_KEY;
-  console.log(
-    `[backfill] NEXT_PUBLIC_SUPABASE_URL=${url ? "set" : "MISSING"}, ` +
-      `SUPABASE_SECRET_KEY=${process.env.SUPABASE_SECRET_KEY ? "set" : "unset"}, ` +
-      `SUPABASE_SERVICE_ROLE_KEY=${
-        process.env.SUPABASE_SERVICE_ROLE_KEY ? "set" : "unset"
-      }`
-  );
   if (!url || !serviceKey) {
     console.error(
       "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY / " +
-        "SUPABASE_SERVICE_ROLE_KEY. Inline workaround: " +
-        "NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SECRET_KEY=... " +
-        "npx tsx scripts/backfill-payments.ts"
+        "SUPABASE_SERVICE_ROLE_KEY."
     );
     process.exit(1);
   }
@@ -160,7 +143,7 @@ async function main() {
     inserted += missing.length;
   }
 
-  console.log(`Done. Inserted ${inserted} payment rows. Trips with nothing to add: ${skipped}.`);
+  console.log(`Done. Inserted ${inserted} payment rows. Skipped: ${skipped}.`);
 }
 
 main().catch((e) => {

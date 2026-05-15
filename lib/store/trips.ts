@@ -2,7 +2,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Route } from "@/lib/calc";
-import { fetchWithDriverKey } from "@/lib/auth/clientDriverKey";
+import { resilientFetch } from "@/lib/outbox";
 
 export interface StoredTrip {
   id: string;
@@ -49,7 +49,7 @@ export const useTrips = create<TripsStore>()(
           return { trips: [...s.trips, trip] };
         });
         try {
-          const res = await fetchWithDriverKey("/api/trips", {
+          const res = await resilientFetch("/api/trips", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify(trip),
@@ -64,7 +64,7 @@ export const useTrips = create<TripsStore>()(
       remove: async (id) => {
         set((s) => ({ trips: s.trips.filter((t) => t.id !== id) }));
         try {
-          const res = await fetchWithDriverKey(`/api/trips?id=${encodeURIComponent(id)}`, {
+          const res = await resilientFetch(`/api/trips?id=${encodeURIComponent(id)}`, {
             method: "DELETE",
           });
           if (!res.ok) throw new Error(await res.text());

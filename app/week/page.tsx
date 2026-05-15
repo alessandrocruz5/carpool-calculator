@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import dayjs from "dayjs";
+import Link from "next/link";
 import { useTrips } from "@/lib/store/trips";
 import { useRoster } from "@/lib/store/roster";
 import { useSettings } from "@/lib/store/settings";
@@ -8,7 +9,7 @@ import { usePayments } from "@/lib/store/payments";
 import { calcDay, calcWeek } from "@/lib/calc";
 import { weekStart, weekdays, isFriday } from "@/lib/week";
 import { PHP } from "@/components/PHP";
-import { getDriverKey } from "@/lib/auth/clientDriverKey";
+import { useIsDriver } from "@/lib/auth/useIsDriver";
 
 export default function WeekPage() {
   const [weekRef, setWeekRef] = useState(weekStart());
@@ -19,14 +20,16 @@ export default function WeekPage() {
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
   const [exportConfigured, setExportConfigured] = useState<boolean | null>(null);
-  const [isDriver, setIsDriver] = useState(false);
+  const isDriver = useIsDriver();
 
   useEffect(() => {
-    setIsDriver(Boolean(getDriverKey()));
     let cancelled = false;
     fetch("/api/sheets/export")
-      .then((r) => r.json())
-      .then((j: { configured: boolean }) => {
+      .then(async (r) => {
+        if (r.status === 503) return { configured: false } as { configured: boolean };
+        return (await r.json()) as { configured: boolean };
+      })
+      .then((j) => {
         if (!cancelled) setExportConfigured(Boolean(j.configured));
       })
       .catch(() => {
@@ -39,6 +42,11 @@ export default function WeekPage() {
 
   const days = weekdays(weekRef);
   const liveSettings = { ...settings, mileageKmPerL: settings.mileageKmPerL || 10.5 };
+
+  const totalUnpaid = useMemo(
+    () => payments.filter((p) => !p.paid).reduce((s, p) => s + p.amountPhp, 0),
+    [payments]
+  );
 
   const summary = useMemo(() => {
     const calcs = days
@@ -96,6 +104,11 @@ export default function WeekPage() {
           settings: liveSettings,
         }),
       });
+      if (res.status === 503) {
+        setExportConfigured(false);
+        setExportMsg(null);
+        return;
+      }
       const json = await res.json();
       setExportMsg(res.ok ? `Exported ${json.rows} rows.` : `Error: ${json.error}`);
     } catch (e) {
@@ -108,7 +121,18 @@ export default function WeekPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Week summary</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-semibold">Week summary</h1>
+          {totalUnpaid > 0 && (
+            <Link
+              href="/payments"
+              className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200"
+              title="Outstanding payments"
+            >
+              Unpaid <PHP value={totalUnpaid} />
+            </Link>
+          )}
+        </div>
         <div className="flex gap-1 text-sm">
           <button
             onClick={() =>
@@ -238,6 +262,9 @@ export default function WeekPage() {
           ? "Export to Google Sheets (not configured)"
           : "Export to Google Sheets (includes payment status)"}
       </button>
+      {exportConfigured === false && (
+        <p className="text-xs text-slate-400 text-center">Sheets export not configured</p>
+      )}
       {exportMsg && <p className="text-xs text-slate-600 text-center">{exportMsg}</p>}
     </div>
   );

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useSettings } from "@/lib/store/settings";
 import { useRoster } from "@/lib/store/roster";
+import { EnablePushReminders } from "@/components/push/EnablePushReminders";
 
 export default function SettingsPage() {
   const { settings, setSettings } = useSettings();
@@ -103,6 +104,8 @@ export default function SettingsPage() {
           onChange={(v) => setSettings({ split3pDriver: v })}
         />
       </section>
+
+      <EnablePushReminders />
     </div>
   );
 }

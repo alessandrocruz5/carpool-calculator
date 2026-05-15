@@ -2,7 +2,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Fillup } from "@/lib/mileage";
-import { fetchWithDriverKey } from "@/lib/auth/clientDriverKey";
+import { resilientFetch } from "@/lib/outbox";
 
 interface FillupsStore {
   fillups: Fillup[];
@@ -36,7 +36,7 @@ export const useFillups = create<FillupsStore>()(
         const optimistic: Fillup = { ...f, id };
         set((s) => ({ fillups: [...s.fillups, optimistic] }));
         try {
-          const res = await fetchWithDriverKey("/api/fillups", {
+          const res = await resilientFetch("/api/fillups", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ ...f, id }),
@@ -51,7 +51,7 @@ export const useFillups = create<FillupsStore>()(
         const prev = get().fillups;
         set({ fillups: prev.filter((x) => x.id !== id) });
         try {
-          const res = await fetchWithDriverKey(`/api/fillups?id=${encodeURIComponent(id)}`, {
+          const res = await resilientFetch(`/api/fillups?id=${encodeURIComponent(id)}`, {
             method: "DELETE",
           });
           if (!res.ok) throw new Error(await res.text());
