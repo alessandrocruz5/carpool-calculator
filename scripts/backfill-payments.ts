@@ -69,11 +69,6 @@ interface TripJoin extends DbTrip {
 
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-<<<<<<< HEAD
-  const serviceKey = process.env.SUPABASE_SECRET_KEY;
-  if (!url || !serviceKey) {
-    console.error("Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY");
-=======
   const serviceKey =
     process.env.SUPABASE_SECRET_KEY ||
     process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -91,7 +86,6 @@ async function main() {
         "NEXT_PUBLIC_SUPABASE_URL=... SUPABASE_SECRET_KEY=... " +
         "npx tsx scripts/backfill-payments.ts"
     );
->>>>>>> claude/trip-payment-tracking-Uz64c
     process.exit(1);
   }
   const supabase = createClient(url, serviceKey);

@@ -102,7 +102,7 @@ export async function POST(req: Request) {
         paid_at: string | null;
         trips: { date: string } | null;
       };
-      const sortedRows = ((payRows ?? []) as PayJoin[])
+      const sortedRows = ((payRows ?? []) as unknown as PayJoin[])
         .map((r) => ({
           date: r.trips?.date ?? "",
           passenger: nameById.get(r.passenger_id) ?? r.passenger_id,
