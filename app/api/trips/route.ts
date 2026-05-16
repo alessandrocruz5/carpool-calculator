@@ -51,10 +51,7 @@ export async function POST(req: Request) {
   if (!gasPriceId && body.gasPrice > 0) {
     const { data: newGp, error: newGpErr } = await supabase
       .from("gas_prices")
-      .upsert(
-        { effective_date: body.date, price_per_liter: body.gasPrice },
-        { onConflict: "effective_date" }
-      )
+      .insert({ effective_date: body.date, price_per_liter: body.gasPrice })
       .select("id")
       .single();
     if (newGpErr)
