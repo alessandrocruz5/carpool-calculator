@@ -8,6 +8,7 @@ import { useSettings } from "@/lib/store/settings";
 import { useRoster } from "@/lib/store/roster";
 import { useTrips } from "@/lib/store/trips";
 import { useFillups } from "@/lib/store/fillups";
+import { useToast } from "@/components/Toast";
 import { rollingMileage } from "@/lib/mileage";
 import { calcDay } from "@/lib/calc";
 import { daysSince } from "@/lib/week";
@@ -18,6 +19,7 @@ export default function TodayPage() {
   const { passengers } = useRoster();
   const { fillups } = useFillups();
   const { trips, upsert } = useTrips();
+  const toast = useToast();
 
   const existing = trips.find((t) => t.date === today);
   const [morning, setMorning] = useState<LegState>(
@@ -47,15 +49,25 @@ export default function TodayPage() {
     liveSettings
   );
 
-  function save() {
-    upsert({
-      id: existing?.id ?? crypto.randomUUID(),
-      date: today,
-      gasPrice,
-      parkingFee: settings.parkingFeePhp,
-      morning,
-      evening,
-    });
+  async function save() {
+    try {
+      await upsert({
+        id: existing?.id ?? crypto.randomUUID(),
+        date: today,
+        gasPrice,
+        parkingFee: settings.parkingFeePhp,
+        morning,
+        evening,
+      });
+      toast.show({ message: existing ? "Trip updated." : "Trip saved." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      toast.show({
+        message: /forbidden|403/i.test(msg)
+          ? "Couldn't save — only the driver can log trips."
+          : "Couldn't save trip. Check your connection and try again.",
+      });
+    }
   }
 
   if (!hydrated) return null;

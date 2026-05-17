@@ -3,6 +3,7 @@ import Link from "next/link";
 import "./globals.css";
 import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/server";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 import { HydrateStores } from "@/components/HydrateStores";
@@ -28,7 +29,48 @@ const nav = [
   { href: "/settings", label: "Settings" },
 ];
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const supabase = await createClient();
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const userId = (claimsData?.claims as { sub?: string } | undefined)?.sub;
+
+  let needsAccountLink = false;
+  if (userId) {
+    const { data: member } = await supabase
+      .from("members")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    needsAccountLink = !member;
+  }
+
+  if (needsAccountLink) {
+    return (
+      <html lang="en" className={cn("font-sans", inter.variable)}>
+        <body>
+          <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
+            <div className="max-w-sm space-y-4">
+              <h1 className="text-xl font-semibold">Account not linked</h1>
+              <p className="text-sm text-slate-600">
+                You&apos;re signed in, but your account isn&apos;t part of this
+                carpool yet. Ask the driver to link your account from the
+                Members page, then refresh.
+              </p>
+              <form action="/auth/signout" method="post">
+                <button
+                  type="submit"
+                  className="text-sm text-brand-600 underline"
+                >
+                  Sign out
+                </button>
+              </form>
+            </div>
+          </div>
+        </body>
+      </html>
+    );
+  }
+
   return (
     <html lang="en" className={cn("font-sans", inter.variable)}>
       <body>

@@ -52,6 +52,7 @@ export const useRoster = create<RosterStore>()(
         } catch (err) {
           console.error("roster.add failed", err);
           await get().hydrate();
+          throw err;
         }
       },
       remove: async (id) => {
@@ -64,6 +65,7 @@ export const useRoster = create<RosterStore>()(
         } catch (err) {
           console.error("roster.remove failed", err);
           await get().hydrate();
+          throw err;
         }
       },
       toggleActive: async (id) => {
@@ -83,6 +85,7 @@ export const useRoster = create<RosterStore>()(
         } catch (err) {
           console.error("roster.toggleActive failed", err);
           await get().hydrate();
+          throw err;
         }
       },
     }),
