@@ -59,6 +59,7 @@ export const useTrips = create<TripsStore>()(
         } catch (err) {
           console.error("trips.upsert failed", err);
           await get().hydrate();
+          throw err;
         }
       },
       remove: async (id) => {
@@ -71,6 +72,7 @@ export const useTrips = create<TripsStore>()(
         } catch (err) {
           console.error("trips.remove failed", err);
           await get().hydrate();
+          throw err;
         }
       },
     }),
