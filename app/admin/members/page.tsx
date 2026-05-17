@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { MembersAdmin } from "./MembersAdmin";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ interface MemberRow {
   role: "driver" | "passenger";
   passenger_id: string | null;
   created_at: string;
+  email: string | null;
 }
 
 interface PassengerRow {
@@ -44,9 +46,29 @@ export default async function MembersAdminPage() {
     supabase.from("passengers").select("id, name").order("name"),
   ]);
 
+  const memberRows = (members ?? []) as Omit<MemberRow, "email">[];
+
+  const emailById = new Map<string, string>();
+  try {
+    const admin = createAdminClient();
+    const { data: usersData } = await admin.auth.admin.listUsers({
+      perPage: 1000,
+    });
+    for (const u of usersData?.users ?? []) {
+      if (u.email) emailById.set(u.id, u.email);
+    }
+  } catch (err) {
+    console.error("failed to load member emails", err);
+  }
+
+  const initialMembers: MemberRow[] = memberRows.map((m) => ({
+    ...m,
+    email: emailById.get(m.user_id) ?? null,
+  }));
+
   return (
     <MembersAdmin
-      initialMembers={(members ?? []) as MemberRow[]}
+      initialMembers={initialMembers}
       passengers={(passengers ?? []) as PassengerRow[]}
     />
   );

@@ -7,6 +7,7 @@ interface MemberRow {
   role: "driver" | "passenger";
   passenger_id: string | null;
   created_at: string;
+  email: string | null;
 }
 
 interface PassengerRow {
@@ -70,7 +71,7 @@ export function MembersAdmin({
         p_passenger_id: role === "passenger" && passengerId ? passengerId : null,
       });
       if (error) throw error;
-      const row = data as MemberRow;
+      const row = { ...(data as MemberRow), email: email.trim() };
       setMembers((prev) => {
         const others = prev.filter((m) => m.user_id !== row.user_id);
         return [...others, row];
@@ -92,6 +93,15 @@ export function MembersAdmin({
     setBusy(true);
     setMsg(null);
     try {
+      const target = members.find((m) => m.user_id === userId);
+      const driverCount = members.filter((m) => m.role === "driver").length;
+      if (target?.role === "driver" && driverCount <= 1) {
+        setMsg({
+          kind: "err",
+          text: "Can't remove the last driver. Link another driver first.",
+        });
+        return;
+      }
       const supabase = createClient();
       const { error } = await supabase
         .from("members")
@@ -193,8 +203,8 @@ export function MembersAdmin({
               className="flex items-center justify-between py-2 text-sm"
             >
               <div>
-                <div className="font-mono text-xs text-slate-500">
-                  {m.user_id}
+                <div className="text-xs text-slate-500">
+                  {m.email ?? m.user_id}
                 </div>
                 <div>
                   <span className="font-medium">{m.role}</span>

@@ -11,7 +11,7 @@ import { useToast } from "@/components/Toast";
 export default function LogPage() {
   const { trips, remove, upsert } = useTrips();
   const { passengers } = useRoster();
-  const { settings } = useSettings();
+  const { settings, gasPrice } = useSettings();
   const [open, setOpen] = useState<string | null>(null);
   const toast = useToast();
 
@@ -28,6 +28,7 @@ export default function LogPage() {
           ? crypto.randomUUID()
           : `${Date.now()}`,
       date: today,
+      gasPrice,
     };
     upsert(newTrip);
     toast.show({ message: `Copied ${dayjs(mostRecent.date).format("MMM D")} → today` });

@@ -50,7 +50,7 @@ describe("passenger mapper", () => {
 });
 
 describe("settings mappers", () => {
-  it("uses default mileage when override is null", () => {
+  it("returns 0 mileage when override is null", () => {
     const r = fromDbSettings({
       id: 1,
       mileage_kml_override: null,
@@ -63,7 +63,7 @@ describe("settings mappers", () => {
       split_3p_driver: 19,
       updated_at: "x",
     });
-    expect(r.mileageKmPerL).toBe(10.5);
+    expect(r.mileageKmPerL).toBe(0);
     expect(r.roundTripKm).toBe(42);
     expect(r.split2pDriver).toBe(25);
   });

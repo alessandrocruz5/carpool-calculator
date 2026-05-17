@@ -39,7 +39,7 @@ export function fromDbSettings(r: DbSettings): CalcSettings {
   return {
     roundTripKm: Number(r.round_trip_km),
     mileageKmPerL:
-      r.mileage_kml_override != null ? Number(r.mileage_kml_override) : 10.5,
+      r.mileage_kml_override != null ? Number(r.mileage_kml_override) : 0,
     parkingFeePhp: Number(r.parking_fee_php),
     tollSkywayPhp: Number(r.toll_skyway_php),
     tollSlexPhp: Number(r.toll_slex_php),
@@ -70,7 +70,7 @@ export function gasPriceFromDb(r: DbGasPrice): {
 } {
   return {
     gasPrice: Number(r.price_per_liter),
-    gasPriceUpdatedAt: r.created_at,
+    gasPriceUpdatedAt: r.updated_at ?? r.created_at,
   };
 }
 

@@ -92,16 +92,19 @@ export default function SettingsPage() {
           label="1 passenger"
           value={settings.split1pDriver}
           onChange={(v) => setSettings({ split1pDriver: v })}
+          integer
         />
         <Field
           label="2 passengers"
           value={settings.split2pDriver}
           onChange={(v) => setSettings({ split2pDriver: v })}
+          integer
         />
         <Field
           label="3 passengers"
           value={settings.split3pDriver}
           onChange={(v) => setSettings({ split3pDriver: v })}
+          integer
         />
       </section>
 
@@ -114,10 +117,12 @@ function Field({
   label,
   value,
   onChange,
+  integer,
 }: {
   label: string;
   value: number;
   onChange: (n: number) => void;
+  integer?: boolean;
 }) {
   return (
     <label className="flex items-center justify-between text-sm">
@@ -125,8 +130,14 @@ function Field({
       <input
         type="number"
         value={value}
-        step="0.01"
-        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+        step={integer ? "1" : "0.01"}
+        onChange={(e) =>
+          onChange(
+            (integer
+              ? parseInt(e.target.value, 10)
+              : parseFloat(e.target.value)) || 0
+          )
+        }
         className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-right"
       />
     </label>
