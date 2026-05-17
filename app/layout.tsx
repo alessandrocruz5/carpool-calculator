@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 import { HydrateStores } from "@/components/HydrateStores";
 import { ToastProvider } from "@/components/Toast";
+import { getMembership } from "@/lib/auth/getMembership";
 
 export const metadata: Metadata = {
   title: "Carpool Calculator",
@@ -28,7 +29,39 @@ const nav = [
   { href: "/settings", label: "Settings" },
 ];
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+function NotAMemberScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
+      <div className="max-w-sm w-full bg-white rounded-xl border border-slate-200 p-6 text-center space-y-4">
+        <h1 className="text-lg font-semibold">You&apos;re not on a carpool yet</h1>
+        <p className="text-sm text-slate-600">
+          Your account isn&apos;t linked to a carpool roster. Ask the driver to
+          link your account from the Members page so you can see trips and
+          payments.
+        </p>
+        <form action="/auth/signout" method="post">
+          <button type="submit" className="text-sm text-slate-600 underline">
+            Sign out
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const membership = await getMembership();
+
+  if (membership.status === "not-a-member") {
+    return (
+      <html lang="en" className={cn("font-sans", inter.variable)}>
+        <body>
+          <NotAMemberScreen />
+        </body>
+      </html>
+    );
+  }
+
   return (
     <html lang="en" className={cn("font-sans", inter.variable)}>
       <body>

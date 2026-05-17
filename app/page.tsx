@@ -11,6 +11,7 @@ import { useFillups } from "@/lib/store/fillups";
 import { rollingMileage } from "@/lib/mileage";
 import { calcDay } from "@/lib/calc";
 import { daysSince } from "@/lib/week";
+import { useToast } from "@/components/Toast";
 
 export default function TodayPage() {
   const today = dayjs().format("YYYY-MM-DD");
@@ -18,6 +19,7 @@ export default function TodayPage() {
   const { passengers } = useRoster();
   const { fillups } = useFillups();
   const { trips, upsert } = useTrips();
+  const toast = useToast();
 
   const existing = trips.find((t) => t.date === today);
   const [morning, setMorning] = useState<LegState>(
@@ -47,15 +49,25 @@ export default function TodayPage() {
     liveSettings
   );
 
-  function save() {
-    upsert({
-      id: existing?.id ?? crypto.randomUUID(),
-      date: today,
-      gasPrice,
-      parkingFee: settings.parkingFeePhp,
-      morning,
-      evening,
-    });
+  async function save() {
+    try {
+      await upsert({
+        id: existing?.id ?? crypto.randomUUID(),
+        date: today,
+        gasPrice,
+        parkingFee: settings.parkingFeePhp,
+        morning,
+        evening,
+      });
+      toast.show({ message: existing ? "Trip updated" : "Trip saved" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      toast.show({
+        message: msg.includes("forbidden")
+          ? "Couldn't save — only the driver can edit trips."
+          : "Couldn't save the trip — please try again.",
+      });
+    }
   }
 
   if (!hydrated) return null;

@@ -85,13 +85,22 @@ describe("trips store", () => {
     expect((init as RequestInit).method).toBe("DELETE");
   });
 
-  it("remove rehydrates when DELETE fails", async () => {
+  it("remove rehydrates and rethrows when DELETE fails", async () => {
     useTrips.setState({ trips: [trip], hydrated: true });
     fetchMock
       .mockResolvedValueOnce(new Response("err", { status: 500 }))
       .mockResolvedValueOnce(jsonResponse([trip])); // rehydrate restores it
-    await useTrips.getState().remove("t1");
+    await expect(useTrips.getState().remove("t1")).rejects.toThrow();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(useTrips.getState().trips).toEqual([trip]);
+  });
+
+  it("upsert rehydrates and rethrows when POST fails", async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response("forbidden", { status: 403 }))
+      .mockResolvedValueOnce(jsonResponse([])); // rehydrate drops the optimistic add
+    await expect(useTrips.getState().upsert(trip)).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(useTrips.getState().trips).toEqual([]);
   });
 });

@@ -1,13 +1,48 @@
 "use client";
 import { useState } from "react";
 import { useSettings } from "@/lib/store/settings";
-import { useRoster } from "@/lib/store/roster";
+import { useRoster, type Passenger } from "@/lib/store/roster";
+import { useToast } from "@/components/Toast";
 import { EnablePushReminders } from "@/components/push/EnablePushReminders";
 
 export default function SettingsPage() {
   const { settings, setSettings } = useSettings();
   const { passengers, add, remove, toggleActive } = useRoster();
   const [newName, setNewName] = useState("");
+  const toast = useToast();
+
+  async function handleAdd() {
+    const name = newName.trim();
+    if (!name) return;
+    setNewName("");
+    try {
+      await add(name);
+    } catch {
+      toast.show({ message: `Couldn't add ${name} — please try again.` });
+    }
+  }
+
+  async function handleToggle(p: Passenger) {
+    try {
+      await toggleActive(p.id);
+    } catch {
+      toast.show({ message: `Couldn't update ${p.name} — please try again.` });
+    }
+  }
+
+  async function handleRemove(p: Passenger) {
+    if (!window.confirm(`Remove ${p.name} from the roster?`)) return;
+    try {
+      await remove(p.id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      toast.show({
+        message: msg.includes("passenger_has_rides")
+          ? "Can't remove — this coworker has logged rides. Disable them instead."
+          : `Couldn't remove ${p.name} — please try again.`,
+      });
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -23,12 +58,7 @@ export default function SettingsPage() {
             className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm"
           />
           <button
-            onClick={() => {
-              if (newName.trim()) {
-                add(newName);
-                setNewName("");
-              }
-            }}
+            onClick={handleAdd}
             className="bg-brand-600 text-white text-sm rounded-lg px-3 py-2"
           >
             Add
@@ -40,13 +70,13 @@ export default function SettingsPage() {
               <span className={p.active ? "" : "text-slate-400 line-through"}>{p.name}</span>
               <div className="flex gap-2">
                 <button
-                  onClick={() => toggleActive(p.id)}
+                  onClick={() => handleToggle(p)}
                   className="text-xs text-slate-600 underline"
                 >
                   {p.active ? "Disable" : "Enable"}
                 </button>
                 <button
-                  onClick={() => remove(p.id)}
+                  onClick={() => handleRemove(p)}
                   className="text-xs text-red-600 underline"
                 >
                   Remove
