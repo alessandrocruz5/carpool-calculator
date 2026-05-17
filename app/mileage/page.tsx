@@ -110,7 +110,7 @@ export default function MileagePage() {
           <input
             type="number"
             step="0.01"
-            value={settings.mileageKmPerL}
+            value={settings.mileageKmPerL || ""}
             onChange={(e) =>
               setSettings({ mileageKmPerL: parseFloat(e.target.value) || 0 })
             }

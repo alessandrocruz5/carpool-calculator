@@ -161,7 +161,8 @@ export default function PaymentsPage() {
 
       {!isDriver && entries.length > 0 && (
         <p className="text-[11px] text-slate-500 text-center">
-          Open the app with <code>?key=…</code> to mark payments.
+          Only drivers can mark payments. Ask a driver to grant you driver
+          access from the Members admin page.
         </p>
       )}
     </div>

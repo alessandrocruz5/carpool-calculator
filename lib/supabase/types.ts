@@ -11,6 +11,7 @@ export interface DbGasPrice {
   price_per_liter: number;
   station_name: string;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface DbFillup {

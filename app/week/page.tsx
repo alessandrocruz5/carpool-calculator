@@ -235,7 +235,8 @@ export default function WeekPage() {
           })}
           {!isDriver && (
             <p className="text-[11px] text-slate-500">
-              Open the app with <code>?key=…</code> to mark payments.
+              Only drivers can mark payments. Ask a driver to grant you driver
+              access from the Members admin page.
             </p>
           )}
         </section>

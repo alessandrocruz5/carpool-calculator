@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import { calcLeg, type CalcSettings, type Route } from "@/lib/calc";
 import { appendRows, replaceRows, type ExportRow } from "@/lib/sheets";
 import { createClient } from "@/lib/supabase/server";
+import { requireDriver } from "@/lib/auth/requireDriver";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,10 @@ export async function POST(req: Request) {
       { status: 503 }
     );
   }
+
+  const supabase = await createClient();
+  const denied = await requireDriver(supabase);
+  if (denied) return denied;
 
   try {
     const body = (await req.json()) as Body;
@@ -77,7 +82,6 @@ export async function POST(req: Request) {
     // Also refresh the Payments-YYYY-MM tab (per trip per rider, with paid status).
     const monthStart = dayjs(body.weekStart).startOf("month").format("YYYY-MM-DD");
     const monthEnd = dayjs(body.weekStart).endOf("month").format("YYYY-MM-DD");
-    const supabase = await createClient();
     const { data: payRows, error: payErr } = await supabase
       .from("trip_payments")
       .select("trip_id, passenger_id, amount_php, paid, paid_at, trips!inner(date)")

@@ -26,11 +26,11 @@ npm run build                # production build
 
 ## Supabase
 
-Apply `supabase/migrations/0001_init.sql` to your project. RLS is permissive in v1 (shared tracker among trusted coworkers). Tighten policies + flip `NEXT_PUBLIC_REQUIRE_AUTH=true` before going public.
+Apply the migrations in `supabase/migrations/` to your project. RLS is permissive in v1 (shared tracker among trusted coworkers). Tighten policies before going public.
 
-Env vars use the legacy names but accept the current Supabase 2025 key format:
+Env vars use the current Supabase 2025 key format:
 
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` ← Supabase **publishable key** (`sb_publishable_…`)
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` ← Supabase **publishable key** (`sb_publishable_…`)
 - `SUPABASE_SERVICE_ROLE_KEY` ← Supabase **secret key** (`sb_secret_…`)
 
 Both are in **Project Settings → API Keys** in the Supabase dashboard.
@@ -38,17 +38,18 @@ Both are in **Project Settings → API Keys** in the Supabase dashboard.
 ## Deploy to Vercel
 
 1. **Create the Supabase project.** In the Supabase dashboard, create a new project. Wait for it to provision.
-2. **Apply the schema.** Open **SQL Editor**, paste the contents of `supabase/migrations/0001_init.sql`, run. Open **Table Editor** and confirm 7 tables exist: `passengers`, `gas_prices`, `fillups`, `settings`, `trips`, `trip_legs`, `trip_leg_riders`. The `settings` table should already contain one row with `id = 1`.
+2. **Apply the schema.** Open **SQL Editor** and run each migration in `supabase/migrations/` in order: `0001_init.sql`, `0002_trip_payments.sql`, `0003_members_and_rls.sql`, `0004_push_subscriptions.sql`. Open **Table Editor** and confirm these tables exist: `passengers`, `gas_prices`, `fillups`, `settings`, `trips`, `trip_legs`, `trip_leg_riders`, `trip_payments`, `members`, `push_subscriptions`. The `settings` table should already contain one row with `id = 1`.
 3. **Copy the keys.** Go to **Project Settings → API Keys** and copy:
    - the project URL (top of the page)
    - the **publishable key** (`sb_publishable_…`)
    - the **secret key** (`sb_secret_…`) — click "Reveal"
 4. **Import to Vercel.** In Vercel, **Add New Project → Import** this GitHub repo. Before the first deploy, add these environment variables:
    - `NEXT_PUBLIC_SUPABASE_URL` = project URL
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = publishable key
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = publishable key
    - `SUPABASE_SERVICE_ROLE_KEY` = secret key
    - (optional) `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID` for Sheets export. Leave unset to disable that feature cleanly.
 5. **Deploy.** Vercel auto-detects Next.js. After deploy, open the URL, go to `/settings`, add a passenger, and confirm the row appears in the Supabase **Table Editor**. If it does, every other store is wired the same way.
+6. **Bootstrap the first driver.** Member roles are stored in the `members` table, but there's no driver yet to grant access from the in-app **Members** admin. Have the driver sign in once (via the magic link on `/auth/login`), then in the Supabase **SQL Editor** run `insert into members (user_id, role) values ('<auth.users.id>','driver');` — copy the user's id from **Authentication → Users**. After that, the driver can invite and link everyone else from `/admin/members`.
 
 Note: RLS is `USING (true)` in v1, so anyone who learns the project URL + publishable key can read/write everything. Keep the GitHub repo private, don't share the deployed URL, and don't paste the keys into any client-side code outside this project.
 
