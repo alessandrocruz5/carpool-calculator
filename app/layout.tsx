@@ -89,6 +89,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="max-w-3xl mx-auto flex items-center justify-between">
               <Link href="/" className="font-semibold">Carpool</Link>
               <div className="flex items-center gap-3 text-xs opacity-90">
+                <Link href="/account" className="hover:underline">Account</Link>
                 <Link href="/admin/members" className="hover:underline">Members</Link>
                 <form action="/auth/signout" method="post">
                   <button type="submit" className="hover:underline">Sign out</button>
