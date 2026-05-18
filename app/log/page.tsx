@@ -7,6 +7,7 @@ import { useSettings } from "@/lib/store/settings";
 import { calcDay } from "@/lib/calc";
 import { PHP } from "@/components/PHP";
 import { useToast } from "@/components/Toast";
+import { useIsDriver } from "@/lib/auth/useIsDriver";
 
 export default function LogPage() {
   const { trips, remove, upsert } = useTrips();
@@ -14,6 +15,7 @@ export default function LogPage() {
   const { settings, gasPrice } = useSettings();
   const [open, setOpen] = useState<string | null>(null);
   const toast = useToast();
+  const isDriver = useIsDriver();
 
   const sorted = [...trips].sort((a, b) => (a.date < b.date ? 1 : -1));
   const mostRecent = sorted[0];
@@ -53,7 +55,7 @@ export default function LogPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Trip log</h1>
-        {mostRecent && (
+        {isDriver && mostRecent && (
           <button
             onClick={copyYesterday}
             className="text-xs px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
@@ -105,12 +107,14 @@ export default function LogPage() {
                   <div className="text-xs text-slate-500 pt-2">
                     AM: {t.morning.route} · PM: {t.evening.route} · Gas <PHP value={t.gasPrice} />/L
                   </div>
-                  <button
-                    onClick={() => handleDelete(t)}
-                    className="text-xs text-red-600 underline"
-                  >
-                    Delete
-                  </button>
+                  {isDriver && (
+                    <button
+                      onClick={() => handleDelete(t)}
+                      className="text-xs text-red-600 underline"
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               )}
             </li>

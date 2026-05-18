@@ -17,6 +17,7 @@ export function LegCard({
   passengers,
   gasPrice,
   settings,
+  readOnly = false,
 }: {
   leg: LegName;
   state: LegState;
@@ -24,6 +25,7 @@ export function LegCard({
   passengers: PassengerOption[];
   gasPrice: number;
   settings: CalcSettings;
+  readOnly?: boolean;
 }) {
   const breakdown: LegBreakdown = useMemo(
     () =>
@@ -39,15 +41,16 @@ export function LegCard({
     <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="font-semibold capitalize">{leg}</h2>
-        <RouteToggle value={state.route} onChange={(r) => onChange({ ...state, route: r })} />
+        <RouteToggle value={state.route} onChange={(r) => onChange({ ...state, route: r })} readOnly={readOnly} />
       </div>
 
       <div>
-        <p className="text-xs text-slate-500 mb-2">Passengers ({state.passengerIds.length}/3)</p>
+        <p className="text-xs text-slate-500 mb-2">Passengers ({state.passengerIds.length}{readOnly ? "" : "/3"})</p>
         <PassengerChips
           options={passengers}
           selected={state.passengerIds}
           onChange={(ids) => onChange({ ...state, passengerIds: ids })}
+          readOnly={readOnly}
         />
       </div>
 
