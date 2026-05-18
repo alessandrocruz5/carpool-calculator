@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 import { HydrateStores } from "@/components/HydrateStores";
 import { ToastProvider } from "@/components/Toast";
+import { PASSENGER_TAB_HREFS } from "@/lib/auth/passengerAccess";
 
 export const metadata: Metadata = {
   title: "Carpool Calculator",
@@ -35,13 +36,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const userId = (claimsData?.claims as { sub?: string } | undefined)?.sub;
 
   let needsAccountLink = false;
+  let role: string | null = null;
   if (userId) {
     const { data: member } = await supabase
       .from("members")
-      .select("user_id")
+      .select("role")
       .eq("user_id", userId)
       .maybeSingle();
     needsAccountLink = !member;
+    role = member?.role ?? null;
   }
 
   if (needsAccountLink) {
@@ -71,6 +74,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     );
   }
 
+  const visibleNav =
+    role === "passenger"
+      ? nav.filter((n) => (PASSENGER_TAB_HREFS as readonly string[]).includes(n.href))
+      : nav;
+
   return (
     <html lang="en" className={cn("font-sans", inter.variable)}>
       <body>
@@ -81,6 +89,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="max-w-3xl mx-auto flex items-center justify-between">
               <Link href="/" className="font-semibold">Carpool</Link>
               <div className="flex items-center gap-3 text-xs opacity-90">
+                <Link href="/account" className="hover:underline">Account</Link>
                 <Link href="/admin/members" className="hover:underline">Members</Link>
                 <form action="/auth/signout" method="post">
                   <button type="submit" className="hover:underline">Sign out</button>
@@ -90,8 +99,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </header>
           <main className="flex-1 max-w-3xl w-full mx-auto p-4 pb-24">{children}</main>
           <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200">
-            <div className="max-w-3xl mx-auto grid grid-cols-6 text-xs">
-              {nav.map((n) => (
+            <div
+              className="max-w-3xl mx-auto grid text-xs"
+              style={{
+                gridTemplateColumns: `repeat(${visibleNav.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {visibleNav.map((n) => (
                 <Link
                   key={n.href}
                   href={n.href}

@@ -242,31 +242,35 @@ export default function WeekPage() {
         </section>
       )}
 
-      <button
-        onClick={exportToSheets}
-        disabled={exporting || exportConfigured === false}
-        title={
-          exportConfigured === false
-            ? "Set GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_SHEET_ID to enable."
-            : undefined
-        }
-        className={
-          "w-full rounded-lg px-3 py-2 font-medium disabled:opacity-50 " +
-          (isFriday() && exportConfigured !== false
-            ? "bg-brand-600 text-white"
-            : "bg-white border border-slate-300 text-slate-700")
-        }
-      >
-        {exporting
-          ? "Exporting…"
-          : exportConfigured === false
-          ? "Export to Google Sheets (not configured)"
-          : "Export to Google Sheets (includes payment status)"}
-      </button>
-      {exportConfigured === false && (
-        <p className="text-xs text-slate-400 text-center">Sheets export not configured</p>
+      {isDriver && (
+        <>
+          <button
+            onClick={exportToSheets}
+            disabled={exporting || exportConfigured === false}
+            title={
+              exportConfigured === false
+                ? "Set GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, and GOOGLE_SHEET_ID to enable."
+                : undefined
+            }
+            className={
+              "w-full rounded-lg px-3 py-2 font-medium disabled:opacity-50 " +
+              (isFriday() && exportConfigured !== false
+                ? "bg-brand-600 text-white"
+                : "bg-white border border-slate-300 text-slate-700")
+            }
+          >
+            {exporting
+              ? "Exporting…"
+              : exportConfigured === false
+              ? "Export to Google Sheets (not configured)"
+              : "Export to Google Sheets (includes payment status)"}
+          </button>
+          {exportConfigured === false && (
+            <p className="text-xs text-slate-400 text-center">Sheets export not configured</p>
+          )}
+          {exportMsg && <p className="text-xs text-slate-600 text-center">{exportMsg}</p>}
+        </>
       )}
-      {exportMsg && <p className="text-xs text-slate-600 text-center">{exportMsg}</p>}
     </div>
   );
 }
