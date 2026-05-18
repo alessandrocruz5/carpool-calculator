@@ -34,33 +34,7 @@ export function MembersAdmin({
   const passengerName = (id: string | null) =>
     id ? passengers.find((p) => p.id === id)?.name ?? id : "—";
 
-  async function inviteByMagicLink() {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/confirm`,
-        },
-      });
-      if (error) throw error;
-      setMsg({
-        kind: "ok",
-        text: `Magic link sent to ${email}. After they sign in once, click "Link member" to attach their account.`,
-      });
-    } catch (err) {
-      setMsg({
-        kind: "err",
-        text: err instanceof Error ? err.message : "failed to send link",
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function linkMember() {
+  async function inviteAndLink() {
     setBusy(true);
     setMsg(null);
     try {
@@ -71,18 +45,34 @@ export function MembersAdmin({
         p_passenger_id: role === "passenger" && passengerId ? passengerId : null,
       });
       if (error) throw error;
-      const row = { ...(data as MemberRow), email: email.trim() };
-      setMembers((prev) => {
-        const others = prev.filter((m) => m.user_id !== row.user_id);
-        return [...others, row];
-      });
-      setMsg({ kind: "ok", text: `Linked ${email} as ${role}.` });
+
+      const result = data as { pending?: boolean; user_id?: string } & MemberRow;
+      if (result.pending) {
+        // User hasn't signed in yet — invite stored, now send the magic link.
+        const { error: otpError } = await supabase.auth.signInWithOtp({
+          email: email.trim(),
+          options: { emailRedirectTo: `${window.location.origin}/auth/confirm` },
+        });
+        if (otpError) throw otpError;
+        setMsg({
+          kind: "ok",
+          text: `Invite saved and sign-in link sent to ${email}. They'll be linked automatically when they sign in.`,
+        });
+      } else {
+        // User already existed in auth — linked immediately.
+        const row = { ...(result as MemberRow), email: email.trim() };
+        setMembers((prev) => {
+          const others = prev.filter((m) => m.user_id !== row.user_id);
+          return [...others, row];
+        });
+        setMsg({ kind: "ok", text: `Linked ${email} as ${role}.` });
+      }
       setEmail("");
       setPassengerId("");
     } catch (err) {
       setMsg({
         kind: "err",
-        text: err instanceof Error ? err.message : "failed to link member",
+        text: err instanceof Error ? err.message : "failed to invite member",
       });
     } finally {
       setBusy(false);
@@ -126,8 +116,9 @@ export function MembersAdmin({
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <h2 className="font-semibold">Invite / link member</h2>
         <p className="text-xs text-slate-500">
-          1. Send a magic link so the user can sign in once. 2. Then link their
-          account to a role and (for passengers) a roster entry.
+          Enter the member&apos;s email, pick their role (and passenger for riders),
+          then click Invite. A sign-in link is sent automatically and their account
+          is linked the moment they sign in.
         </p>
         <input
           type="email"
@@ -165,19 +156,11 @@ export function MembersAdmin({
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={inviteByMagicLink}
-            disabled={busy || !email}
-            className="bg-slate-200 text-slate-800 text-sm rounded-lg px-3 py-2 disabled:opacity-50"
-          >
-            Send magic link
-          </button>
-          <button
-            type="button"
-            onClick={linkMember}
+            onClick={inviteAndLink}
             disabled={busy || !email}
             className="bg-brand-600 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-50"
           >
-            Link member
+            Invite &amp; link
           </button>
         </div>
         {msg && (
