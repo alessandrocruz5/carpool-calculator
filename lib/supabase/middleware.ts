@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isDriverOnlyPath } from '@/lib/auth/passengerAccess'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -47,6 +48,22 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
+  }
+
+  // Passengers may only use the Today, Log and Week tabs. Block direct
+  // navigation to driver-only routes.
+  const userId = (user as { sub?: string } | undefined)?.sub
+  if (userId && isDriverOnlyPath(request.nextUrl.pathname)) {
+    const { data: member } = await supabase
+      .from('members')
+      .select('role')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (member?.role === 'passenger') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/'
+      return NextResponse.redirect(url)
+    }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
