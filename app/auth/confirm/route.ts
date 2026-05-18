@@ -14,11 +14,13 @@ export async function GET(request: NextRequest) {
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      await supabase.rpc("claim_member_invite");
       return NextResponse.redirect(new URL(next, request.url));
     }
   } else if (token_hash && type) {
     const { error } = await supabase.auth.verifyOtp({ type, token_hash });
     if (!error) {
+      await supabase.rpc("claim_member_invite");
       return NextResponse.redirect(new URL(next, request.url));
     }
   }
