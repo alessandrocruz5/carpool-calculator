@@ -25,6 +25,7 @@ const nav = [
   { href: "/", label: "Today" },
   { href: "/log", label: "Log" },
   { href: "/week", label: "Week" },
+  { href: "/payments", label: "Payments" },
   { href: "/gas", label: "Gas" },
   { href: "/mileage", label: "Mileage" },
   { href: "/settings", label: "Settings" },

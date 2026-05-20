@@ -9,8 +9,8 @@ export function useIsDriver(): boolean {
     let cancelled = false;
     (async () => {
       const supabase = createClient();
-      const { data: claims } = await supabase.auth.getClaims();
-      const userId = (claims?.claims as { sub?: string } | undefined)?.sub;
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
       if (!userId) return;
       const { data } = await supabase
         .from("members")
