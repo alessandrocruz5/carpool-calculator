@@ -40,16 +40,16 @@ export default function SettingsPage() {
     setNewName("");
     try {
       await add(name);
-    } catch {
-      toast.show({ message: "Couldn't add coworker. Check your connection and try again." });
+    } catch (err) {
+      toast.show({ message: describeError(err, "Couldn't add coworker.") });
     }
   }
 
   async function handleToggle(p: Passenger) {
     try {
       await toggleActive(p.id);
-    } catch {
-      toast.show({ message: `Couldn't update ${p.name}. Check your connection and try again.` });
+    } catch (err) {
+      toast.show({ message: describeError(err, `Couldn't update ${p.name}.`) });
     }
   }
 
@@ -62,7 +62,7 @@ export default function SettingsPage() {
       toast.show({
         message: /foreign key|23503/i.test(msg)
           ? "Can't remove — this coworker has logged rides. Disable them instead."
-          : "Couldn't remove coworker. Check your connection and try again.",
+          : describeError(err, "Couldn't remove coworker."),
       });
     }
   }
@@ -288,6 +288,24 @@ export default function SettingsPage() {
       <EnablePushReminders />
     </div>
   );
+}
+
+// Surfaces the real server error instead of masking everything as a
+// connection problem. Genuine fetch failures throw a TypeError; anything
+// else carries a server response body worth showing.
+function describeError(err: unknown, prefix: string): string {
+  if (err instanceof TypeError) {
+    return `${prefix} Check your connection and try again.`;
+  }
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  let detail = raw.trim();
+  try {
+    const parsed = JSON.parse(detail) as { error?: string };
+    if (parsed?.error) detail = parsed.error;
+  } catch {
+    // not JSON — use the raw text
+  }
+  return detail ? `${prefix} ${detail}` : `${prefix} Please try again.`;
 }
 
 function Sparkline({
