@@ -17,3 +17,6 @@ public/worker-*.js.map
 public/fallback-*.js
 next-env.d.ts
 *.tsbuildinfo
+
+# one-off DB migration data export (contains member emails)
+old_project_data.sql
