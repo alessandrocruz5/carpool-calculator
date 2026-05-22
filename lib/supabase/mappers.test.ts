@@ -21,9 +21,10 @@ describe("fillup mappers", () => {
       odometer_km: 12345.6,
       created_at: "2026-05-13T00:00:00Z",
     };
-    const f = fromDbFillup(db);
+    const f = fromDbFillup({ ...db, car_id: "c1", owner_user_id: "u9" });
     expect(f).toEqual({
       id: "u1",
+      carId: "c1",
       date: "2026-05-13",
       liters: 30.5,
       totalPhp: 2745,
@@ -34,6 +35,16 @@ describe("fillup mappers", () => {
       liters: 30.5,
       total_php: 2745,
       odometer_km: 12345.6,
+      car_id: "c1",
+    });
+    expect(toDbFillupInsert(f, { groupId: "g1", ownerUserId: "u9" })).toEqual({
+      date: "2026-05-13",
+      liters: 30.5,
+      total_php: 2745,
+      odometer_km: 12345.6,
+      car_id: "c1",
+      group_id: "g1",
+      owner_user_id: "u9",
     });
   });
 });

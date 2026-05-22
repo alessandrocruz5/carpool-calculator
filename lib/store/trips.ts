@@ -9,6 +9,8 @@ export interface StoredTrip {
   date: string;
   gasPrice: number;
   parkingFee: number;
+  carId?: string | null;
+  driverUserId?: string | null;
   morning: { route: Route; passengerIds: string[] };
   evening: { route: Route; passengerIds: string[] };
   notes?: string;
