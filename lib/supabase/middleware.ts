@@ -51,6 +51,37 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // First-run gate: a signed-in user whose profile has no display_name is
+  // routed to /account?complete=1 and blocked from every other page until
+  // they fill it in. API routes are exempt — they enforce their own auth.
+  if (
+    user?.sub &&
+    !pathname.startsWith('/auth') &&
+    !pathname.startsWith('/login') &&
+    !pathname.startsWith('/api')
+  ) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('user_id', user.sub)
+      .maybeSingle()
+    const displayName = (profile as { display_name?: string | null } | null)
+      ?.display_name
+    const profileComplete = !!displayName && displayName.trim().length > 0
+
+    if (!profileComplete) {
+      if (pathname !== '/account') {
+        const url = request.nextUrl.clone()
+        url.pathname = '/account'
+        url.search = '?complete=1'
+        return NextResponse.redirect(url)
+      }
+      // On /account with an incomplete profile: let it render, skip the
+      // group gate below so a brand-new user isn't bounced to /groups.
+      return supabaseResponse
+    }
+  }
+
   // Resolve the caller's active group. Users with no memberships are sent to
   // the group picker; everyone else gets the active-group cookie refreshed.
   if (

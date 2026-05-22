@@ -8,6 +8,8 @@ import { useSettings } from "@/lib/store/settings";
 import { useRoster } from "@/lib/store/roster";
 import { useTrips } from "@/lib/store/trips";
 import { useFillups } from "@/lib/store/fillups";
+import { useCars } from "@/lib/store/cars";
+import { createClient } from "@/lib/supabase/client";
 import { rollingMileage } from "@/lib/mileage";
 import { calcDay } from "@/lib/calc";
 import { daysSince } from "@/lib/week";
@@ -17,6 +19,7 @@ export default function TodayPage() {
   const { settings, gasPrice, gasPriceUpdatedAt } = useSettings();
   const { passengers } = useRoster();
   const { fillups } = useFillups();
+  const { cars } = useCars();
   const { trips, upsert } = useTrips();
 
   const existing = trips.find((t) => t.date === today);
@@ -26,12 +29,37 @@ export default function TodayPage() {
   const [evening, setEvening] = useState<LegState>(
     existing?.evening ?? { route: "skyway", passengerIds: [] }
   );
+  const [carId, setCarId] = useState<string>(existing?.carId ?? "");
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
 
+  useEffect(() => {
+    (async () => {
+      const { data } = await createClient().auth.getClaims();
+      setUserId(
+        (data?.claims as { sub?: string } | undefined)?.sub ?? null
+      );
+    })();
+  }, []);
+
+  // Default the car picker to the trip's saved car, else the only car.
+  useEffect(() => {
+    if (carId) return;
+    if (existing?.carId) setCarId(existing.carId);
+    else if (cars.length === 1) setCarId(cars[0].id);
+  }, [cars, existing, carId]);
+
+  const selectedCar = cars.find((c) => c.id === carId);
+  // A chosen car resolves the trip's efficiency: its rated value first, then
+  // its measured rolling mileage, then the group setting / overall measured.
+  const carMeasured = carId ? rollingMileage(fillups, 5, carId) : null;
+  const carEfficiency =
+    selectedCar?.fuelEfficiencyKml || carMeasured || null;
   const measuredMileage = rollingMileage(fillups);
-  const effectiveMileage = settings.mileageKmPerL || measuredMileage || 10.5;
+  const effectiveMileage =
+    carEfficiency || settings.mileageKmPerL || measuredMileage || 10.5;
   const liveSettings = { ...settings, mileageKmPerL: effectiveMileage };
 
   const activePassengers = passengers.filter((p) => p.active);
@@ -48,11 +76,16 @@ export default function TodayPage() {
   );
 
   function save() {
+    // car_id and driver_user_id must be persisted together; only attach the
+    // car when the current user is resolved.
+    const attachCar = carId && userId ? carId : null;
     upsert({
       id: existing?.id ?? crypto.randomUUID(),
       date: today,
       gasPrice,
       parkingFee: settings.parkingFeePhp,
+      carId: attachCar,
+      driverUserId: attachCar ? userId : null,
       morning,
       evening,
     });
@@ -85,6 +118,33 @@ export default function TodayPage() {
           ⛽ Gas price is {gasPriceUpdatedAt ? `${daysSince(gasPriceUpdatedAt)} days` : "never"} old —
           update for Tuesday →
         </Link>
+      )}
+
+      {cars.length > 0 && (
+        <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">Vehicle</h2>
+            <select
+              value={carId}
+              onChange={(e) => setCarId(e.target.value)}
+              className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+            >
+              <option value="">— no car —</option>
+              {cars.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {selectedCar && (
+            <p className="text-xs text-slate-500">
+              {carEfficiency
+                ? `Using ${effectiveMileage.toFixed(2)} km/L for ${selectedCar.name}`
+                : `${selectedCar.name} has no efficiency data — using ${effectiveMileage.toFixed(2)} km/L`}
+            </p>
+          )}
+        </section>
       )}
 
       <LegCard
