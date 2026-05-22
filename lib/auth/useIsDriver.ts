@@ -1,8 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { readActiveGroupCookie } from "@/lib/auth/passengerAccess";
 
-export function useIsDriver(): boolean {
+/**
+ * True when the signed-in user can drive in the active group (role
+ * `driver` or `both`). Pass an explicit group id to override the cookie.
+ */
+export function useIsDriver(groupId?: string): boolean {
   const [isDriver, setIsDriver] = useState(false);
 
   useEffect(() => {
@@ -12,17 +17,17 @@ export function useIsDriver(): boolean {
       const { data: claims } = await supabase.auth.getClaims();
       const userId = (claims?.claims as { sub?: string } | undefined)?.sub;
       if (!userId) return;
-      const { data } = await supabase
-        .from("members")
-        .select("role")
-        .eq("user_id", userId)
-        .maybeSingle();
-      if (!cancelled) setIsDriver(data?.role === "driver");
+      const gid = groupId ?? readActiveGroupCookie();
+      let query = supabase.from("members").select("role").eq("user_id", userId);
+      if (gid) query = query.eq("group_id", gid);
+      const { data } = await query.maybeSingle();
+      const role = data?.role;
+      if (!cancelled) setIsDriver(role === "driver" || role === "both");
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [groupId]);
 
   return isDriver;
 }

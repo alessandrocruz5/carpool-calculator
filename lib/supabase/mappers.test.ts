@@ -13,6 +13,8 @@ describe("fillup mappers", () => {
   it("round-trips fillup fields", () => {
     const db = {
       id: "u1",
+      group_id: "g1",
+      car_id: null,
       date: "2026-05-13",
       liters: 30.5,
       total_php: 2745,
@@ -41,6 +43,7 @@ describe("passenger mapper", () => {
     expect(
       fromDbPassenger({
         id: "p1",
+        group_id: "g1",
         name: "Ana",
         active: true,
         created_at: "x",
@@ -53,6 +56,7 @@ describe("settings mappers", () => {
   it("returns 0 mileage when override is null", () => {
     const r = fromDbSettings({
       id: 1,
+      group_id: "g1",
       mileage_kml_override: null,
       round_trip_km: 42,
       parking_fee_php: 90,
@@ -84,6 +88,7 @@ describe("gas price mapper", () => {
     expect(
       gasPriceFromDb({
         id: "g1",
+        group_id: "g1",
         effective_date: "2026-05-13",
         price_per_liter: 65.55,
         station_name: "Petron",
@@ -98,6 +103,9 @@ describe("trip mapper", () => {
     const t = fromDbTrip(
       {
         id: "t1",
+        group_id: "g1",
+        car_id: null,
+        driver_user_id: null,
         date: "2026-05-13",
         gas_price_id: "g1",
         parking_fee_php: 90,
@@ -106,20 +114,24 @@ describe("trip mapper", () => {
         trip_legs: [
           {
             id: "l1",
+            group_id: "g1",
             trip_id: "t1",
             leg: "morning",
             route: "skyway",
             trip_leg_riders: [
-              { trip_leg_id: "l1", passenger_id: "p1" },
-              { trip_leg_id: "l1", passenger_id: "p2" },
+              { group_id: "g1", trip_leg_id: "l1", passenger_id: "p1" },
+              { group_id: "g1", trip_leg_id: "l1", passenger_id: "p2" },
             ],
           },
           {
             id: "l2",
+            group_id: "g1",
             trip_id: "t1",
             leg: "evening",
             route: "slex",
-            trip_leg_riders: [{ trip_leg_id: "l2", passenger_id: "p1" }],
+            trip_leg_riders: [
+              { group_id: "g1", trip_leg_id: "l2", passenger_id: "p1" },
+            ],
           },
         ],
       },
