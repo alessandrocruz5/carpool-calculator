@@ -36,17 +36,54 @@ export async function updateSession(request: NextRequest) {
   // IMPORTANT: If you remove getClaims() and you use server-side rendering
   // with the Supabase client, your users may be randomly logged out.
   const { data } = await supabase.auth.getClaims()
-  const user = data?.claims
+  const user = data?.claims as { sub?: string } | undefined
+
+  const pathname = request.nextUrl.pathname
 
   if (
     !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth')
+    !pathname.startsWith('/login') &&
+    !pathname.startsWith('/auth')
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
+  }
+
+  // Resolve the caller's active group. Users with no memberships are sent to
+  // the group picker; everyone else gets the active-group cookie refreshed.
+  if (
+    user?.sub &&
+    !pathname.startsWith('/auth') &&
+    !pathname.startsWith('/login') &&
+    pathname !== '/groups'
+  ) {
+    const { data: memberships } = await supabase
+      .from('members')
+      .select('group_id')
+      .eq('user_id', user.sub)
+    const groupIds = (memberships ?? []).map(
+      (m) => (m as { group_id: string }).group_id
+    )
+
+    if (groupIds.length === 0) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/groups'
+      return NextResponse.redirect(url)
+    }
+
+    const cookieGroup = request.cookies.get('carpool-group')?.value
+    const activeGroup =
+      cookieGroup && groupIds.includes(cookieGroup) ? cookieGroup : groupIds[0]
+    if (activeGroup !== cookieGroup) {
+      supabaseResponse.cookies.set('carpool-group', activeGroup, {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365,
+      })
+    }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.

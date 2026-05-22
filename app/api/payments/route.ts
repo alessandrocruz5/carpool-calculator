@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requireDriver } from "@/lib/auth/requireDriver";
+import { requireGroupDriver } from "@/lib/auth/requireDriver";
+import { requireActiveGroupId } from "@/lib/group";
 import type { DbTripPayment } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,8 @@ interface PassengerJoin {
 
 export async function GET(req: Request) {
   const supabase = await createClient();
+  const group = await requireActiveGroupId(supabase);
+  if (!group.ok) return group.response;
   const { searchParams } = new URL(req.url);
   const summary = searchParams.get("summary");
   const from = searchParams.get("from");
@@ -28,6 +31,7 @@ export async function GET(req: Request) {
     const { data, error } = await supabase
       .from("trip_payments")
       .select("passenger_id, amount_php, passengers!inner(name)")
+      .eq("group_id", group.groupId)
       .eq("paid", false);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     const rows = (data ?? []) as unknown as PassengerJoin[];
@@ -52,7 +56,8 @@ export async function GET(req: Request) {
 
   let q = supabase
     .from("trip_payments")
-    .select("trip_id, passenger_id, amount_php, paid, paid_at, trips!inner(date)");
+    .select("trip_id, passenger_id, amount_php, paid, paid_at, trips!inner(date)")
+    .eq("group_id", group.groupId);
 
   if (passengerId) q = q.eq("passenger_id", passengerId);
   if (paid === "true") q = q.eq("paid", true);
@@ -82,8 +87,10 @@ interface PatchItem {
 
 export async function PATCH(req: Request) {
   const supabase = await createClient();
-  const denied = await requireDriver(supabase);
-  if (denied) return denied;
+  const group = await requireActiveGroupId(supabase);
+  if (!group.ok) return group.response;
+  const denied = await requireGroupDriver(supabase, group.groupId);
+  if (!denied.ok) return denied.response;
 
   const body = (await req.json()) as
     | PatchItem
@@ -120,6 +127,7 @@ export async function PATCH(req: Request) {
         paid: it.paid,
         paid_at: it.paid ? new Date().toISOString() : null,
       })
+      .eq("group_id", group.groupId)
       .eq("trip_id", it.tripId)
       .eq("passenger_id", it.passengerId)
       .select()

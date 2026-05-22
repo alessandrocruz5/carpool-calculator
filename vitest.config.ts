@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "."),
       "server-only": path.resolve(__dirname, "lib/test/server-only-shim.ts"),
+      "next/headers": path.resolve(__dirname, "lib/test/next-headers-shim.ts"),
     },
   },
   test: {
