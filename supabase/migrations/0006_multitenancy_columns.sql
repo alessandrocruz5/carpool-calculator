@@ -117,6 +117,8 @@ begin
   update settings set group_id = v_group where group_id is null;
 end $$;
 
+delete from settings where group_id is null;
+
 -- Drop the singleton check and old PK, make group_id the PK
 alter table settings drop constraint if exists singleton;
 alter table settings drop constraint if exists settings_pkey;
