@@ -1,88 +1,102 @@
 "use client";
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useEffect, useState } from "react";
+import type { MemberRole } from "@/lib/supabase/types";
+import { roleCanDrive } from "@/lib/auth/passengerAccess";
 
 interface MemberRow {
-  user_id: string;
-  role: "driver" | "passenger";
-  passenger_id: string | null;
-  created_at: string;
+  userId: string;
+  role: MemberRole;
   email: string | null;
 }
 
-interface PassengerRow {
-  id: string;
-  name: string;
-}
+const ROLES: MemberRole[] = ["driver", "passenger", "both"];
+type Msg = { kind: "ok" | "err"; text: string } | null;
 
-export function MembersAdmin({
-  initialMembers,
-  passengers,
-}: {
-  initialMembers: MemberRow[];
-  passengers: PassengerRow[];
-}) {
-  const [members, setMembers] = useState<MemberRow[]>(initialMembers);
+export function MembersAdmin() {
+  const [members, setMembers] = useState<MemberRow[]>([]);
+  const [selfUserId, setSelfUserId] = useState<string | null>(null);
+  const [callerRole, setCallerRole] = useState<MemberRole | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"driver" | "passenger">("passenger");
-  const [passengerId, setPassengerId] = useState<string>("");
+  const [role, setRole] = useState<MemberRole>("passenger");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(
-    null
-  );
+  const [msg, setMsg] = useState<Msg>(null);
 
-  const passengerName = (id: string | null) =>
-    id ? passengers.find((p) => p.id === id)?.name ?? id : "—";
+  const canManage = roleCanDrive(callerRole);
 
-  async function inviteByMagicLink() {
-    setBusy(true);
-    setMsg(null);
+  async function load() {
     try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/confirm`,
-        },
-      });
-      if (error) throw error;
-      setMsg({
-        kind: "ok",
-        text: `Magic link sent to ${email}. After they sign in once, click "Link member" to attach their account.`,
-      });
+      const res = await fetch("/api/members", { cache: "no-store" });
+      if (!res.ok) throw new Error(await res.text());
+      const d = (await res.json()) as {
+        members: MemberRow[];
+        selfUserId: string;
+        callerRole: MemberRole;
+      };
+      setMembers(d.members);
+      setSelfUserId(d.selfUserId);
+      setCallerRole(d.callerRole);
     } catch (err) {
       setMsg({
         kind: "err",
-        text: err instanceof Error ? err.message : "failed to send link",
+        text: err instanceof Error ? err.message : "failed to load members",
+      });
+    } finally {
+      setLoaded(true);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function invite() {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/members", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), role }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setMsg({
+        kind: "ok",
+        text: `Invited ${email.trim()} as ${role}. They join once they sign in.`,
+      });
+      setEmail("");
+      await load();
+    } catch (err) {
+      setMsg({
+        kind: "err",
+        text: err instanceof Error ? err.message : "failed to invite",
       });
     } finally {
       setBusy(false);
     }
   }
 
-  async function linkMember() {
+  async function changeRole(userId: string, nextRole: MemberRole) {
     setBusy(true);
     setMsg(null);
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase.rpc("link_member_by_email", {
-        p_email: email.trim(),
-        p_role: role,
-        p_passenger_id: role === "passenger" && passengerId ? passengerId : null,
+      const res = await fetch("/api/members", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, role: nextRole }),
       });
-      if (error) throw error;
-      const row = { ...(data as MemberRow), email: email.trim() };
-      setMembers((prev) => {
-        const others = prev.filter((m) => m.user_id !== row.user_id);
-        return [...others, row];
-      });
-      setMsg({ kind: "ok", text: `Linked ${email} as ${role}.` });
-      setEmail("");
-      setPassengerId("");
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(body?.error ?? "failed to change role");
+      }
+      await load();
     } catch (err) {
       setMsg({
         kind: "err",
-        text: err instanceof Error ? err.message : "failed to link member",
+        text: err instanceof Error ? err.message : "failed to change role",
       });
     } finally {
       setBusy(false);
@@ -93,22 +107,17 @@ export function MembersAdmin({
     setBusy(true);
     setMsg(null);
     try {
-      const target = members.find((m) => m.user_id === userId);
-      const driverCount = members.filter((m) => m.role === "driver").length;
-      if (target?.role === "driver" && driverCount <= 1) {
-        setMsg({
-          kind: "err",
-          text: "Can't remove the last driver. Link another driver first.",
-        });
-        return;
+      const res = await fetch(
+        `/api/members?userId=${encodeURIComponent(userId)}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(body?.error ?? "failed to remove member");
       }
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("members")
-        .delete()
-        .eq("user_id", userId);
-      if (error) throw error;
-      setMembers((prev) => prev.filter((m) => m.user_id !== userId));
+      await load();
     } catch (err) {
       setMsg({
         kind: "err",
@@ -119,15 +128,23 @@ export function MembersAdmin({
     }
   }
 
+  if (loaded && !canManage) {
+    return (
+      <div className="max-w-md mx-auto mt-16 text-center text-sm text-slate-600">
+        This page is only available to drivers.
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Members</h1>
 
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-        <h2 className="font-semibold">Invite / link member</h2>
+        <h2 className="font-semibold">Invite member</h2>
         <p className="text-xs text-slate-500">
-          1. Send a magic link so the user can sign in once. 2. Then link their
-          account to a role and (for passengers) a roster entry.
+          Invite by email. If the person already has an account they join this
+          group immediately; otherwise they join the first time they sign in.
         </p>
         <input
           type="email"
@@ -139,56 +156,24 @@ export function MembersAdmin({
         <div className="flex gap-2">
           <select
             value={role}
-            onChange={(e) =>
-              setRole(e.target.value as "driver" | "passenger")
-            }
+            onChange={(e) => setRole(e.target.value as MemberRole)}
             className="border border-slate-300 rounded-lg px-2 py-2 text-sm"
           >
-            <option value="passenger">passenger</option>
-            <option value="driver">driver</option>
+            {ROLES.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
           </select>
-          {role === "passenger" && (
-            <select
-              value={passengerId}
-              onChange={(e) => setPassengerId(e.target.value)}
-              className="flex-1 border border-slate-300 rounded-lg px-2 py-2 text-sm"
-            >
-              <option value="">— pick passenger —</option>
-              {passengers.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-        <div className="flex gap-2">
           <button
             type="button"
-            onClick={inviteByMagicLink}
-            disabled={busy || !email}
-            className="bg-slate-200 text-slate-800 text-sm rounded-lg px-3 py-2 disabled:opacity-50"
-          >
-            Send magic link
-          </button>
-          <button
-            type="button"
-            onClick={linkMember}
-            disabled={busy || !email}
+            onClick={invite}
+            disabled={busy || !email.trim()}
             className="bg-brand-600 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-50"
           >
-            Link member
+            Invite
           </button>
         </div>
-        {msg && (
-          <p
-            className={`text-sm ${
-              msg.kind === "ok" ? "text-green-700" : "text-red-600"
-            }`}
-          >
-            {msg.text}
-          </p>
-        )}
       </section>
 
       <section className="bg-white rounded-xl border border-slate-200 p-4">
@@ -199,34 +184,53 @@ export function MembersAdmin({
           )}
           {members.map((m) => (
             <li
-              key={m.user_id}
-              className="flex items-center justify-between py-2 text-sm"
+              key={m.userId}
+              className="flex items-center justify-between py-2 text-sm gap-2"
             >
-              <div>
-                <div className="text-xs text-slate-500">
-                  {m.email ?? m.user_id}
-                </div>
-                <div>
-                  <span className="font-medium">{m.role}</span>
-                  {m.role === "passenger" && (
-                    <span className="text-slate-500">
-                      {" "}
-                      → {passengerName(m.passenger_id)}
-                    </span>
-                  )}
+              <div className="min-w-0">
+                <div className="text-xs text-slate-500 truncate">
+                  {m.email ?? m.userId}
+                  {m.userId === selfUserId && " (you)"}
                 </div>
               </div>
-              <button
-                onClick={() => removeMember(m.user_id)}
-                disabled={busy}
-                className="text-xs text-red-600 underline disabled:opacity-50"
-              >
-                Remove
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <select
+                  value={m.role}
+                  disabled={busy}
+                  onChange={(e) =>
+                    changeRole(m.userId, e.target.value as MemberRole)
+                  }
+                  className="border border-slate-300 rounded-lg px-2 py-1 text-xs"
+                >
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => removeMember(m.userId)}
+                  disabled={busy}
+                  className="text-xs text-red-600 underline disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              </div>
             </li>
           ))}
         </ul>
       </section>
+
+      {msg && (
+        <p
+          className={`text-sm ${
+            msg.kind === "ok" ? "text-green-700" : "text-red-600"
+          }`}
+        >
+          {msg.text}
+        </p>
+      )}
     </div>
   );
 }

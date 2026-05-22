@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import type { MemberRole } from "@/lib/supabase/types";
 
 /** Name of the cookie that holds the caller's active group id. */
 export const GROUP_COOKIE = "carpool-group";
@@ -40,4 +41,43 @@ export function useIsPassenger(groupId?: string): boolean {
   }, [groupId]);
 
   return isPassenger;
+}
+
+/**
+ * Resolve the signed-in user's role in the active group, or `null` while it
+ * loads / when they have no membership. A `both` role unlocks every tab —
+ * navigation should treat it as the union of `driver` and `passenger`.
+ */
+export function useActiveRole(groupId?: string): MemberRole | null {
+  const [role, setRole] = useState<MemberRole | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data: claims } = await supabase.auth.getClaims();
+      const userId = (claims?.claims as { sub?: string } | undefined)?.sub;
+      if (!userId) return;
+      const gid = groupId ?? readActiveGroupCookie();
+      let query = supabase.from("members").select("role").eq("user_id", userId);
+      if (gid) query = query.eq("group_id", gid);
+      const { data } = await query.maybeSingle();
+      if (!cancelled) setRole((data?.role as MemberRole | undefined) ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId]);
+
+  return role;
+}
+
+/** True when `role` can drive (`driver` or `both`). */
+export function roleCanDrive(role: MemberRole | null): boolean {
+  return role === "driver" || role === "both";
+}
+
+/** True when `role` can ride as a passenger (`passenger` or `both`). */
+export function roleCanRide(role: MemberRole | null): boolean {
+  return role === "passenger" || role === "both";
 }

@@ -5,6 +5,8 @@ import { useRoster } from "@/lib/store/roster";
 import { useSettings } from "@/lib/store/settings";
 import { useTrips } from "@/lib/store/trips";
 import { usePayments } from "@/lib/store/payments";
+import { useCars } from "@/lib/store/cars";
+import { useGroups } from "@/lib/store/groups";
 import { installOutbox, subscribe } from "@/lib/outbox";
 
 export function HydrateStores() {
@@ -16,6 +18,8 @@ export function HydrateStores() {
     useSettings.getState().hydrate();
     useTrips.getState().hydrate();
     usePayments.getState().hydrate();
+    useCars.getState().hydrate();
+    useGroups.getState().hydrate();
     installOutbox();
     const unsub = subscribe((n) => setQueued(n));
     return unsub;

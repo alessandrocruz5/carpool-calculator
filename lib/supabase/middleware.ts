@@ -51,13 +51,40 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // First-run profile gate. After a user signs in (and any pending invites
+  // are claimed), they must set a display name before using the rest of the
+  // app. API routes are exempt so the /account page can save the name.
+  if (
+    user?.sub &&
+    !pathname.startsWith('/auth') &&
+    !pathname.startsWith('/login') &&
+    !pathname.startsWith('/api') &&
+    pathname !== '/account'
+  ) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('display_name')
+      .eq('user_id', user.sub)
+      .maybeSingle()
+    const displayName = (profile as { display_name: string | null } | null)
+      ?.display_name
+    if (!displayName || displayName.trim() === '') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/account'
+      url.search = 'complete=1'
+      return NextResponse.redirect(url)
+    }
+  }
+
   // Resolve the caller's active group. Users with no memberships are sent to
   // the group picker; everyone else gets the active-group cookie refreshed.
   if (
     user?.sub &&
     !pathname.startsWith('/auth') &&
     !pathname.startsWith('/login') &&
-    pathname !== '/groups'
+    !pathname.startsWith('/api') &&
+    pathname !== '/groups' &&
+    pathname !== '/account'
   ) {
     const { data: memberships } = await supabase
       .from('members')

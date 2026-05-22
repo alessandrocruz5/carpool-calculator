@@ -17,6 +17,7 @@ export function LegCard({
   passengers,
   gasPrice,
   settings,
+  carName,
 }: {
   leg: LegName;
   state: LegState;
@@ -24,6 +25,7 @@ export function LegCard({
   passengers: PassengerOption[];
   gasPrice: number;
   settings: CalcSettings;
+  carName?: string;
 }) {
   const breakdown: LegBreakdown = useMemo(
     () =>
@@ -38,7 +40,12 @@ export function LegCard({
   return (
     <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold capitalize">{leg}</h2>
+        <div>
+          <h2 className="font-semibold capitalize">{leg}</h2>
+          {carName && (
+            <p className="text-xs text-slate-500">Car: {carName}</p>
+          )}
+        </div>
         <RouteToggle value={state.route} onChange={(r) => onChange({ ...state, route: r })} />
       </div>
 
