@@ -1,25 +1,26 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useFillups } from "@/lib/store/fillups";
-import { useRoster } from "@/lib/store/roster";
-import { useSettings } from "@/lib/store/settings";
-import { useTrips } from "@/lib/store/trips";
-import { usePayments } from "@/lib/store/payments";
+import { useGroups } from "@/lib/store/groups";
+import { useProfile } from "@/lib/store/profile";
+import { applyGroupScope } from "@/lib/store/groupScope";
 import { installOutbox, subscribe } from "@/lib/outbox";
 
 export function HydrateStores() {
   const [queued, setQueued] = useState(0);
+  const activeGroupId = useGroups((s) => s.activeGroupId);
 
   useEffect(() => {
-    useFillups.getState().hydrate();
-    useRoster.getState().hydrate();
-    useSettings.getState().hydrate();
-    useTrips.getState().hydrate();
-    usePayments.getState().hydrate();
+    useGroups.getState().hydrate();
+    useProfile.getState().hydrate();
     installOutbox();
     const unsub = subscribe((n) => setQueued(n));
     return unsub;
   }, []);
+
+  useEffect(() => {
+    if (!activeGroupId) return;
+    void applyGroupScope(activeGroupId);
+  }, [activeGroupId]);
 
   if (queued <= 0) return null;
   return (
