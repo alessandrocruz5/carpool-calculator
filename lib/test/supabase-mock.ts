@@ -48,11 +48,20 @@ export interface AuthState {
  * `from('foo')` shifts the next entry. If a queue runs out, `{ data: null, error: null }`
  * is returned. The `members` table is auto-handled from `auth.member` unless overridden.
  */
+export interface RpcCall {
+  name: string;
+  args: unknown;
+}
+
 export function makeSupabase(opts: {
   auth?: AuthState;
   tables?: Record<string, QueryResult[]>;
+  /** per-rpc-name queue of results, shifted on each call */
+  rpcs?: Record<string, QueryResult[]>;
 }) {
   const queues: Record<string, QueryResult[]> = { ...(opts.tables ?? {}) };
+  const rpcQueues: Record<string, QueryResult[]> = { ...(opts.rpcs ?? {}) };
+  const rpcLog: RpcCall[] = [];
   const auth = opts.auth ?? { userId: "u1", member: { role: "driver" } };
 
   if (!queues.members) {
@@ -77,13 +86,28 @@ export function makeSupabase(opts: {
     return { data: { claims: { sub: auth.userId } } };
   });
 
+  const rpcMock = vi.fn((name: string, args?: unknown) => {
+    rpcLog.push({ name, args });
+    return makeBuilder(() => {
+      const q = rpcQueues[name];
+      if (!q || q.length === 0) return { data: null, error: null };
+      return q.shift()!;
+    });
+  });
+
   return {
     client: {
       auth: { getClaims },
       from: fromMock,
+      rpc: rpcMock,
     },
     fromMock,
     getClaims,
+    rpcMock,
+    /** rpc invocations in call order, for assertions */
+    rpcCalls(): RpcCall[] {
+      return rpcLog;
+    },
     /** push a result onto a table's queue (after creation) */
     enqueue(table: string, result: QueryResult) {
       (queues[table] ||= []).push(result);
