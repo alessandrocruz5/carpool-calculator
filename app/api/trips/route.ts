@@ -46,6 +46,47 @@ export async function POST(req: Request) {
   const groupId = group.groupId;
   const body = (await req.json()) as StoredTrip;
 
+  // When a car/driver is attached, validate ownership + group membership and
+  // resolve the car's fuel efficiency for the cost calculation below.
+  let carMileageKmPerL: number | null = null;
+  if (body.carId != null || body.driverUserId != null) {
+    if (body.carId == null || body.driverUserId == null) {
+      return NextResponse.json(
+        { error: "car_id and driver_user_id must be provided together" },
+        { status: 400 }
+      );
+    }
+    const { data: memberRow } = await supabase
+      .from("members")
+      .select("role")
+      .eq("group_id", groupId)
+      .eq("user_id", body.driverUserId)
+      .maybeSingle();
+    const role = (memberRow as { role?: string } | null)?.role;
+    if (role !== "driver" && role !== "both") {
+      return NextResponse.json(
+        { error: "driver_user_id is not a driver of the active group" },
+        { status: 400 }
+      );
+    }
+    const { data: carRow } = await supabase
+      .from("cars")
+      .select("owner_user_id, fuel_efficiency_kml")
+      .eq("id", body.carId)
+      .maybeSingle();
+    const car = carRow as
+      | { owner_user_id: string; fuel_efficiency_kml: number | null }
+      | null;
+    if (!car || car.owner_user_id !== body.driverUserId) {
+      return NextResponse.json(
+        { error: "car_id is not owned by driver_user_id" },
+        { status: 400 }
+      );
+    }
+    carMileageKmPerL =
+      car.fuel_efficiency_kml != null ? Number(car.fuel_efficiency_kml) : null;
+  }
+
   // Find the gas_prices row effective for this trip's date (latest with effective_date <= trip.date).
   // If none exists, snapshot body.gasPrice into a new gas_prices row so the Log renders correctly.
   const { data: gpRow } = await supabase
@@ -81,6 +122,8 @@ export async function POST(req: Request) {
         gas_price_id: gasPriceId,
         parking_fee_php: body.parkingFee,
         notes: body.notes ?? null,
+        car_id: body.carId ?? null,
+        driver_user_id: body.driverUserId ?? null,
       },
       { onConflict: "date" }
     )
@@ -138,9 +181,15 @@ export async function POST(req: Request) {
     .select("*")
     .eq("group_id", groupId)
     .maybeSingle();
-  const calcSettings = settingsRow
+  const baseSettings = settingsRow
     ? fromDbSettings(settingsRow as DbSettings)
     : DEFAULT_SETTINGS;
+  // The chosen car's measured efficiency takes precedence over the group
+  // settings override; calc's signature is unchanged.
+  const calcSettings =
+    carMileageKmPerL != null && carMileageKmPerL > 0
+      ? { ...baseSettings, mileageKmPerL: carMileageKmPerL }
+      : baseSettings;
 
   const breakdown = calcDay(
     {

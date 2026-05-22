@@ -62,6 +62,7 @@ export interface DbFillup {
   id: string;
   group_id: string;
   car_id: string | null;
+  owner_user_id: string | null;
   date: string;
   liters: number;
   total_php: number;

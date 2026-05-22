@@ -86,6 +86,7 @@ export function toDbCarInsert(
 export function fromDbFillup(r: DbFillup): Fillup {
   return {
     id: r.id,
+    carId: r.car_id,
     date: r.date,
     liters: Number(r.liters),
     totalPhp: Number(r.total_php),
@@ -95,17 +96,17 @@ export function fromDbFillup(r: DbFillup): Fillup {
 
 export function toDbFillupInsert(
   f: Omit<Fillup, "id">,
-  groupId?: string
-): Omit<DbFillup, "id" | "created_at" | "car_id" | "group_id"> & { group_id?: string } {
-  const out: Omit<DbFillup, "id" | "created_at" | "car_id" | "group_id"> & {
-    group_id?: string;
-  } = {
+  ctx?: { groupId?: string; ownerUserId?: string }
+): Partial<DbFillup> {
+  const out: Partial<DbFillup> = {
     date: f.date,
     liters: f.liters,
     total_php: f.totalPhp,
     odometer_km: f.odometerKm,
+    car_id: f.carId ?? null,
   };
-  if (groupId !== undefined) out.group_id = groupId;
+  if (ctx?.groupId !== undefined) out.group_id = ctx.groupId;
+  if (ctx?.ownerUserId !== undefined) out.owner_user_id = ctx.ownerUserId;
   return out;
 }
 
@@ -164,6 +165,8 @@ export function fromDbTrip(r: DbTripWithLegs, gasPrice: number): StoredTrip {
     date: r.date,
     gasPrice,
     parkingFee: Number(r.parking_fee_php),
+    carId: r.car_id,
+    driverUserId: r.driver_user_id,
     morning: {
       route: morning?.route ?? "skyway",
       passengerIds: morning?.trip_leg_riders.map((x) => x.passenger_id) ?? [],

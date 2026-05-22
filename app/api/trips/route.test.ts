@@ -228,6 +228,80 @@ describe("POST /api/trips gas snapshot", () => {
   });
 });
 
+describe("POST /api/trips car + driver attachment", () => {
+  const tripWithCar = { ...baseTrip, carId: "car1", driverUserId: "u-driver" };
+
+  function fullTables(extra: Record<string, unknown[]>) {
+    return {
+      gas_prices: [{ data: { id: "g-existing" }, error: null }],
+      trips: [{ data: { id: "t1" }, error: null }],
+      trip_legs: [
+        { data: null, error: null },
+        { data: [{ id: "lm", leg: "morning" }, { id: "le", leg: "evening" }], error: null },
+      ],
+      trip_leg_riders: [{ data: null, error: null }],
+      settings: [driverSettings],
+      trip_payments: [
+        { data: null, error: null },
+        { data: [], error: null },
+        { data: null, error: null },
+      ],
+      ...extra,
+    } as Parameters<typeof makeSupabase>[0]["tables"];
+  }
+
+  it("rejects car_id without driver_user_id", async () => {
+    setSupa({});
+    const res = await POST(
+      new Request("http://t/api/trips", {
+        method: "POST",
+        body: JSON.stringify({ ...baseTrip, carId: "car1" }),
+      })
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a driver_user_id that is not a driver of the group", async () => {
+    setSupa({
+      tables: {
+        members: [
+          { data: { group_id: "g1", role: "driver" }, error: null },
+          { data: { group_id: "g1", role: "driver" }, error: null },
+          { data: { role: "passenger" }, error: null },
+        ],
+      },
+    });
+    const res = await POST(
+      new Request("http://t/api/trips", { method: "POST", body: JSON.stringify(tripWithCar) })
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a car not owned by the driver", async () => {
+    setSupa({
+      tables: { cars: [{ data: { owner_user_id: "someone-else", fuel_efficiency_kml: 14 }, error: null }] },
+    });
+    const res = await POST(
+      new Request("http://t/api/trips", { method: "POST", body: JSON.stringify(tripWithCar) })
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("stamps car_id + driver_user_id when valid", async () => {
+    const supa = setSupa({
+      tables: fullTables({
+        cars: [{ data: { owner_user_id: "u-driver", fuel_efficiency_kml: 14 }, error: null }],
+      }),
+    });
+    const res = await POST(
+      new Request("http://t/api/trips", { method: "POST", body: JSON.stringify(tripWithCar) })
+    );
+    expect(res.status).toBe(200);
+    const upsert = supa.callsFor("trips")[0].find((c) => c.method === "upsert");
+    expect(upsert!.args[0]).toMatchObject({ car_id: "car1", driver_user_id: "u-driver" });
+  });
+});
+
 describe("DELETE /api/trips", () => {
   it("requires id", async () => {
     setSupa({});
