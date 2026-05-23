@@ -52,34 +52,55 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Passengers may only use the Today, Log and Week tabs. Block direct
-  // navigation to driver-only routes.
+  // Look up the member row once per request and forward role + membership
+  // status to RSCs via request headers, so the root layout doesn't have to
+  // repeat the same query. Skip for API routes and auth pages — those don't
+  // render the layout nav and don't need role gating.
   const userId = (user as { sub?: string } | undefined)?.sub
-  if (userId && isDriverOnlyPath(request.nextUrl.pathname)) {
+  const isPageRoute =
+    !pathname.startsWith('/api') &&
+    !pathname.startsWith('/auth') &&
+    !pathname.startsWith('/login')
+
+  let role: string | null = null
+  let memberExists = false
+  if (userId && isPageRoute) {
     const { data: member } = await supabase
       .from('members')
       .select('role')
       .eq('user_id', userId)
       .maybeSingle()
-    if (member?.role === 'passenger') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/'
-      return NextResponse.redirect(url)
+    if (member) {
+      memberExists = true
+      role = (member as { role: string }).role
     }
   }
 
-  // IMPORTANT: You *must* return the supabaseResponse object as it is.
-  // If you're creating a new response object with NextResponse.next() make sure to:
-  // 1. Pass the request in it, like so:
-  //    const myNewResponse = NextResponse.next({ request })
-  // 2. Copy over the cookies, like so:
-  //    myNewResponse.cookies.setAll(supabaseResponse.cookies.getAll())
-  // 3. Change the myNewResponse object to fit your needs, but avoid changing
-  //    the cookies!
-  // 4. Finally:
-  //    return myNewResponse
-  // If this is not done, you may be causing the browser and server to go out
-  // of sync and terminate the user's session prematurely!
+  if (role === 'passenger' && isDriverOnlyPath(pathname)) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/'
+    return NextResponse.redirect(url)
+  }
+
+  // Forward auth + role to downstream RSCs via request headers so the root
+  // layout can read them without re-querying Supabase. We rebuild the response
+  // with the augmented request headers and copy over any auth cookies that
+  // the Supabase client set during getClaims().
+  if (userId || role) {
+    const forwardedHeaders = new Headers(request.headers)
+    if (userId) forwardedHeaders.set('x-user-id', userId)
+    if (role) forwardedHeaders.set('x-user-role', role)
+    if (userId && isPageRoute) {
+      forwardedHeaders.set('x-member-exists', memberExists ? '1' : '0')
+    }
+    const forwardedResponse = NextResponse.next({
+      request: { headers: forwardedHeaders },
+    })
+    supabaseResponse.cookies.getAll().forEach((c) =>
+      forwardedResponse.cookies.set(c)
+    )
+    return forwardedResponse
+  }
 
   return supabaseResponse
 }

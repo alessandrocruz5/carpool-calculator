@@ -9,7 +9,6 @@ import { useRoster } from "@/lib/store/roster";
 import { useTrips } from "@/lib/store/trips";
 import { useFillups } from "@/lib/store/fillups";
 import { useCars } from "@/lib/store/cars";
-import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/Toast";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
 import { rollingMileage } from "@/lib/mileage";
@@ -34,19 +33,9 @@ export default function TodayPage() {
     existing?.evening ?? { route: "skyway", passengerIds: [] }
   );
   const [carId, setCarId] = useState<string>(existing?.carId ?? "");
-  const [userId, setUserId] = useState<string | null>(null);
 
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await createClient().auth.getClaims();
-      setUserId(
-        (data?.claims as { sub?: string } | undefined)?.sub ?? null
-      );
-    })();
-  }, []);
 
   // Default the car picker to the trip's saved car, else the only car.
   useEffect(() => {
