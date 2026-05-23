@@ -190,6 +190,9 @@ export async function POST(req: Request) {
     carMileageKmPerL != null && carMileageKmPerL > 0
       ? { ...baseSettings, mileageKmPerL: carMileageKmPerL }
       : baseSettings;
+  if (!(calcSettings.mileageKmPerL > 0)) {
+    calcSettings.mileageKmPerL = DEFAULT_SETTINGS.mileageKmPerL;
+  }
 
   const breakdown = calcDay(
     {
