@@ -31,8 +31,7 @@ export default function GroupsPage() {
     try {
       const res = await fetch("/api/groups", { cache: "no-store" });
       if (!res.ok) throw new Error(await res.text());
-      const data = (await res.json()) as { groups: GroupItem[] };
-      setGroups(data.groups);
+      setGroups((await res.json()) as GroupItem[]);
     } catch (err) {
       console.error("groups load failed", err);
     } finally {
@@ -56,8 +55,14 @@ export default function GroupsPage() {
         body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error(await res.text());
+      const group = (await res.json()) as { id: string };
+      // Switch to the newly created group so the active-group cookie is set.
+      await fetch("/api/groups/switch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ groupId: group.id }),
+      });
       setNewName("");
-      // Created group becomes active — reload so all data re-scopes.
       window.location.assign("/");
     } catch (err) {
       setMsg({
@@ -72,10 +77,10 @@ export default function GroupsPage() {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/groups", {
-        method: "PUT",
+      const res = await fetch("/api/groups/switch", {
+        method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ groupId: id }),
       });
       if (!res.ok) throw new Error(await res.text());
       window.location.assign("/");

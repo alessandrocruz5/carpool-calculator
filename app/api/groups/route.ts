@@ -3,17 +3,38 @@ import { createClient } from "@/lib/supabase/server";
 import { fromDbGroup } from "@/lib/supabase/mappers";
 import type { DbGroup } from "@/lib/supabase/types";
 import { requireAuth, requireGroupDriver } from "@/lib/auth/requireDriver";
+import { getActiveGroupId } from "@/lib/auth/activeGroup";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const supabase = await createClient();
+  const auth = await requireAuth(supabase);
+  if (!auth.ok) return auth.response;
+  const activeGroupId = await getActiveGroupId();
+
   const { data, error } = await supabase
-    .from("groups")
-    .select("*")
-    .order("created_at", { ascending: true });
+    .from("members")
+    .select("group_id, role, groups!inner(id, name, owner_user_id, created_at)")
+    .eq("user_id", auth.userId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(((data ?? []) as DbGroup[]).map(fromDbGroup));
+
+  type Row = {
+    group_id: string;
+    role: string;
+    groups: { id: string; name: string; owner_user_id: string; created_at: string };
+  };
+  const groups = ((data ?? []) as Row[]).map((m) => ({
+    id: m.group_id,
+    name: m.groups.name,
+    ownerUserId: m.groups.owner_user_id,
+    createdAt: m.groups.created_at,
+    role: m.role,
+    isOwner: m.groups.owner_user_id === auth.userId,
+    isActive: m.group_id === activeGroupId,
+  }));
+
+  return NextResponse.json(groups);
 }
 
 export async function POST(req: Request) {
