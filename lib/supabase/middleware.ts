@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isDriverOnlyPath } from '@/lib/auth/passengerAccess'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -51,69 +52,19 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // First-run gate: a signed-in user whose profile has no display_name is
-  // routed to /account?complete=1 and blocked from every other page until
-  // they fill it in. API routes are exempt — they enforce their own auth.
-  if (
-    user?.sub &&
-    !pathname.startsWith('/auth') &&
-    !pathname.startsWith('/login') &&
-    !pathname.startsWith('/api')
-  ) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('display_name')
-      .eq('user_id', user.sub)
-      .maybeSingle()
-    const displayName = (profile as { display_name?: string | null } | null)
-      ?.display_name
-    const profileComplete = !!displayName && displayName.trim().length > 0
-
-    if (!profileComplete) {
-      if (pathname !== '/account') {
-        const url = request.nextUrl.clone()
-        url.pathname = '/account'
-        url.search = '?complete=1'
-        return NextResponse.redirect(url)
-      }
-      // On /account with an incomplete profile: let it render, skip the
-      // group gate below so a brand-new user isn't bounced to /groups.
-      return supabaseResponse
-    }
-  }
-
-  // Resolve the caller's active group. Users with no memberships are sent to
-  // the group picker; everyone else gets the active-group cookie refreshed.
-  if (
-    user?.sub &&
-    !pathname.startsWith('/auth') &&
-    !pathname.startsWith('/login') &&
-    pathname !== '/groups'
-  ) {
-    const { data: memberships } = await supabase
+  // Passengers may only use the Today, Log and Week tabs. Block direct
+  // navigation to driver-only routes.
+  const userId = (user as { sub?: string } | undefined)?.sub
+  if (userId && isDriverOnlyPath(request.nextUrl.pathname)) {
+    const { data: member } = await supabase
       .from('members')
-      .select('group_id')
-      .eq('user_id', user.sub)
-    const groupIds = (memberships ?? []).map(
-      (m) => (m as { group_id: string }).group_id
-    )
-
-    if (groupIds.length === 0) {
+      .select('role')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (member?.role === 'passenger') {
       const url = request.nextUrl.clone()
-      url.pathname = '/groups'
+      url.pathname = '/'
       return NextResponse.redirect(url)
-    }
-
-    const cookieGroup = request.cookies.get('carpool-group')?.value
-    const activeGroup =
-      cookieGroup && groupIds.includes(cookieGroup) ? cookieGroup : groupIds[0]
-    if (activeGroup !== cookieGroup) {
-      supabaseResponse.cookies.set('carpool-group', activeGroup, {
-        httpOnly: true,
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 60 * 60 * 24 * 365,
-      })
     }
   }
 

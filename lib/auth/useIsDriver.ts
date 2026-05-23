@@ -14,8 +14,8 @@ export function useIsDriver(groupId?: string): boolean {
     let cancelled = false;
     (async () => {
       const supabase = createClient();
-      const { data: claims } = await supabase.auth.getClaims();
-      const userId = (claims?.claims as { sub?: string } | undefined)?.sub;
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
       if (!userId) return;
       const gid = groupId ?? readActiveGroupCookie();
       let query = supabase.from("members").select("role").eq("user_id", userId);

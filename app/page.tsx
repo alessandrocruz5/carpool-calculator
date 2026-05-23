@@ -8,8 +8,8 @@ import { useSettings } from "@/lib/store/settings";
 import { useRoster } from "@/lib/store/roster";
 import { useTrips } from "@/lib/store/trips";
 import { useFillups } from "@/lib/store/fillups";
-import { useCars } from "@/lib/store/cars";
-import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/Toast";
+import { useIsDriver } from "@/lib/auth/useIsDriver";
 import { rollingMileage } from "@/lib/mileage";
 import { calcDay } from "@/lib/calc";
 import { daysSince } from "@/lib/week";
@@ -21,6 +21,8 @@ export default function TodayPage() {
   const { fillups } = useFillups();
   const { cars } = useCars();
   const { trips, upsert } = useTrips();
+  const toast = useToast();
+  const isDriver = useIsDriver();
 
   const existing = trips.find((t) => t.date === today);
   const [morning, setMorning] = useState<LegState>(
@@ -75,20 +77,25 @@ export default function TodayPage() {
     liveSettings
   );
 
-  function save() {
-    // car_id and driver_user_id must be persisted together; only attach the
-    // car when the current user is resolved.
-    const attachCar = carId && userId ? carId : null;
-    upsert({
-      id: existing?.id ?? crypto.randomUUID(),
-      date: today,
-      gasPrice,
-      parkingFee: settings.parkingFeePhp,
-      carId: attachCar,
-      driverUserId: attachCar ? userId : null,
-      morning,
-      evening,
-    });
+  async function save() {
+    try {
+      await upsert({
+        id: existing?.id ?? crypto.randomUUID(),
+        date: today,
+        gasPrice,
+        parkingFee: settings.parkingFeePhp,
+        morning,
+        evening,
+      });
+      toast.show({ message: existing ? "Trip updated." : "Trip saved." });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      toast.show({
+        message: /forbidden|403/i.test(msg)
+          ? "Couldn't save — only the driver can log trips."
+          : "Couldn't save trip. Check your connection and try again.",
+      });
+    }
   }
 
   if (!hydrated) return null;
@@ -102,12 +109,14 @@ export default function TodayPage() {
             Gas <PHP value={gasPrice} />/L · Mileage {effectiveMileage.toFixed(2)} km/L
           </p>
         </div>
-        <button
-          onClick={save}
-          className="bg-brand-600 text-white text-sm font-medium rounded-lg px-4 py-2"
-        >
-          {existing ? "Update" : "Save"}
-        </button>
+        {isDriver && (
+          <button
+            onClick={save}
+            className="bg-brand-600 text-white text-sm font-medium rounded-lg px-4 py-2"
+          >
+            {existing ? "Update" : "Save"}
+          </button>
+        )}
       </div>
 
       {stale && (
@@ -154,6 +163,7 @@ export default function TodayPage() {
         passengers={activePassengers}
         gasPrice={gasPrice}
         settings={liveSettings}
+        readOnly={!isDriver}
       />
       <LegCard
         leg="evening"
@@ -162,6 +172,7 @@ export default function TodayPage() {
         passengers={activePassengers}
         gasPrice={gasPrice}
         settings={liveSettings}
+        readOnly={!isDriver}
       />
 
       <section className="bg-white rounded-xl border border-slate-200 p-4">

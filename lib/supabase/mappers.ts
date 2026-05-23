@@ -2,11 +2,15 @@ import type { Fillup } from "@/lib/mileage";
 import type { CalcSettings } from "@/lib/calc";
 import type { Passenger } from "@/lib/store/roster";
 import type { StoredTrip } from "@/lib/store/trips";
+import type { Group } from "@/lib/store/groups";
+import type { Member } from "@/lib/store/members";
+import type { Profile } from "@/lib/store/profile";
 import type {
   DbCar,
   DbFillup,
   DbGasPrice,
   DbGroup,
+  DbMember,
   DbPassenger,
   DbProfile,
   DbSettings,
@@ -112,6 +116,33 @@ export function toDbFillupInsert(
 
 export function fromDbPassenger(r: DbPassenger): Passenger {
   return { id: r.id, name: r.name, active: r.active };
+}
+
+export function fromDbGroup(r: DbGroup): Group {
+  return {
+    id: r.id,
+    name: r.name,
+    ownerUserId: r.owner_user_id,
+    createdAt: r.created_at,
+  };
+}
+
+export function fromDbMember(r: DbMember): Member {
+  return {
+    userId: r.user_id,
+    groupId: r.group_id,
+    role: r.role,
+    passengerId: r.passenger_id,
+    createdAt: r.created_at,
+  };
+}
+
+export function fromDbProfile(r: DbProfile): Profile {
+  return {
+    userId: r.user_id,
+    displayName: r.display_name,
+    avatarUrl: r.avatar_url,
+  };
 }
 
 export function fromDbSettings(r: DbSettings): CalcSettings {

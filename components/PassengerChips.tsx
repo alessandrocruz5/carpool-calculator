@@ -9,11 +9,31 @@ export function PassengerChips({
   options,
   selected,
   onChange,
+  readOnly = false,
 }: {
   options: PassengerOption[];
   selected: string[];
   onChange: (ids: string[]) => void;
+  readOnly?: boolean;
 }) {
+  if (readOnly) {
+    const selectedPassengers = options.filter((p) => selected.includes(p.id));
+    if (selectedPassengers.length === 0)
+      return <p className="text-sm text-slate-500">No passengers.</p>;
+    return (
+      <div className="flex flex-wrap gap-2">
+        {selectedPassengers.map((p) => (
+          <span
+            key={p.id}
+            className="px-3 py-1.5 rounded-full text-sm border bg-brand-600 text-white border-brand-600"
+          >
+            {p.name}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
   function toggle(id: string) {
     if (selected.includes(id)) onChange(selected.filter((x) => x !== id));
     else if (selected.length < 3) onChange([...selected, id]);

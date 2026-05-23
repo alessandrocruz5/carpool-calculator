@@ -60,10 +60,10 @@ export default function PaymentsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Payments</h1>
         <Link
-          href="/week"
+          href="/log"
           className="text-sm text-brand-600 hover:underline"
         >
-          Week →
+          Log →
         </Link>
       </div>
 

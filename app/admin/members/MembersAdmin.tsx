@@ -38,57 +38,45 @@ export function MembersAdmin() {
     load();
   }, [load]);
 
-  async function invite() {
+  async function inviteAndLink() {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/members", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), role }),
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("link_member_by_email", {
+        p_email: email.trim(),
+        p_role: role,
+        p_passenger_id: role === "passenger" && passengerId ? passengerId : null,
       });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(body?.error ?? "failed to invite");
-      }
-      setMsg({
-        kind: "ok",
-        text: `Invited ${email.trim()} as ${role}. They join once they sign in.`,
-      });
-      setEmail("");
-      await load();
-    } catch (err) {
-      setMsg({
-        kind: "err",
-        text: err instanceof Error ? err.message : "failed to invite",
-      });
-    } finally {
-      setBusy(false);
-    }
-  }
+      if (error) throw error;
 
-  async function changeRole(userId: string, nextRole: MemberRole) {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/members", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, role: nextRole }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(body?.error ?? "failed to change role");
+      const result = data as { pending?: boolean; user_id?: string } & MemberRow;
+      if (result.pending) {
+        // User hasn't signed in yet — invite stored, now send the magic link.
+        const { error: otpError } = await supabase.auth.signInWithOtp({
+          email: email.trim(),
+          options: { emailRedirectTo: `${window.location.origin}/auth/confirm` },
+        });
+        if (otpError) throw otpError;
+        setMsg({
+          kind: "ok",
+          text: `Invite saved and sign-in link sent to ${email}. They'll be linked automatically when they sign in.`,
+        });
+      } else {
+        // User already existed in auth — linked immediately.
+        const row = { ...(result as MemberRow), email: email.trim() };
+        setMembers((prev) => {
+          const others = prev.filter((m) => m.user_id !== row.user_id);
+          return [...others, row];
+        });
+        setMsg({ kind: "ok", text: `Linked ${email} as ${role}.` });
       }
-      await load();
+      setEmail("");
+      setPassengerId("");
     } catch (err) {
       setMsg({
         kind: "err",
-        text: err instanceof Error ? err.message : "failed to change role",
+        text: err instanceof Error ? err.message : "failed to invite member",
       });
       await load();
     } finally {
@@ -128,8 +116,9 @@ export function MembersAdmin() {
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <h2 className="font-semibold">Invite member</h2>
         <p className="text-xs text-slate-500">
-          Invite by email and role. Existing users join the group immediately;
-          new users join once they sign in.
+          Enter the member&apos;s email, pick their role (and passenger for riders),
+          then click Invite. A sign-in link is sent automatically and their account
+          is linked the moment they sign in.
         </p>
         <input
           type="email"
@@ -152,11 +141,11 @@ export function MembersAdmin() {
           </select>
           <button
             type="button"
-            onClick={invite}
-            disabled={busy || !email.trim()}
+            onClick={inviteAndLink}
+            disabled={busy || !email}
             className="bg-brand-600 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-50"
           >
-            Invite
+            Invite &amp; link
           </button>
         </div>
       </section>
