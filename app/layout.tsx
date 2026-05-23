@@ -34,37 +34,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // looked up the caller's member row; it forwarded both via request headers
   // so we don't have to make the same two Supabase round-trips here.
   const h = await headers();
-  const userId = h.get("x-user-id");
   const role = h.get("x-user-role");
-  const needsAccountLink =
-    userId != null && h.get("x-member-exists") === "0";
-
-  if (needsAccountLink) {
-    return (
-      <html lang="en" className={cn("font-sans", inter.variable)}>
-        <body>
-          <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center">
-            <div className="max-w-sm space-y-4">
-              <h1 className="text-xl font-semibold">Account not linked</h1>
-              <p className="text-sm text-slate-600">
-                You&apos;re signed in, but your account isn&apos;t part of this
-                carpool yet. Ask the driver to link your account from the
-                Members page, then refresh.
-              </p>
-              <form action="/auth/signout" method="post">
-                <button
-                  type="submit"
-                  className="text-sm text-brand-600 underline"
-                >
-                  Sign out
-                </button>
-              </form>
-            </div>
-          </div>
-        </body>
-      </html>
-    );
-  }
 
   const visibleNav =
     role === "passenger"

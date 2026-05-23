@@ -82,6 +82,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // If the user has no active-group cookie, send them to /groups to pick or
+  // create one before they can use any part of the app.
+  const carpoolCookie = request.cookies.get('carpool-group')?.value
+  if (userId && isPageRoute && !carpoolCookie && pathname !== '/groups') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/groups'
+    return NextResponse.redirect(url)
+  }
+
   // Forward auth + role to downstream RSCs via request headers so the root
   // layout can read them without re-querying Supabase. We rebuild the response
   // with the augmented request headers and copy over any auth cookies that
