@@ -36,7 +36,7 @@ export async function GET() {
     "id" | "price_per_liter"
   >[];
 
-  const trips: StoredTrip[] = ((data ?? []) as DbTripWithLegs[]).map((r) => {
+  const trips: StoredTrip[] = ((data ?? []) as unknown as DbTripWithLegs[]).map((r) => {
     const gp = gasPrices.find((g) => g.id === r.gas_price_id);
     return fromDbTrip(r, gp ? Number(gp.price_per_liter) : 0);
   });
