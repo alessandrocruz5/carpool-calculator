@@ -58,7 +58,7 @@ describe("roster store", () => {
     fetchMock
       .mockResolvedValueOnce(new Response("err", { status: 500 }))
       .mockResolvedValueOnce(jsonResponse([]));
-    await useRoster.getState().add("Ana");
+    await expect(useRoster.getState().add("Ana")).rejects.toThrow();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(useRoster.getState().passengers).toEqual([]);
   });
@@ -92,7 +92,7 @@ describe("roster store", () => {
     fetchMock
       .mockResolvedValueOnce(new Response("err", { status: 500 }))
       .mockResolvedValueOnce(jsonResponse([ana]));
-    await useRoster.getState().toggleActive("p1");
+    await expect(useRoster.getState().toggleActive("p1")).rejects.toThrow();
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(useRoster.getState().passengers).toEqual([ana]);
   });

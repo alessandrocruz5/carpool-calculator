@@ -19,18 +19,6 @@ import type {
   DbTripLegRider,
 } from "./types";
 
-export interface Group {
-  id: string;
-  name: string;
-  ownerUserId: string;
-}
-
-export interface Profile {
-  userId: string;
-  displayName: string | null;
-  avatarUrl: string | null;
-}
-
 export interface Car {
   id: string;
   ownerUserId: string;
@@ -39,22 +27,10 @@ export interface Car {
   tankSizeLiters: number | null;
 }
 
-export function fromDbGroup(r: DbGroup): Group {
-  return { id: r.id, name: r.name, ownerUserId: r.owner_user_id };
-}
-
 export function toDbGroupInsert(
-  g: Omit<Group, "id">
+  g: Omit<Group, "id" | "createdAt">
 ): Omit<DbGroup, "id" | "created_at"> {
   return { name: g.name, owner_user_id: g.ownerUserId };
-}
-
-export function fromDbProfile(r: DbProfile): Profile {
-  return {
-    userId: r.user_id,
-    displayName: r.display_name,
-    avatarUrl: r.avatar_url,
-  };
 }
 
 export function toDbProfilePatch(
@@ -146,6 +122,7 @@ export function fromDbProfile(r: DbProfile): Profile {
 }
 
 export function fromDbSettings(r: DbSettings): CalcSettings {
+
   return {
     roundTripKm: Number(r.round_trip_km),
     mileageKmPerL:

@@ -8,6 +8,8 @@ import { useSettings } from "@/lib/store/settings";
 import { useRoster } from "@/lib/store/roster";
 import { useTrips } from "@/lib/store/trips";
 import { useFillups } from "@/lib/store/fillups";
+import { useCars } from "@/lib/store/cars";
+import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/Toast";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
 import { rollingMileage } from "@/lib/mileage";
