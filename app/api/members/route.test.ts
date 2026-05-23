@@ -15,6 +15,25 @@ vi.mock("@/lib/auth/activeGroup", () => ({
   getActiveGroupId: vi.fn(async () => groupState.id),
 }));
 
+vi.mock("@/lib/group", () => ({
+  getActiveGroupId: vi.fn(async () => {
+    if (groupState.id === null) throw new Error("no group");
+    return groupState.id;
+  }),
+  requireActiveGroupId: vi.fn(async () => {
+    if (groupState.id === null) {
+      return {
+        ok: false as const,
+        response: new Response(JSON.stringify({ error: "unauthorized" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        }),
+      };
+    }
+    return { ok: true as const, groupId: groupState.id };
+  }),
+}));
+
 import { GET, POST, PATCH, DELETE } from "./route";
 
 function setSupa(opts: Parameters<typeof makeSupabase>[0]) {
