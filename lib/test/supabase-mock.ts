@@ -40,7 +40,7 @@ export interface AuthState {
   /** when null/undefined, getClaims returns no user (unauthenticated) */
   userId?: string | null;
   /** role row returned for the members lookup. null = not a member */
-  member?: { role: "driver" | "rider" } | null;
+  member?: { role: string; group_id?: string } | null;
 }
 
 /**
@@ -63,17 +63,27 @@ export function makeSupabase(opts: {
   const rpcQueues: Record<string, QueryResult[]> = { ...(opts.rpcs ?? {}) };
   const rpcLog: RpcCall[] = [];
   const auth = opts.auth ?? { userId: "u1", member: { role: "driver" } };
+  const membersExplicit = Boolean(opts.tables && "members" in opts.tables);
 
-  if (!queues.members) {
-    // requireUser issues a single members lookup per request; default to authState
-    queues.members = [{ data: auth.member ?? null, error: null }];
-  }
+  // The members table backs both group resolution and role checks, each of
+  // which may query it more than once per request. Unless a test supplies an
+  // explicit queue, every members lookup resolves to the auth member (with a
+  // default group_id) so group-scoped routes can resolve an active group.
+  const memberRow: QueryResult = {
+    data: auth.member
+      ? { group_id: "g1", ...auth.member }
+      : null,
+    error: null,
+  };
 
   const callLog: Record<string, BuilderCall[][]> = {};
 
   const fromMock = vi.fn((table: string) => {
     const calls: BuilderCall[] = [];
     (callLog[table] ||= []).push(calls);
+    if (table === "members" && !membersExplicit) {
+      return makeBuilder(() => memberRow, calls);
+    }
     return makeBuilder(() => {
       const q = queues[table];
       if (!q || q.length === 0) return { data: null, error: null };

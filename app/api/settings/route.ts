@@ -3,16 +3,19 @@ import { createClient } from "@/lib/supabase/server";
 import { fromDbSettings, toDbSettingsPatch } from "@/lib/supabase/mappers";
 import type { DbSettings } from "@/lib/supabase/types";
 import type { CalcSettings } from "@/lib/calc";
-import { requireDriver } from "@/lib/auth/requireDriver";
+import { requireGroupDriver } from "@/lib/auth/requireDriver";
+import { requireActiveGroupId } from "@/lib/group";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const supabase = await createClient();
+  const group = await requireActiveGroupId(supabase);
+  if (!group.ok) return group.response;
   const { data, error } = await supabase
     .from("settings")
     .select("*")
-    .eq("id", 1)
+    .eq("group_id", group.groupId)
     .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json(null);
@@ -21,14 +24,16 @@ export async function GET() {
 
 export async function PATCH(req: Request) {
   const supabase = await createClient();
-  const denied = await requireDriver(supabase);
-  if (denied) return denied;
+  const group = await requireActiveGroupId(supabase);
+  if (!group.ok) return group.response;
+  const denied = await requireGroupDriver(supabase, group.groupId);
+  if (!denied.ok) return denied.response;
   const body = (await req.json()) as Partial<CalcSettings>;
   const patch = { ...toDbSettingsPatch(body), updated_at: new Date().toISOString() };
   const { data, error } = await supabase
     .from("settings")
     .update(patch)
-    .eq("id", 1)
+    .eq("group_id", group.groupId)
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

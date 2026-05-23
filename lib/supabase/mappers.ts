@@ -6,6 +6,7 @@ import type { Group } from "@/lib/store/groups";
 import type { Member } from "@/lib/store/members";
 import type { Profile } from "@/lib/store/profile";
 import type {
+  DbCar,
   DbFillup,
   DbGasPrice,
   DbGroup,
@@ -18,9 +19,54 @@ import type {
   DbTripLegRider,
 } from "./types";
 
+export interface Car {
+  id: string;
+  ownerUserId: string;
+  name: string;
+  fuelEfficiencyKml: number | null;
+  tankSizeLiters: number | null;
+}
+
+export function toDbGroupInsert(
+  g: Omit<Group, "id" | "createdAt">
+): Omit<DbGroup, "id" | "created_at"> {
+  return { name: g.name, owner_user_id: g.ownerUserId };
+}
+
+export function toDbProfilePatch(
+  p: Partial<Omit<Profile, "userId">>
+): Partial<Pick<DbProfile, "display_name" | "avatar_url">> {
+  const out: Partial<Pick<DbProfile, "display_name" | "avatar_url">> = {};
+  if (p.displayName !== undefined) out.display_name = p.displayName;
+  if (p.avatarUrl !== undefined) out.avatar_url = p.avatarUrl;
+  return out;
+}
+
+export function fromDbCar(r: DbCar): Car {
+  return {
+    id: r.id,
+    ownerUserId: r.owner_user_id,
+    name: r.name,
+    fuelEfficiencyKml: r.fuel_efficiency_kml != null ? Number(r.fuel_efficiency_kml) : null,
+    tankSizeLiters: r.tank_size_liters != null ? Number(r.tank_size_liters) : null,
+  };
+}
+
+export function toDbCarInsert(
+  c: Omit<Car, "id">
+): Omit<DbCar, "id" | "created_at"> {
+  return {
+    owner_user_id: c.ownerUserId,
+    name: c.name,
+    fuel_efficiency_kml: c.fuelEfficiencyKml,
+    tank_size_liters: c.tankSizeLiters,
+  };
+}
+
 export function fromDbFillup(r: DbFillup): Fillup {
   return {
     id: r.id,
+    carId: r.car_id,
     date: r.date,
     liters: Number(r.liters),
     totalPhp: Number(r.total_php),
@@ -28,13 +74,20 @@ export function fromDbFillup(r: DbFillup): Fillup {
   };
 }
 
-export function toDbFillupInsert(f: Omit<Fillup, "id">): Omit<DbFillup, "id" | "created_at"> {
-  return {
+export function toDbFillupInsert(
+  f: Omit<Fillup, "id">,
+  ctx?: { groupId?: string; ownerUserId?: string }
+): Partial<DbFillup> {
+  const out: Partial<DbFillup> = {
     date: f.date,
     liters: f.liters,
     total_php: f.totalPhp,
     odometer_km: f.odometerKm,
+    car_id: f.carId ?? null,
   };
+  if (ctx?.groupId !== undefined) out.group_id = ctx.groupId;
+  if (ctx?.ownerUserId !== undefined) out.owner_user_id = ctx.ownerUserId;
+  return out;
 }
 
 export function fromDbPassenger(r: DbPassenger): Passenger {
@@ -69,6 +122,7 @@ export function fromDbProfile(r: DbProfile): Profile {
 }
 
 export function fromDbSettings(r: DbSettings): CalcSettings {
+
   return {
     roundTripKm: Number(r.round_trip_km),
     mileageKmPerL:
@@ -119,6 +173,8 @@ export function fromDbTrip(r: DbTripWithLegs, gasPrice: number): StoredTrip {
     date: r.date,
     gasPrice,
     parkingFee: Number(r.parking_fee_php),
+    carId: r.car_id,
+    driverUserId: r.driver_user_id,
     morning: {
       route: morning?.route ?? "skyway",
       passengerIds: morning?.trip_leg_riders.map((x) => x.passenger_id) ?? [],

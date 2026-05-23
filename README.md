@@ -26,7 +26,13 @@ npm run build                # production build
 
 ## Supabase
 
-Apply the migrations in `supabase/migrations/` to your project. RLS is permissive in v1 (shared tracker among trusted coworkers). Tighten policies before going public.
+Apply the migrations in `supabase/migrations/` to your project in numeric order. The multi-tenant model is layered on across `0005`–`0009`:
+
+- **`0005_groups_profiles_cars.sql`** — introduces `groups`, `profiles` (auto-created per `auth.users` row), and `cars` (per-user vehicles with `fuel_efficiency_kml` and `tank_size_liters`).
+- **`0006_multitenancy_columns.sql`** — adds `group_id` to every data table, `car_id` + `driver_user_id` to `trips`, restructures `members` and `settings` to be group-scoped, creates `member_invites` for pending invitees, and backfills legacy rows into a "Legacy Carpool" group owned by the first existing driver.
+- **`0007_rls_group_scoped.sql`** — drops the flat policies from `0003` and replaces them with `is_group_member(gid)` / `is_group_driver(gid)` security-definer helpers plus group-scoped RLS on every table. From here on, two users in different groups cannot see each other's trips, passengers, settings, fillups, or payments.
+- **`0008_group_rpcs.sql`** — exposes `create_group(name)`, `link_member_by_email(group_id, email, role)`, and friends. `create_group` adds the caller as `role='both'` and seeds default `settings`.
+- **`0009_fillups_owner.sql`** — stamps `owner_user_id` onto every fillup so per-driver mileage rollups stay correct after a car changes hands.
 
 Env vars use the current Supabase 2025 key format:
 
@@ -49,16 +55,42 @@ Both are in **Project Settings → API Keys** in the Supabase dashboard.
    - `SUPABASE_SERVICE_ROLE_KEY` = secret key
    - (optional) `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID` for Sheets export. Leave unset to disable that feature cleanly.
 5. **Deploy.** Vercel auto-detects Next.js. After deploy, open the URL, go to `/settings`, add a passenger, and confirm the row appears in the Supabase **Table Editor**. If it does, every other store is wired the same way.
-6. **Bootstrap the first driver.** Member roles are stored in the `members` table, but there's no driver yet to grant access from the in-app **Members** admin. Have the driver sign in once (via the magic link on `/auth/login`), then in the Supabase **SQL Editor** run `insert into members (user_id, role) values ('<auth.users.id>','driver');` — copy the user's id from **Authentication → Users**. After that, the driver can invite and link everyone else from `/admin/members`.
+6. **Bootstrap the first user → first group.** The app is invite-only: every data table is gated by `is_group_member(gid)`, so a brand-new auth user can't see (or be seen) until they belong to a group. To bring up the first one:
+   1. Have the first user sign in once via the magic link on `/auth/login`. The `handle_new_user` trigger creates their empty profile row.
+   2. In the Supabase **SQL Editor**, call `select public.create_group('Your Carpool Name');` while authenticated as that user (or run it inside a `SET LOCAL role authenticated; SET LOCAL "request.jwt.claim.sub" = '<auth.users.id>';` block as service role). `create_group` inserts the group, adds the caller as `role = 'both'`, and seeds a default `settings` row in one shot.
+   3. From `/admin/members`, invite everyone else by email. Pick `driver` (can edit shared settings, manage trips/fillups), `passenger` (read-only on shared data, can mark their own payments), or `both`. If the invitee already has an auth user, they're added immediately; otherwise a row in `member_invites` is created and consumed the next time they sign in with that email.
 
-Note: RLS is `USING (true)` in v1, so anyone who learns the project URL + publishable key can read/write everything. Keep the GitHub repo private, don't share the deployed URL, and don't paste the keys into any client-side code outside this project.
+The full /admin/members surface (and the underlying `link_member_by_email` RPC) is the only way to add a second user — RLS does not allow self-joining a group. **Invite-only is preserved end-to-end.**
 
 ## Google Sheets export
 
 Optional. Create a service account, share the target spreadsheet with its email, and set `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID`. Trigger from the Week page → exports one tab per month, one row per leg. When any of those vars is unset, `/api/sheets/export` returns 503 and the export button on `/week` renders disabled.
 
+## Per-car mileage workflow
+
+Each driver can register one or more cars under **Account → Cars**. Every car has its own `fuel_efficiency_kml` (optional manual override) and `tank_size_liters`.
+
+- **Fillups** belong to a specific car (`fillups.car_id`) and are also stamped with `owner_user_id` so a car changing hands doesn't corrupt history.
+- **Trips** pick the driver's car at log time (`trips.car_id`, `trips.driver_user_id`). The Trip Editor defaults to the signed-in driver's most-recently-used car.
+- **Rolling mileage** is computed **per car**: `getRollingMileage(fillups, carId)` averages km / liter across that car's fillups only. The settings-level "Mileage override" still wins when set, but otherwise each car uses its own rolling number.
+- When a driver has no fillups yet for a car, the trip cost calculation falls back to the group-level `mileageKmPerL` setting.
+
+## Tests
+
+```bash
+npm test           # unit + route tests via vitest
+```
+
+The RLS regression suite in `lib/test/rls.integration.test.ts` runs end-to-end against a Supabase **dev branch**. It is skipped unless these env vars are set when invoking `npm test`:
+
+- `RLS_TEST_SUPABASE_URL` — dev branch project URL
+- `RLS_TEST_SERVICE_ROLE_KEY` — service-role key (used to seed users + rows directly)
+- `RLS_TEST_ANON_KEY` (or `RLS_TEST_PUBLISHABLE_KEY`) — the publishable key, used to sign in as each seeded user
+
+The suite seeds two groups with disjoint owners and asserts that user A's PostgREST `select` against `trips`, `passengers`, `settings`, `fillups`, and `trip_payments` cannot leak rows belonging to user B's group (and vice versa).
+
 ## Notes
 
 - Gas price: manual entry every Tuesday (no Petron/DOE API)
 - Toll prices: Skyway 164 / SLEX 124 per leg, editable in Settings
-- Mileage: rolling avg from fill-up log, with manual override
+- Mileage: rolling avg from per-car fill-up log, with manual per-group override

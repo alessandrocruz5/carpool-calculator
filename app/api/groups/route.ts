@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fromDbGroup } from "@/lib/supabase/mappers";
 import type { DbGroup } from "@/lib/supabase/types";
-import { requireAuth, requireDriver } from "@/lib/auth/requireDriver";
+import { requireAuth, requireGroupDriver } from "@/lib/auth/requireDriver";
 
 export const dynamic = "force-dynamic";
 
@@ -39,12 +39,12 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   const supabase = await createClient();
-  const denied = await requireDriver(supabase);
-  if (denied) return denied;
   const body = (await req.json()) as { id: string; name: string };
   const name = body.name?.trim();
   if (!body.id || !name)
     return NextResponse.json({ error: "missing id or name" }, { status: 400 });
+  const auth = await requireGroupDriver(supabase, body.id);
+  if (!auth.ok) return auth.response;
   const { data, error } = await supabase
     .from("groups")
     .update({ name })
@@ -57,11 +57,11 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   const supabase = await createClient();
-  const denied = await requireDriver(supabase);
-  if (denied) return denied;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
+  const auth = await requireGroupDriver(supabase, id);
+  if (!auth.ok) return auth.response;
   const { error } = await supabase.from("groups").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

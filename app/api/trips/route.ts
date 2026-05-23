@@ -4,7 +4,8 @@ import { fromDbTrip, fromDbSettings, type DbTripWithLegs } from "@/lib/supabase/
 import type { StoredTrip } from "@/lib/store/trips";
 import type { DbGasPrice, DbSettings } from "@/lib/supabase/types";
 import { calcDay, DEFAULT_SETTINGS } from "@/lib/calc";
-import { requireDriver } from "@/lib/auth/requireDriver";
+import { requireGroupDriver } from "@/lib/auth/requireDriver";
+import { requireActiveGroupId } from "@/lib/group";
 
 export const dynamic = "force-dynamic";
 
@@ -13,15 +14,19 @@ const TRIP_SELECT =
 
 export async function GET() {
   const supabase = await createClient();
+  const group = await requireActiveGroupId(supabase);
+  if (!group.ok) return group.response;
   const { data, error } = await supabase
     .from("trips")
     .select(TRIP_SELECT)
+    .eq("group_id", group.groupId)
     .order("date", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const { data: gpData } = await supabase
     .from("gas_prices")
     .select("*")
+    .eq("group_id", group.groupId)
     .order("effective_date", { ascending: true });
   const gasPrices = (gpData ?? []) as DbGasPrice[];
 
@@ -34,15 +39,60 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const denied = await requireDriver(supabase);
-  if (denied) return denied;
+  const group = await requireActiveGroupId(supabase);
+  if (!group.ok) return group.response;
+  const denied = await requireGroupDriver(supabase, group.groupId);
+  if (!denied.ok) return denied.response;
+  const groupId = group.groupId;
   const body = (await req.json()) as StoredTrip;
+
+  // When a car/driver is attached, validate ownership + group membership and
+  // resolve the car's fuel efficiency for the cost calculation below.
+  let carMileageKmPerL: number | null = null;
+  if (body.carId != null || body.driverUserId != null) {
+    if (body.carId == null || body.driverUserId == null) {
+      return NextResponse.json(
+        { error: "car_id and driver_user_id must be provided together" },
+        { status: 400 }
+      );
+    }
+    const { data: memberRow } = await supabase
+      .from("members")
+      .select("role")
+      .eq("group_id", groupId)
+      .eq("user_id", body.driverUserId)
+      .maybeSingle();
+    const role = (memberRow as { role?: string } | null)?.role;
+    if (role !== "driver" && role !== "both") {
+      return NextResponse.json(
+        { error: "driver_user_id is not a driver of the active group" },
+        { status: 400 }
+      );
+    }
+    const { data: carRow } = await supabase
+      .from("cars")
+      .select("owner_user_id, fuel_efficiency_kml")
+      .eq("id", body.carId)
+      .maybeSingle();
+    const car = carRow as
+      | { owner_user_id: string; fuel_efficiency_kml: number | null }
+      | null;
+    if (!car || car.owner_user_id !== body.driverUserId) {
+      return NextResponse.json(
+        { error: "car_id is not owned by driver_user_id" },
+        { status: 400 }
+      );
+    }
+    carMileageKmPerL =
+      car.fuel_efficiency_kml != null ? Number(car.fuel_efficiency_kml) : null;
+  }
 
   // Find the gas_prices row effective for this trip's date (latest with effective_date <= trip.date).
   // If none exists, snapshot body.gasPrice into a new gas_prices row so the Log renders correctly.
   const { data: gpRow } = await supabase
     .from("gas_prices")
     .select("id")
+    .eq("group_id", groupId)
     .lte("effective_date", body.date)
     .order("effective_date", { ascending: false })
     .limit(1)
@@ -51,7 +101,11 @@ export async function POST(req: Request) {
   if (!gasPriceId && body.gasPrice > 0) {
     const { data: newGp, error: newGpErr } = await supabase
       .from("gas_prices")
-      .insert({ effective_date: body.date, price_per_liter: body.gasPrice })
+      .insert({
+        group_id: groupId,
+        effective_date: body.date,
+        price_per_liter: body.gasPrice,
+      })
       .select("id")
       .single();
     if (newGpErr)
@@ -63,10 +117,13 @@ export async function POST(req: Request) {
     .from("trips")
     .upsert(
       {
+        group_id: groupId,
         date: body.date,
         gas_price_id: gasPriceId,
         parking_fee_php: body.parkingFee,
         notes: body.notes ?? null,
+        car_id: body.carId ?? null,
+        driver_user_id: body.driverUserId ?? null,
       },
       { onConflict: "date" }
     )
@@ -84,8 +141,8 @@ export async function POST(req: Request) {
   if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
 
   const legsToInsert = [
-    { trip_id: tripId, leg: "morning" as const, route: body.morning.route },
-    { trip_id: tripId, leg: "evening" as const, route: body.evening.route },
+    { group_id: groupId, trip_id: tripId, leg: "morning" as const, route: body.morning.route },
+    { group_id: groupId, trip_id: tripId, leg: "evening" as const, route: body.evening.route },
   ];
   const { data: legRows, error: legErr } = await supabase
     .from("trip_legs")
@@ -102,10 +159,12 @@ export async function POST(req: Request) {
 
   const riders = [
     ...body.morning.passengerIds.map((pid) => ({
+      group_id: groupId,
       trip_leg_id: morningLeg!.id,
       passenger_id: pid,
     })),
     ...body.evening.passengerIds.map((pid) => ({
+      group_id: groupId,
       trip_leg_id: eveningLeg!.id,
       passenger_id: pid,
     })),
@@ -120,11 +179,17 @@ export async function POST(req: Request) {
   const { data: settingsRow } = await supabase
     .from("settings")
     .select("*")
-    .eq("id", 1)
+    .eq("group_id", groupId)
     .maybeSingle();
-  const calcSettings = settingsRow
+  const baseSettings = settingsRow
     ? fromDbSettings(settingsRow as DbSettings)
     : DEFAULT_SETTINGS;
+  // The chosen car's measured efficiency takes precedence over the group
+  // settings override; calc's signature is unchanged.
+  const calcSettings =
+    carMileageKmPerL != null && carMileageKmPerL > 0
+      ? { ...baseSettings, mileageKmPerL: carMileageKmPerL }
+      : baseSettings;
 
   const breakdown = calcDay(
     {
@@ -161,6 +226,7 @@ export async function POST(req: Request) {
       )
     );
     const payments = passengerIds.map((pid) => ({
+      group_id: groupId,
       trip_id: tripId,
       passenger_id: pid,
       amount_php: breakdown.perPassenger[pid],
@@ -178,12 +244,18 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   const supabase = await createClient();
-  const denied = await requireDriver(supabase);
-  if (denied) return denied;
+  const group = await requireActiveGroupId(supabase);
+  if (!group.ok) return group.response;
+  const denied = await requireGroupDriver(supabase, group.groupId);
+  if (!denied.ok) return denied.response;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
-  const { error } = await supabase.from("trips").delete().eq("id", id);
+  const { error } = await supabase
+    .from("trips")
+    .delete()
+    .eq("id", id)
+    .eq("group_id", group.groupId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

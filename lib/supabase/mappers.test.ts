@@ -1,27 +1,36 @@
 import { describe, expect, it } from "vitest";
 import {
+  fromDbCar,
   fromDbFillup,
-  toDbFillupInsert,
+  fromDbGroup,
   fromDbPassenger,
+  fromDbProfile,
   fromDbSettings,
-  toDbSettingsPatch,
-  gasPriceFromDb,
   fromDbTrip,
+  gasPriceFromDb,
+  toDbCarInsert,
+  toDbFillupInsert,
+  toDbGroupInsert,
+  toDbProfilePatch,
+  toDbSettingsPatch,
 } from "./mappers";
 
 describe("fillup mappers", () => {
   it("round-trips fillup fields", () => {
     const db = {
       id: "u1",
+      group_id: "g1",
+      car_id: null,
       date: "2026-05-13",
       liters: 30.5,
       total_php: 2745,
       odometer_km: 12345.6,
       created_at: "2026-05-13T00:00:00Z",
     };
-    const f = fromDbFillup(db);
+    const f = fromDbFillup({ ...db, car_id: "c1", owner_user_id: "u9" });
     expect(f).toEqual({
       id: "u1",
+      carId: "c1",
       date: "2026-05-13",
       liters: 30.5,
       totalPhp: 2745,
@@ -32,6 +41,16 @@ describe("fillup mappers", () => {
       liters: 30.5,
       total_php: 2745,
       odometer_km: 12345.6,
+      car_id: "c1",
+    });
+    expect(toDbFillupInsert(f, { groupId: "g1", ownerUserId: "u9" })).toEqual({
+      date: "2026-05-13",
+      liters: 30.5,
+      total_php: 2745,
+      odometer_km: 12345.6,
+      car_id: "c1",
+      group_id: "g1",
+      owner_user_id: "u9",
     });
   });
 });
@@ -41,6 +60,7 @@ describe("passenger mapper", () => {
     expect(
       fromDbPassenger({
         id: "p1",
+        group_id: "g1",
         name: "Ana",
         active: true,
         created_at: "x",
@@ -53,6 +73,7 @@ describe("settings mappers", () => {
   it("returns 0 mileage when override is null", () => {
     const r = fromDbSettings({
       id: 1,
+      group_id: "g1",
       mileage_kml_override: null,
       round_trip_km: 42,
       parking_fee_php: 90,
@@ -84,6 +105,7 @@ describe("gas price mapper", () => {
     expect(
       gasPriceFromDb({
         id: "g1",
+        group_id: "g1",
         effective_date: "2026-05-13",
         price_per_liter: 65.55,
         station_name: "Petron",
@@ -93,11 +115,106 @@ describe("gas price mapper", () => {
   });
 });
 
+describe("group mappers", () => {
+  it("maps from db row", () => {
+    expect(
+      fromDbGroup({
+        id: "g1",
+        name: "Carpool",
+        owner_user_id: "u1",
+        created_at: "x",
+      })
+    ).toEqual({ id: "g1", name: "Carpool", ownerUserId: "u1", createdAt: "x" });
+  });
+
+  it("converts new-group payload to snake_case", () => {
+    expect(toDbGroupInsert({ name: "Carpool", ownerUserId: "u1" })).toEqual({
+      name: "Carpool",
+      owner_user_id: "u1",
+    });
+  });
+});
+
+describe("profile mappers", () => {
+  it("maps from db row", () => {
+    expect(
+      fromDbProfile({
+        user_id: "u1",
+        display_name: "Ana",
+        avatar_url: null,
+        created_at: "x",
+        updated_at: "x",
+      })
+    ).toEqual({ userId: "u1", displayName: "Ana", avatarUrl: null });
+  });
+
+  it("converts partial patches, dropping unset fields", () => {
+    expect(toDbProfilePatch({ displayName: "Ana" })).toEqual({
+      display_name: "Ana",
+    });
+    expect(toDbProfilePatch({ avatarUrl: null })).toEqual({ avatar_url: null });
+    expect(toDbProfilePatch({})).toEqual({});
+  });
+});
+
+describe("car mappers", () => {
+  it("maps from db row and coerces numeric strings", () => {
+    expect(
+      fromDbCar({
+        id: "c1",
+        owner_user_id: "u1",
+        name: "Civic",
+        fuel_efficiency_kml: "12.5" as unknown as number,
+        tank_size_liters: "45" as unknown as number,
+        created_at: "x",
+      })
+    ).toEqual({
+      id: "c1",
+      ownerUserId: "u1",
+      name: "Civic",
+      fuelEfficiencyKml: 12.5,
+      tankSizeLiters: 45,
+    });
+  });
+
+  it("passes null efficiency/tank through", () => {
+    const c = fromDbCar({
+      id: "c1",
+      owner_user_id: "u1",
+      name: "Civic",
+      fuel_efficiency_kml: null,
+      tank_size_liters: null,
+      created_at: "x",
+    });
+    expect(c.fuelEfficiencyKml).toBeNull();
+    expect(c.tankSizeLiters).toBeNull();
+  });
+
+  it("converts new-car payload to snake_case", () => {
+    expect(
+      toDbCarInsert({
+        ownerUserId: "u1",
+        name: "Civic",
+        fuelEfficiencyKml: 12.5,
+        tankSizeLiters: 45,
+      })
+    ).toEqual({
+      owner_user_id: "u1",
+      name: "Civic",
+      fuel_efficiency_kml: 12.5,
+      tank_size_liters: 45,
+    });
+  });
+});
+
 describe("trip mapper", () => {
   it("flattens legs and riders", () => {
     const t = fromDbTrip(
       {
         id: "t1",
+        group_id: "g1",
+        car_id: null,
+        driver_user_id: null,
         date: "2026-05-13",
         gas_price_id: "g1",
         parking_fee_php: 90,
@@ -106,20 +223,24 @@ describe("trip mapper", () => {
         trip_legs: [
           {
             id: "l1",
+            group_id: "g1",
             trip_id: "t1",
             leg: "morning",
             route: "skyway",
             trip_leg_riders: [
-              { trip_leg_id: "l1", passenger_id: "p1" },
-              { trip_leg_id: "l1", passenger_id: "p2" },
+              { group_id: "g1", trip_leg_id: "l1", passenger_id: "p1" },
+              { group_id: "g1", trip_leg_id: "l1", passenger_id: "p2" },
             ],
           },
           {
             id: "l2",
+            group_id: "g1",
             trip_id: "t1",
             leg: "evening",
             route: "slex",
-            trip_leg_riders: [{ trip_leg_id: "l2", passenger_id: "p1" }],
+            trip_leg_riders: [
+              { group_id: "g1", trip_leg_id: "l2", passenger_id: "p1" },
+            ],
           },
         ],
       },

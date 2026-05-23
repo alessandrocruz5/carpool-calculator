@@ -3,7 +3,8 @@ import dayjs from "dayjs";
 import { calcLeg, type CalcSettings, type Route } from "@/lib/calc";
 import { appendRows, replaceRows, type ExportRow } from "@/lib/sheets";
 import { createClient } from "@/lib/supabase/server";
-import { requireDriver } from "@/lib/auth/requireDriver";
+import { requireGroupDriver } from "@/lib/auth/requireDriver";
+import { requireActiveGroupId } from "@/lib/group";
 
 export const dynamic = "force-dynamic";
 
@@ -41,8 +42,10 @@ export async function POST(req: Request) {
   }
 
   const supabase = await createClient();
-  const denied = await requireDriver(supabase);
-  if (denied) return denied;
+  const group = await requireActiveGroupId(supabase);
+  if (!group.ok) return group.response;
+  const denied = await requireGroupDriver(supabase, group.groupId);
+  if (!denied.ok) return denied.response;
 
   try {
     const body = (await req.json()) as Body;
@@ -85,6 +88,7 @@ export async function POST(req: Request) {
     const { data: payRows, error: payErr } = await supabase
       .from("trip_payments")
       .select("trip_id, passenger_id, amount_php, paid, paid_at, trips!inner(date)")
+      .eq("group_id", group.groupId)
       .gte("trips.date", monthStart)
       .lte("trips.date", monthEnd);
 
