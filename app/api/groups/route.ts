@@ -24,7 +24,7 @@ export async function GET() {
     role: string;
     groups: { id: string; name: string; owner_user_id: string; created_at: string };
   };
-  const groups = ((data ?? []) as Row[]).map((m) => ({
+  const groups = ((data ?? []) as unknown as Row[]).map((m) => ({
     id: m.group_id,
     name: m.groups.name,
     ownerUserId: m.groups.owner_user_id,
