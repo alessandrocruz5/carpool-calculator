@@ -10,25 +10,31 @@ import { requireActiveGroupId } from "@/lib/group";
 export const dynamic = "force-dynamic";
 
 const TRIP_SELECT =
-  "*, trip_legs(*, trip_leg_riders(*))";
+  "id, date, parking_fee_php, notes, car_id, driver_user_id, gas_price_id, " +
+  "trip_legs(leg, route, trip_leg_riders(passenger_id))";
 
 export async function GET() {
   const supabase = await createClient();
   const group = await requireActiveGroupId(supabase);
   if (!group.ok) return group.response;
-  const { data, error } = await supabase
-    .from("trips")
-    .select(TRIP_SELECT)
-    .eq("group_id", group.groupId)
-    .order("date", { ascending: true });
+  const [tripsRes, gpRes] = await Promise.all([
+    supabase
+      .from("trips")
+      .select(TRIP_SELECT)
+      .eq("group_id", group.groupId)
+      .order("date", { ascending: true }),
+    supabase
+      .from("gas_prices")
+      .select("id, price_per_liter")
+      .eq("group_id", group.groupId)
+      .order("effective_date", { ascending: true }),
+  ]);
+  const { data, error } = tripsRes;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const { data: gpData } = await supabase
-    .from("gas_prices")
-    .select("*")
-    .eq("group_id", group.groupId)
-    .order("effective_date", { ascending: true });
-  const gasPrices = (gpData ?? []) as DbGasPrice[];
+  const gasPrices = (gpRes.data ?? []) as Pick<
+    DbGasPrice,
+    "id" | "price_per_liter"
+  >[];
 
   const trips: StoredTrip[] = ((data ?? []) as DbTripWithLegs[]).map((r) => {
     const gp = gasPrices.find((g) => g.id === r.gas_price_id);
