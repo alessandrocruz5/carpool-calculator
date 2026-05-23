@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fromDbMember } from "@/lib/supabase/mappers";
 import type { DbMember } from "@/lib/supabase/types";
-import { requireDriver } from "@/lib/auth/requireDriver";
+import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { getActiveGroupId } from "@/lib/auth/activeGroup";
 
 export const dynamic = "force-dynamic";
@@ -24,11 +24,11 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const denied = await requireDriver(supabase);
-  if (denied) return denied;
   const groupId = await getActiveGroupId();
   if (!groupId)
     return NextResponse.json({ error: "no active group" }, { status: 400 });
+  const auth = await requireGroupDriver(supabase, groupId);
+  if (!auth.ok) return auth.response;
   const body = (await req.json()) as { email: string; role: Role };
   const email = body.email?.trim();
   if (!email)
@@ -44,11 +44,11 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   const supabase = await createClient();
-  const denied = await requireDriver(supabase);
-  if (denied) return denied;
   const groupId = await getActiveGroupId();
   if (!groupId)
     return NextResponse.json({ error: "no active group" }, { status: 400 });
+  const auth = await requireGroupDriver(supabase, groupId);
+  if (!auth.ok) return auth.response;
   const body = (await req.json()) as { userId: string; role: Role };
   if (!body.userId)
     return NextResponse.json({ error: "missing userId" }, { status: 400 });
@@ -65,11 +65,11 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   const supabase = await createClient();
-  const denied = await requireDriver(supabase);
-  if (denied) return denied;
   const groupId = await getActiveGroupId();
   if (!groupId)
     return NextResponse.json({ error: "no active group" }, { status: 400 });
+  const auth = await requireGroupDriver(supabase, groupId);
+  if (!auth.ok) return auth.response;
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get("userId");
   if (!userId)

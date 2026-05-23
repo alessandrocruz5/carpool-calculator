@@ -7,28 +7,13 @@ export type GroupAuthCheck =
   | { ok: true; userId: string; role: MemberRole }
   | { ok: false; response: NextResponse };
 
-export type SimpleAuth =
+export type UserCheck =
   | { ok: true; userId: string }
   | { ok: false; response: NextResponse };
 
-/**
- * Authentication-only guard: confirms a signed-in user without requiring an
- * existing membership row. Used by routes a brand-new user must reach before
- * they belong to any group (e.g. creating their first group, own profile).
- */
-export async function requireAuth(supabase: SupabaseClient): Promise<SimpleAuth> {
-  const { data } = await supabase.auth.getClaims();
-  const claims = data?.claims as { sub?: string } | undefined;
-  if (!claims?.sub) {
-    return {
-      ok: false,
-      response: NextResponse.json({ error: "unauthorized" }, { status: 401 }),
-    };
-  }
-  return { ok: true, userId: claims.sub };
-}
+export type SimpleAuth = UserCheck;
 
-export async function requireUser(supabase: SupabaseClient): Promise<AuthCheck> {
+async function getUserId(supabase: SupabaseClient): Promise<string | null> {
   const { data } = await supabase.auth.getClaims();
   return (data?.claims as { sub?: string } | undefined)?.sub ?? null;
 }
@@ -38,6 +23,12 @@ function unauthorized(): { ok: false; response: NextResponse } {
     ok: false,
     response: NextResponse.json({ error: "unauthorized" }, { status: 401 }),
   };
+}
+
+export async function requireAuth(supabase: SupabaseClient): Promise<SimpleAuth> {
+  const userId = await getUserId(supabase);
+  if (!userId) return unauthorized();
+  return { ok: true, userId };
 }
 
 export async function requireUser(supabase: SupabaseClient): Promise<UserCheck> {

@@ -124,7 +124,7 @@ describe("group mappers", () => {
         owner_user_id: "u1",
         created_at: "x",
       })
-    ).toEqual({ id: "g1", name: "Carpool", ownerUserId: "u1" });
+    ).toEqual({ id: "g1", name: "Carpool", ownerUserId: "u1", createdAt: "x" });
   });
 
   it("converts new-group payload to snake_case", () => {

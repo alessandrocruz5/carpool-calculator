@@ -11,3 +11,32 @@ export function isDriverOnlyPath(pathname: string): boolean {
     (p) => pathname === p || pathname.startsWith(p + "/")
   );
 }
+
+/** Name of the cookie that holds the caller's active group id. */
+export const GROUP_COOKIE = "carpool-group";
+
+/** Read the active group id from the browser cookie jar (client-side). */
+export function readActiveGroupCookie(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const match = document.cookie.match(/(?:^|;\s*)carpool-group=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+export type Role = "driver" | "passenger" | "both";
+
+export interface Access {
+  role: Role | null;
+  isDriver: boolean;
+  isPassenger: boolean;
+  loaded: boolean;
+}
+
+export function roleIsDriver(role?: Role | null): boolean {
+  return role === "driver" || role === "both";
+}
+
+export function roleIsPassenger(role?: Role | null): boolean {
+  return role === "passenger" || role === "both";
+}
+
+export { useAccess, useIsPassenger } from "./useAccess";
