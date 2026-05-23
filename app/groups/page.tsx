@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { MemberRole } from "@/lib/supabase/types";
 
@@ -31,8 +32,17 @@ export default function GroupsPage() {
     try {
       const res = await fetch("/api/groups", { cache: "no-store" });
       if (!res.ok) throw new Error(await res.text());
-      const data = (await res.json()) as { groups: GroupItem[] };
-      setGroups(data.groups);
+      const data = (await res.json()) as GroupItem[];
+      setGroups(data);
+      // Single group with no active cookie: switch silently and go to dashboard.
+      if (data.length === 1 && !data[0].isActive) {
+        await fetch("/api/groups/switch", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ groupId: data[0].id }),
+        });
+        window.location.assign("/");
+      }
     } catch (err) {
       console.error("groups load failed", err);
     } finally {
@@ -56,9 +66,15 @@ export default function GroupsPage() {
         body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error(await res.text());
+      const group = (await res.json()) as { id: string };
+      await fetch("/api/groups/switch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ groupId: group.id }),
+      });
       setNewName("");
-      // Created group becomes active — reload so all data re-scopes.
-      window.location.assign("/");
+      // Send the driver straight to Members so they can invite their carpool.
+      window.location.assign("/admin/members");
     } catch (err) {
       setMsg({
         kind: "err",
@@ -72,10 +88,10 @@ export default function GroupsPage() {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/groups", {
-        method: "PUT",
+      const res = await fetch("/api/groups/switch", {
+        method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ groupId: id }),
       });
       if (!res.ok) throw new Error(await res.text());
       window.location.assign("/");
@@ -133,9 +149,22 @@ export default function GroupsPage() {
     }
   }
 
+  const hasActiveGroup = groups.some((g) => g.isActive);
+
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Groups</h1>
+      <h1 className="text-xl font-semibold">Choose your group</h1>
+
+      {hasActiveGroup && (
+        <div className="flex gap-4 text-sm">
+          <Link href="/" className="text-brand-600 hover:underline">
+            ← Continue to dashboard
+          </Link>
+          <Link href="/admin/members" className="text-brand-600 hover:underline">
+            Invite members →
+          </Link>
+        </div>
+      )}
 
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <h2 className="font-semibold">Create a group</h2>
@@ -143,6 +172,7 @@ export default function GroupsPage() {
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && createGroup()}
             placeholder="Group name"
             className="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm"
           />
@@ -163,7 +193,7 @@ export default function GroupsPage() {
           <p className="text-sm text-slate-500">Loading…</p>
         ) : groups.length === 0 ? (
           <p className="text-sm text-slate-500">
-            You aren&apos;t in any groups yet. Create one above.
+            No groups yet — create one above to get started.
           </p>
         ) : (
           <ul className="divide-y divide-slate-100">

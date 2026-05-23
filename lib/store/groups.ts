@@ -31,14 +31,17 @@ export const useGroups = create<GroupsStore>()(
           const res = await fetch("/api/groups", { cache: "no-store" });
           if (!res.ok) throw new Error(await res.text());
           const data = (await res.json()) as Group[];
-          set((s) => ({
-            groups: data,
-            hydrated: true,
-            activeGroupId:
-              s.activeGroupId && data.some((g) => g.id === s.activeGroupId)
-                ? s.activeGroupId
-                : data[0]?.id ?? null,
-          }));
+          const currentActiveId = get().activeGroupId;
+          const resolvedId =
+            currentActiveId && data.some((g) => g.id === currentActiveId)
+              ? currentActiveId
+              : data[0]?.id ?? null;
+          set({ groups: data, hydrated: true, activeGroupId: resolvedId });
+          // If we picked a different group than what the cookie knows about,
+          // call switchTo so the server cookie stays in sync.
+          if (resolvedId && resolvedId !== currentActiveId) {
+            await get().switchTo(resolvedId);
+          }
         } catch (err) {
           console.error("groups.hydrate failed", err);
           set({ hydrated: true });

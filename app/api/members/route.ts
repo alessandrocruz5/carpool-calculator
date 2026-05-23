@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fromDbMember } from "@/lib/supabase/mappers";
 import type { DbMember } from "@/lib/supabase/types";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
-import { getActiveGroupId } from "@/lib/auth/activeGroup";
+import { getActiveGroupId, requireActiveGroupId } from "@/lib/group";
 
 export const dynamic = "force-dynamic";
 
@@ -11,8 +11,12 @@ type Role = "driver" | "passenger" | "both";
 
 export async function GET() {
   const supabase = await createClient();
-  const groupId = await getActiveGroupId();
-  if (!groupId) return NextResponse.json([]);
+  let groupId: string;
+  try {
+    groupId = await getActiveGroupId(supabase);
+  } catch {
+    return NextResponse.json([]);
+  }
   const { data, error } = await supabase
     .from("members")
     .select("*")
@@ -24,9 +28,9 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const groupId = await getActiveGroupId();
-  if (!groupId)
-    return NextResponse.json({ error: "no active group" }, { status: 400 });
+  const groupCheck = await requireActiveGroupId(supabase);
+  if (!groupCheck.ok) return groupCheck.response;
+  const groupId = groupCheck.groupId;
   const auth = await requireGroupDriver(supabase, groupId);
   if (!auth.ok) return auth.response;
   const body = (await req.json()) as { email: string; role: Role };
@@ -44,9 +48,9 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   const supabase = await createClient();
-  const groupId = await getActiveGroupId();
-  if (!groupId)
-    return NextResponse.json({ error: "no active group" }, { status: 400 });
+  const groupCheck = await requireActiveGroupId(supabase);
+  if (!groupCheck.ok) return groupCheck.response;
+  const groupId = groupCheck.groupId;
   const auth = await requireGroupDriver(supabase, groupId);
   if (!auth.ok) return auth.response;
   const body = (await req.json()) as { userId: string; role: Role };
@@ -65,9 +69,9 @@ export async function PATCH(req: Request) {
 
 export async function DELETE(req: Request) {
   const supabase = await createClient();
-  const groupId = await getActiveGroupId();
-  if (!groupId)
-    return NextResponse.json({ error: "no active group" }, { status: 400 });
+  const groupCheck = await requireActiveGroupId(supabase);
+  if (!groupCheck.ok) return groupCheck.response;
+  const groupId = groupCheck.groupId;
   const auth = await requireGroupDriver(supabase, groupId);
   if (!auth.ok) return auth.response;
   const { searchParams } = new URL(req.url);
