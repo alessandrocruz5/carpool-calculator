@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  fromDbCar,
   fromDbFillup,
-  toDbFillupInsert,
+  fromDbGroup,
   fromDbPassenger,
+  fromDbProfile,
   fromDbSettings,
-  toDbSettingsPatch,
-  gasPriceFromDb,
   fromDbTrip,
+  gasPriceFromDb,
+  toDbCarInsert,
+  toDbFillupInsert,
+  toDbGroupInsert,
+  toDbProfilePatch,
+  toDbSettingsPatch,
 } from "./mappers";
 
 describe("fillup mappers", () => {
@@ -106,6 +112,98 @@ describe("gas price mapper", () => {
         created_at: "2026-05-13T03:00:00Z",
       })
     ).toEqual({ gasPrice: 65.55, gasPriceUpdatedAt: "2026-05-13T03:00:00Z" });
+  });
+});
+
+describe("group mappers", () => {
+  it("maps from db row", () => {
+    expect(
+      fromDbGroup({
+        id: "g1",
+        name: "Carpool",
+        owner_user_id: "u1",
+        created_at: "x",
+      })
+    ).toEqual({ id: "g1", name: "Carpool", ownerUserId: "u1" });
+  });
+
+  it("converts new-group payload to snake_case", () => {
+    expect(toDbGroupInsert({ name: "Carpool", ownerUserId: "u1" })).toEqual({
+      name: "Carpool",
+      owner_user_id: "u1",
+    });
+  });
+});
+
+describe("profile mappers", () => {
+  it("maps from db row", () => {
+    expect(
+      fromDbProfile({
+        user_id: "u1",
+        display_name: "Ana",
+        avatar_url: null,
+        created_at: "x",
+        updated_at: "x",
+      })
+    ).toEqual({ userId: "u1", displayName: "Ana", avatarUrl: null });
+  });
+
+  it("converts partial patches, dropping unset fields", () => {
+    expect(toDbProfilePatch({ displayName: "Ana" })).toEqual({
+      display_name: "Ana",
+    });
+    expect(toDbProfilePatch({ avatarUrl: null })).toEqual({ avatar_url: null });
+    expect(toDbProfilePatch({})).toEqual({});
+  });
+});
+
+describe("car mappers", () => {
+  it("maps from db row and coerces numeric strings", () => {
+    expect(
+      fromDbCar({
+        id: "c1",
+        owner_user_id: "u1",
+        name: "Civic",
+        fuel_efficiency_kml: "12.5" as unknown as number,
+        tank_size_liters: "45" as unknown as number,
+        created_at: "x",
+      })
+    ).toEqual({
+      id: "c1",
+      ownerUserId: "u1",
+      name: "Civic",
+      fuelEfficiencyKml: 12.5,
+      tankSizeLiters: 45,
+    });
+  });
+
+  it("passes null efficiency/tank through", () => {
+    const c = fromDbCar({
+      id: "c1",
+      owner_user_id: "u1",
+      name: "Civic",
+      fuel_efficiency_kml: null,
+      tank_size_liters: null,
+      created_at: "x",
+    });
+    expect(c.fuelEfficiencyKml).toBeNull();
+    expect(c.tankSizeLiters).toBeNull();
+  });
+
+  it("converts new-car payload to snake_case", () => {
+    expect(
+      toDbCarInsert({
+        ownerUserId: "u1",
+        name: "Civic",
+        fuelEfficiencyKml: 12.5,
+        tankSizeLiters: 45,
+      })
+    ).toEqual({
+      owner_user_id: "u1",
+      name: "Civic",
+      fuel_efficiency_kml: 12.5,
+      tank_size_liters: 45,
+    });
   });
 });
 
