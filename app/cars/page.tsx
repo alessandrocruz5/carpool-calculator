@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useCars, type Car } from "@/lib/store/cars";
 import { useFillups } from "@/lib/store/fillups";
 import { rollingMileage } from "@/lib/mileage";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Car as CarIcon } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,7 @@ export default function CarsPage() {
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
 
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [kml, setKml] = useState("");
   const [tank, setTank] = useState("");
@@ -69,6 +72,7 @@ export default function CarsPage() {
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <h2 className="font-semibold">Add a car</h2>
         <input
+          ref={nameInputRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Car name"
@@ -129,12 +133,14 @@ export default function CarsPage() {
       </section>
 
       {cars.length === 0 && (
-        <section className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-600">
-            No cars yet. Add one above — km/L and tank size are used to
-            estimate fuel cost per trip.
-          </p>
-        </section>
+        <EmptyState
+          icon={CarIcon}
+          headline="Add your first car"
+          cta={{
+            label: "Add a car",
+            onClick: () => nameInputRef.current?.focus(),
+          }}
+        />
       )}
 
       {cars.map((car) => (
