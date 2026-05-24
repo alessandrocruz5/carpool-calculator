@@ -9,9 +9,12 @@ import { useRoster } from "@/lib/store/roster";
 import { useTrips } from "@/lib/store/trips";
 import { useFillups } from "@/lib/store/fillups";
 import { useCars } from "@/lib/store/cars";
+import { useMembers } from "@/lib/store/members";
+import { useGroups } from "@/lib/store/groups";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/Toast";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
+import { DriverSelect } from "@/components/DriverSelect";
 import { rollingMileage } from "@/lib/mileage";
 import { calcDay } from "@/lib/calc";
 import { daysSince } from "@/lib/week";
@@ -23,6 +26,8 @@ export default function TodayPage() {
   const { fillups } = useFillups();
   const { cars } = useCars();
   const { trips, upsert } = useTrips();
+  const { members } = useMembers();
+  const activeGroupId = useGroups((s) => s.activeGroupId);
   const toast = useToast();
   const isDriver = useIsDriver();
 
@@ -34,6 +39,9 @@ export default function TodayPage() {
     existing?.evening ?? { route: "skyway", passengerIds: [] }
   );
   const [carId, setCarId] = useState<string>(existing?.carId ?? "");
+  const [driverUserId, setDriverUserId] = useState<string | null>(
+    existing?.driverUserId ?? null
+  );
   const [userId, setUserId] = useState<string | null>(null);
 
   const [hydrated, setHydrated] = useState(false);
@@ -54,6 +62,20 @@ export default function TodayPage() {
     if (existing?.carId) setCarId(existing.carId);
     else if (cars.length === 1) setCarId(cars[0].id);
   }, [cars, existing, carId]);
+
+  // Default driver to current user when they're a driver; otherwise leave blank.
+  useEffect(() => {
+    if (driverUserId !== null) return;
+    if (existing?.driverUserId) {
+      setDriverUserId(existing.driverUserId);
+      return;
+    }
+    if (!userId) return;
+    const self = members.find((m) => m.userId === userId);
+    if (self && (self.role === "driver" || self.role === "both")) {
+      setDriverUserId(userId);
+    }
+  }, [members, existing, userId, driverUserId]);
 
   const selectedCar = cars.find((c) => c.id === carId);
   // A chosen car resolves the trip's efficiency: its rated value first, then
@@ -81,6 +103,10 @@ export default function TodayPage() {
 
   async function save() {
     try {
+      const pair =
+        driverUserId && carId
+          ? { driverUserId, carId }
+          : { driverUserId: null, carId: null };
       await upsert({
         id: existing?.id ?? crypto.randomUUID(),
         date: today,
@@ -88,6 +114,7 @@ export default function TodayPage() {
         parkingFee: settings.parkingFeePhp,
         morning,
         evening,
+        ...pair,
       });
       toast.show({ message: existing ? "Trip updated." : "Trip saved." });
     } catch (err) {
@@ -131,10 +158,37 @@ export default function TodayPage() {
         </Link>
       )}
 
-      {cars.length > 0 && (
-        <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+      <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Driver</h2>
+          <DriverSelect
+            value={driverUserId}
+            onChange={(next) => {
+              setDriverUserId(next);
+              if (next !== userId) setCarId("");
+            }}
+            activeGroupId={activeGroupId}
+            currentUserId={userId}
+          />
+        </div>
+
+        {!driverUserId && (
+          <p className="text-xs text-slate-500">Pick a driver first.</p>
+        )}
+
+        {driverUserId && driverUserId === userId && cars.length === 0 && (
+          <p className="text-xs text-slate-500">
+            You have no cars yet —{" "}
+            <Link href="/cars" className="text-brand-600 underline">
+              Add one
+            </Link>
+            .
+          </p>
+        )}
+
+        {driverUserId && driverUserId === userId && cars.length > 0 && (
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Vehicle</h2>
+            <span className="text-sm text-slate-600">Car</span>
             <select
               value={carId}
               onChange={(e) => setCarId(e.target.value)}
@@ -148,15 +202,25 @@ export default function TodayPage() {
               ))}
             </select>
           </div>
-          {selectedCar && (
+        )}
+
+        {driverUserId &&
+          driverUserId === userId &&
+          cars.length > 0 &&
+          selectedCar && (
             <p className="text-xs text-slate-500">
               {carEfficiency
                 ? `Using ${effectiveMileage.toFixed(2)} km/L for ${selectedCar.name}`
                 : `${selectedCar.name} has no efficiency data — using ${effectiveMileage.toFixed(2)} km/L`}
             </p>
           )}
-        </section>
-      )}
+
+        {driverUserId && driverUserId !== userId && (
+          <p className="text-sm text-slate-600">
+            Car: chosen by {driverUserId}
+          </p>
+        )}
+      </section>
 
       <LegCard
         leg="morning"
