@@ -1,19 +1,4 @@
 /**
- * Minimal slice of the Supabase client needed to count group memberships.
- * Using a structural interface keeps this module free of Supabase package
- * imports and makes it easy to test with any compatible mock.
- */
-export interface MembersQueryClient {
-  from(table: string): {
-    select(columns: string): {
-      eq(column: string, value: string): {
-        limit(count: number): PromiseLike<{ data: unknown; error: unknown }>;
-      };
-    };
-  };
-}
-
-/**
  * Returns `true` when `next` is a safe same-origin relative path.
  *
  * Rules:
@@ -33,7 +18,10 @@ export function isSafeRedirect(next: string): boolean {
  *   - 0 memberships  → `/onboarding`  (new user, no group yet)
  *   - ≥1 memberships → `next` if present and safe, otherwise `/`
  *
- * @param supabase - A Supabase client (server or any compatible mock)
+ * @param supabase - A Supabase client (server or any compatible mock).
+ *   Typed as `{ from(table: string): unknown }` to avoid triggering
+ *   TypeScript's "excessively deep instantiation" error on the deeply-generic
+ *   Supabase client while remaining compatible with test mocks.
  * @param userId   - The authenticated user's UUID
  * @param next     - The `?next=` param from the confirmation URL (default "/")
  */
@@ -42,11 +30,14 @@ export async function resolvePostConfirmRedirect({
   userId,
   next,
 }: {
-  supabase: MembersQueryClient;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: { from(table: string): any };
   userId: string;
   next: string;
 }): Promise<string> {
   // A single row is enough to determine whether any membership exists.
+  // We cast to a known shape after awaiting; the loose parameter type above
+  // prevents TS2589 ("excessively deep") on the real Supabase client.
   const { data, error } = (await supabase
     .from("members")
     .select("group_id")
