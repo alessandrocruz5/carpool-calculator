@@ -11,6 +11,8 @@ import { weekStart, weekdays, isFriday } from "@/lib/week";
 import { PHP } from "@/components/PHP";
 import { useToast } from "@/components/Toast";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { CalendarDays, Inbox } from "lucide-react";
 
 export default function LogPage() {
   const { trips, remove, upsert } = useTrips();
@@ -94,6 +96,7 @@ export default function LogPage() {
 
   const sorted = [...trips].sort((a, b) => (a.date < b.date ? 1 : -1));
   const mostRecent = sorted[0];
+  const weekHasTrips = days.some((d) => trips.some((t) => t.date === d));
 
   function copyYesterday() {
     if (!mostRecent) return;
@@ -229,20 +232,25 @@ export default function LogPage() {
             </div>
           </div>
 
-          <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
-            <h2 className="font-semibold mb-1">Totals</h2>
-            <TotalsRow label="Driver collects" value={summary.driverTotal} bold />
-            {Object.entries(summary.perPassenger).map(([id, amt]) => (
-              <TotalsRow
-                key={id}
-                label={passengers.find((p) => p.id === id)?.name ?? id}
-                value={amt}
-              />
-            ))}
-            {Object.keys(summary.perPassenger).length === 0 && (
-              <p className="text-sm text-slate-500">No trips logged this week yet.</p>
-            )}
-          </section>
+          {!weekHasTrips ? (
+            <EmptyState
+              icon={CalendarDays}
+              headline="No trips this week"
+              cta={isDriver ? { label: "Log a trip", href: "/" } : undefined}
+            />
+          ) : (
+            <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+              <h2 className="font-semibold mb-1">Totals</h2>
+              <TotalsRow label="Driver collects" value={summary.driverTotal} bold />
+              {Object.entries(summary.perPassenger).map(([id, amt]) => (
+                <TotalsRow
+                  key={id}
+                  label={passengers.find((p) => p.id === id)?.name ?? id}
+                  value={amt}
+                />
+              ))}
+            </section>
+          )}
 
           {byPassenger.size > 0 && (
             <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
@@ -353,7 +361,11 @@ export default function LogPage() {
             </div>
           )}
           {sorted.length === 0 && (
-            <p className="text-sm text-slate-500">No trips saved yet.</p>
+            <EmptyState
+              icon={Inbox}
+              headline="No trips logged yet"
+              cta={isDriver ? { label: "Log your first trip", href: "/" } : undefined}
+            />
           )}
           <ul className="space-y-2">
             {sorted.map((t) => {
