@@ -1,0 +1,160 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
+import { makeSupabase } from "@/lib/test/supabase-mock";
+
+const supaState: { current: ReturnType<typeof makeSupabase> | null } = {
+  current: null,
+};
+
+vi.mock("@supabase/ssr", () => ({
+  createServerClient: vi.fn(() => supaState.current!.client),
+}));
+
+import { updateSession } from "./middleware";
+
+beforeEach(() => {
+  supaState.current = null;
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost";
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "anon";
+});
+
+function setSupa(opts: Parameters<typeof makeSupabase>[0]) {
+  supaState.current = makeSupabase(opts);
+}
+
+function makeRequest(
+  pathname: string,
+  cookies: Record<string, string> = {},
+): NextRequest {
+  const cookieHeader = Object.entries(cookies)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("; ");
+  return new NextRequest(`http://localhost${pathname}`, {
+    headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+  });
+}
+
+describe("updateSession /admin gate", () => {
+  it("redirects unauthenticated users away from /admin to /auth/login", async () => {
+    setSupa({ auth: { userId: null } });
+    const res = await updateSession(makeRequest("/admin/members"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/auth/login");
+  });
+
+  it("redirects to /groups when admin route is hit without active group cookie", async () => {
+    setSupa({ auth: { userId: "u1", member: { role: "driver" } } });
+    const res = await updateSession(makeRequest("/admin/members"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/groups");
+  });
+
+  it("redirects passengers from /admin/* to /?error=forbidden", async () => {
+    setSupa({
+      auth: { userId: "u1" },
+      tables: {
+        members: [
+          { data: { role: "passenger" }, error: null },
+          { data: { role: "passenger" }, error: null },
+        ],
+      },
+    });
+    const res = await updateSession(
+      makeRequest("/admin/members", { "carpool-group": "g1" }),
+    );
+    expect(res.status).toBe(307);
+    const location = res.headers.get("location") ?? "";
+    expect(location).toContain("/");
+    expect(location).toContain("error=forbidden");
+  });
+
+  it("redirects users with no membership in the active group to /?error=forbidden", async () => {
+    setSupa({
+      auth: { userId: "u1" },
+      tables: {
+        members: [
+          { data: null, error: null },
+          { data: null, error: null },
+        ],
+      },
+    });
+    const res = await updateSession(
+      makeRequest("/admin/members", { "carpool-group": "g1" }),
+    );
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("error=forbidden");
+  });
+
+  it("allows drivers into /admin/*", async () => {
+    setSupa({
+      auth: { userId: "u1" },
+      tables: {
+        members: [
+          { data: { role: "driver" }, error: null },
+          { data: { role: "driver" }, error: null },
+        ],
+      },
+    });
+    const res = await updateSession(
+      makeRequest("/admin/members", { "carpool-group": "g1" }),
+    );
+    // No redirect — middleware returns NextResponse.next (status 200).
+    expect(res.status).toBe(200);
+  });
+
+  it("allows 'both' role into /admin/*", async () => {
+    setSupa({
+      auth: { userId: "u1" },
+      tables: {
+        members: [
+          { data: { role: "both" }, error: null },
+          { data: { role: "both" }, error: null },
+        ],
+      },
+    });
+    const res = await updateSession(
+      makeRequest("/admin/members", { "carpool-group": "g1" }),
+    );
+    expect(res.status).toBe(200);
+  });
+
+  it("scopes the admin role lookup to the active group", async () => {
+    setSupa({
+      auth: { userId: "u1" },
+      tables: {
+        members: [
+          { data: { role: "driver" }, error: null },
+          { data: { role: "driver" }, error: null },
+        ],
+      },
+    });
+    await updateSession(
+      makeRequest("/admin/members", { "carpool-group": "g-active" }),
+    );
+    const calls = supaState.current!.callsFor("members");
+    // Second members lookup is the admin gate; assert it filtered by group.
+    const adminCallChain = calls[1] ?? [];
+    const eqCalls = adminCallChain
+      .filter((c) => c.method === "eq")
+      .map((c) => c.args);
+    expect(eqCalls).toEqual(
+      expect.arrayContaining([
+        ["user_id", "u1"],
+        ["group_id", "g-active"],
+      ]),
+    );
+  });
+
+  it("does not gate non-admin routes on driver role", async () => {
+    setSupa({
+      auth: { userId: "u1" },
+      tables: {
+        members: [{ data: { role: "passenger" }, error: null }],
+      },
+    });
+    const res = await updateSession(
+      makeRequest("/log", { "carpool-group": "g1" }),
+    );
+    expect(res.status).toBe(200);
+  });
+});
