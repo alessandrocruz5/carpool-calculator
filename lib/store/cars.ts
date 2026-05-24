@@ -20,7 +20,7 @@ interface CarsStore {
     id: string,
     patch: Partial<Pick<Car, "name" | "fuelEfficiencyKml" | "tankSizeLiters">>
   ) => Promise<void>;
-  remove: (id: string) => Promise<void>;
+  remove: (id: string) => Promise<{ ok: true } | { ok: false; status: number; tripCount?: number }>;
 }
 
 export const useCars = create<CarsStore>()(
@@ -81,15 +81,26 @@ export const useCars = create<CarsStore>()(
         }
       },
       remove: async (id) => {
-        set((s) => ({ cars: s.cars.filter((c) => c.id !== id) }));
         try {
           const res = await fetch(`/api/cars?id=${encodeURIComponent(id)}`, {
             method: "DELETE",
           });
-          if (!res.ok) throw new Error(await res.text());
+          if (res.status === 409) {
+            const body = (await res.json().catch(() => ({}))) as {
+              tripCount?: number;
+            };
+            return { ok: false, status: 409, tripCount: body.tripCount };
+          }
+          if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            console.error("cars.remove failed", res.status, text);
+            return { ok: false, status: res.status };
+          }
+          set((s) => ({ cars: s.cars.filter((c) => c.id !== id) }));
+          return { ok: true };
         } catch (err) {
           console.error("cars.remove failed", err);
-          await get().hydrate();
+          return { ok: false, status: 0 };
         }
       },
     }),

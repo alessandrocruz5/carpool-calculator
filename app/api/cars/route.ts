@@ -79,6 +79,18 @@ export async function DELETE(req: Request) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
+  const { data: tripRows, error: tripErr } = await supabase
+    .from("trips")
+    .select("id")
+    .eq("car_id", id);
+  if (tripErr)
+    return NextResponse.json({ error: tripErr.message }, { status: 500 });
+  const tripCount = (tripRows ?? []).length;
+  if (tripCount > 0)
+    return NextResponse.json(
+      { error: "in_use", tripCount },
+      { status: 409 }
+    );
   const { error } = await supabase
     .from("cars")
     .delete()
