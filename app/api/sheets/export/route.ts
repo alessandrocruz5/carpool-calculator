@@ -5,6 +5,7 @@ import { appendRows, replaceRows, type ExportRow } from "@/lib/sheets";
 import { createClient } from "@/lib/supabase/server";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
+import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,13 @@ export async function POST(req: Request) {
   if (!group.ok) return group.response;
   const denied = await requireGroupDriver(supabase, group.groupId);
   if (!denied.ok) return denied.response;
+
+  const limited = await enforceRateLimit(
+    "sheets:export",
+    getIdentifier(req, denied.userId),
+    { requests: 3, window: "1 m" }
+  );
+  if (limited) return limited;
 
   try {
     const body = (await req.json()) as Body;

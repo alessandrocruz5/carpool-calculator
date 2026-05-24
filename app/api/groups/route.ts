@@ -4,6 +4,7 @@ import { fromDbGroup } from "@/lib/supabase/mappers";
 import type { DbGroup } from "@/lib/supabase/types";
 import { requireAuth, requireGroupDriver } from "@/lib/auth/requireDriver";
 import { getActiveGroupId } from "@/lib/auth/activeGroup";
+import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,12 @@ export async function POST(req: Request) {
   const supabase = await createClient();
   const auth = await requireAuth(supabase);
   if (!auth.ok) return auth.response;
+  const limited = await enforceRateLimit(
+    "groups:create",
+    getIdentifier(req, auth.userId),
+    { requests: 3, window: "1 h" }
+  );
+  if (limited) return limited;
   const body = (await req.json()) as { name: string };
   const name = body.name?.trim();
   if (!name) return NextResponse.json({ error: "missing name" }, { status: 400 });
