@@ -18,7 +18,7 @@ export function LegCard({
   gasPrice,
   settings,
   readOnly = false,
-  maxPassengers = 3,
+  maxPassengers,
 }: {
   leg: LegName;
   state: LegState;
@@ -27,7 +27,7 @@ export function LegCard({
   gasPrice: number;
   settings: CalcSettings;
   readOnly?: boolean;
-  maxPassengers?: number;
+  maxPassengers?: number | null;
 }) {
   const breakdown: LegBreakdown = useMemo(
     () =>
@@ -47,13 +47,16 @@ export function LegCard({
       </div>
 
       <div>
-        <p className="text-xs text-slate-500 mb-2">Passengers ({state.passengerIds.length}{readOnly ? "" : `/${maxPassengers}`})</p>
+        <p className="text-xs text-slate-500 mb-2">
+          Passengers ({state.passengerIds.length}
+          {!readOnly && maxPassengers != null ? `/${maxPassengers}` : ""})
+        </p>
         <PassengerChips
           options={passengers}
           selected={state.passengerIds}
           onChange={(ids) => onChange({ ...state, passengerIds: ids })}
           readOnly={readOnly}
-          maxPassengers={maxPassengers}
+          maxPassengers={maxPassengers ?? undefined}
         />
       </div>
 
