@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
 
@@ -80,6 +81,40 @@ export function getIdentifier(
     if (first) return `ip:${first}`;
   }
   return "anonymous";
+}
+
+/**
+ * Build a 429 response with a Retry-After header (in seconds) derived from the
+ * limiter's reset timestamp.
+ */
+export function rateLimitedResponse(result: RatelimitResult): NextResponse {
+  const retryAfter = Math.max(1, Math.ceil((result.reset - Date.now()) / 1000));
+  return NextResponse.json(
+    { error: "rate_limited" },
+    {
+      status: 429,
+      headers: {
+        "Retry-After": String(retryAfter),
+        "X-RateLimit-Limit": String(result.limit),
+        "X-RateLimit-Remaining": String(result.remaining),
+        "X-RateLimit-Reset": String(result.reset),
+      },
+    }
+  );
+}
+
+/**
+ * Convenience: run a limiter for `identifier` and return a 429 response when
+ * exhausted, or `null` when the request should proceed.
+ */
+export async function enforceRateLimit(
+  key: string,
+  identifier: string,
+  opts: RatelimiterOptions
+): Promise<NextResponse | null> {
+  const result = await ratelimiter(key, opts).limit(identifier);
+  if (!result.success) return rateLimitedResponse(result);
+  return null;
 }
 
 /** Test-only: reset memoized Redis client so env changes take effect. */
