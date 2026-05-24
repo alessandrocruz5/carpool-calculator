@@ -1,5 +1,5 @@
 import type { Fillup } from "@/lib/mileage";
-import type { CalcSettings } from "@/lib/calc";
+import { DEFAULT_SETTINGS, type CalcSettings } from "@/lib/calc";
 import type { Passenger } from "@/lib/store/roster";
 import type { StoredTrip } from "@/lib/store/trips";
 import type { Group } from "@/lib/store/groups";
@@ -126,7 +126,9 @@ export function fromDbSettings(r: DbSettings): CalcSettings {
   return {
     roundTripKm: Number(r.round_trip_km),
     mileageKmPerL:
-      r.mileage_kml_override != null ? Number(r.mileage_kml_override) : 0,
+      r.mileage_kml_override != null && Number(r.mileage_kml_override) > 0
+        ? Number(r.mileage_kml_override)
+        : DEFAULT_SETTINGS.mileageKmPerL,
     parkingFeePhp: Number(r.parking_fee_php),
     tollSkywayPhp: Number(r.toll_skyway_php),
     tollSlexPhp: Number(r.toll_slex_php),

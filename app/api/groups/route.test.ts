@@ -18,21 +18,36 @@ function setSupa(opts: Parameters<typeof makeSupabase>[0]) {
 
 const row = { id: "g1", name: "Trip", owner_user_id: "u1", created_at: "x" };
 
+// Row returned by the members+groups join in GET /api/groups
+const memberWithGroup = {
+  group_id: "g1",
+  role: "driver",
+  groups: { id: "g1", name: "Trip", owner_user_id: "u1", created_at: "x" },
+};
+
 beforeEach(() => {
   supaState.current = null;
 });
 
 describe("GET /api/groups", () => {
   it("returns mapped rows", async () => {
-    setSupa({ tables: { groups: [{ data: [row], error: null }] } });
+    setSupa({ tables: { members: [{ data: [memberWithGroup], error: null }] } });
     const res = await GET();
     expect(await res.json()).toEqual([
-      { id: "g1", name: "Trip", ownerUserId: "u1", createdAt: "x" },
+      {
+        id: "g1",
+        name: "Trip",
+        ownerUserId: "u1",
+        createdAt: "x",
+        role: "driver",
+        isOwner: true,   // owner_user_id "u1" === default auth userId "u1"
+        isActive: false, // no cookie in test env
+      },
     ]);
   });
 
   it("empty under RLS", async () => {
-    setSupa({ tables: { groups: [{ data: [], error: null }] } });
+    setSupa({ tables: { members: [{ data: [], error: null }] } });
     expect(await (await GET()).json()).toEqual([]);
   });
 });
