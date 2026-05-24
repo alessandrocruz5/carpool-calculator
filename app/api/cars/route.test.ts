@@ -118,11 +118,34 @@ describe("DELETE /api/cars", () => {
     expect(res.status).toBe(400);
   });
 
-  it("deletes a car scoped to the caller", async () => {
-    setSupa({ tables: { cars: [{ data: null, error: null }] } });
+  it("deletes a car scoped to the caller when no trips reference it", async () => {
+    const supa = setSupa({
+      tables: {
+        trips: [{ data: [], error: null }],
+        cars: [{ data: null, error: null }],
+      },
+    });
     const res = await DELETE(
       new Request("http://t/api/cars?id=c1", { method: "DELETE" })
     );
     expect(res.status).toBe(200);
+    const tripEq = supa
+      .callsFor("trips")[0]
+      .filter((c) => c.method === "eq")
+      .map((c) => c.args);
+    expect(tripEq).toContainEqual(["car_id", "c1"]);
+  });
+
+  it("returns 409 with tripCount when the car is in use", async () => {
+    setSupa({
+      tables: {
+        trips: [{ data: [{ id: "t1" }, { id: "t2" }], error: null }],
+      },
+    });
+    const res = await DELETE(
+      new Request("http://t/api/cars?id=c1", { method: "DELETE" })
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "in_use", tripCount: 2 });
   });
 });
