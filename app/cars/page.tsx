@@ -108,7 +108,9 @@ function CarCard({
   onUpdate: (
     patch: Partial<Pick<Car, "name" | "fuelEfficiencyKml" | "tankSizeLiters">>
   ) => void;
-  onRemove: () => void;
+  onRemove: () => Promise<
+    { ok: true } | { ok: false; status: number; tripCount?: number }
+  >;
   onAddFillup: (f: {
     date: string;
     liters: number;
@@ -126,6 +128,24 @@ function CarCard({
   const [liters, setLiters] = useState("");
   const [total, setTotal] = useState("");
   const [odo, setOdo] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleRemove() {
+    if (!window.confirm("Delete this car?")) return;
+    const result = await onRemove();
+    if (result.ok) {
+      setDeleteError(null);
+      return;
+    }
+    if (result.status === 409) {
+      const n = result.tripCount ?? 0;
+      setDeleteError(
+        `Can't delete — used by ${n} trip(s). Remove it from those trips first.`
+      );
+    } else {
+      setDeleteError("Couldn't delete this car. Please try again.");
+    }
+  }
 
   const measured = rollingMileage(
     fillups.map((f) => ({ ...f, carId: car.id })),
@@ -227,13 +247,17 @@ function CarCard({
             </button>
             <button
               type="button"
-              onClick={onRemove}
+              onClick={handleRemove}
               className="text-red-600 underline"
             >
               Delete
             </button>
           </div>
         </div>
+      )}
+
+      {deleteError && (
+        <p className="text-xs text-red-600">{deleteError}</p>
       )}
 
       <div className="border-t border-slate-100 pt-3 space-y-2">

@@ -77,23 +77,35 @@ describe("cars store", () => {
     });
   });
 
-  it("remove optimistically drops and DELETEs", async () => {
+  it("remove drops only after DELETE succeeds", async () => {
     useCars.setState({ cars: [car], hydrated: true });
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
-    await useCars.getState().remove("c1");
+    const result = await useCars.getState().remove("c1");
+    expect(result).toEqual({ ok: true });
     expect(useCars.getState().cars).toEqual([]);
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("/api/cars?id=c1");
     expect((init as RequestInit).method).toBe("DELETE");
   });
 
-  it("remove rehydrates on DELETE failure", async () => {
+  it("remove keeps the car and returns 409 when in use", async () => {
     useCars.setState({ cars: [car], hydrated: true });
-    fetchMock
-      .mockResolvedValueOnce(new Response("err", { status: 500 }))
-      .mockResolvedValueOnce(jsonResponse([car]));
-    await useCars.getState().remove("c1");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "in_use", tripCount: 3 }), {
+        status: 409,
+        headers: { "content-type": "application/json" },
+      })
+    );
+    const result = await useCars.getState().remove("c1");
+    expect(result).toEqual({ ok: false, status: 409, tripCount: 3 });
+    expect(useCars.getState().cars).toEqual([car]);
+  });
+
+  it("remove keeps the car on generic server error", async () => {
+    useCars.setState({ cars: [car], hydrated: true });
+    fetchMock.mockResolvedValueOnce(new Response("err", { status: 500 }));
+    const result = await useCars.getState().remove("c1");
+    expect(result.ok).toBe(false);
     expect(useCars.getState().cars).toEqual([car]);
   });
 });
