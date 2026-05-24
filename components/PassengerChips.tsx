@@ -10,11 +10,13 @@ export function PassengerChips({
   selected,
   onChange,
   readOnly = false,
+  maxPassengers = 3,
 }: {
   options: PassengerOption[];
   selected: string[];
   onChange: (ids: string[]) => void;
   readOnly?: boolean;
+  maxPassengers?: number;
 }) {
   if (readOnly) {
     const selectedPassengers = options.filter((p) => selected.includes(p.id));
@@ -36,7 +38,7 @@ export function PassengerChips({
 
   function toggle(id: string) {
     if (selected.includes(id)) onChange(selected.filter((x) => x !== id));
-    else if (selected.length < 3) onChange([...selected, id]);
+    else if (selected.length < maxPassengers) onChange([...selected, id]);
   }
   return (
     <div className="flex flex-wrap gap-2">

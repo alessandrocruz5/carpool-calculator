@@ -25,6 +25,7 @@ export interface Car {
   name: string;
   fuelEfficiencyKml: number | null;
   tankSizeLiters: number | null;
+  maxPassengers: number | null;
 }
 
 export function toDbGroupInsert(
@@ -49,6 +50,7 @@ export function fromDbCar(r: DbCar): Car {
     name: r.name,
     fuelEfficiencyKml: r.fuel_efficiency_kml != null ? Number(r.fuel_efficiency_kml) : null,
     tankSizeLiters: r.tank_size_liters != null ? Number(r.tank_size_liters) : null,
+    maxPassengers: r.max_passengers != null ? Number(r.max_passengers) : null,
   };
 }
 
@@ -60,6 +62,7 @@ export function toDbCarInsert(
     name: c.name,
     fuel_efficiency_kml: c.fuelEfficiencyKml,
     tank_size_liters: c.tankSizeLiters,
+    max_passengers: c.maxPassengers ?? null,
   };
 }
 
@@ -135,6 +138,7 @@ export function fromDbSettings(r: DbSettings): CalcSettings {
     split1pDriver: r.split_1p_driver,
     split2pDriver: r.split_2p_driver,
     split3pDriver: r.split_3p_driver,
+    split4pDriver: r.split_4p_driver ?? DEFAULT_SETTINGS.split4pDriver,
   };
 }
 
@@ -150,6 +154,7 @@ export function toDbSettingsPatch(
   if (s.split1pDriver !== undefined) out.split_1p_driver = s.split1pDriver;
   if (s.split2pDriver !== undefined) out.split_2p_driver = s.split2pDriver;
   if (s.split3pDriver !== undefined) out.split_3p_driver = s.split3pDriver;
+  if (s.split4pDriver !== undefined) out.split_4p_driver = s.split4pDriver;
   return out;
 }
 

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useGroups } from "@/lib/store/groups";
 import { useProfile } from "@/lib/store/profile";
+import { useCars } from "@/lib/store/cars";
 import { applyGroupScope } from "@/lib/store/groupScope";
 import { installOutbox, subscribe } from "@/lib/outbox";
 
@@ -12,6 +13,7 @@ export function HydrateStores() {
   useEffect(() => {
     useGroups.getState().hydrate();
     useProfile.getState().hydrate();
+    useCars.getState().hydrate();
     installOutbox();
     const unsub = subscribe((n) => setQueued(n));
     return unsub;

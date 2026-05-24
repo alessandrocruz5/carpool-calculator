@@ -9,6 +9,7 @@ export interface CarInput {
   name: string;
   fuelEfficiencyKml?: number | null;
   tankSizeLiters?: number | null;
+  maxPassengers?: number | null;
 }
 
 interface CarsStore {
@@ -18,7 +19,7 @@ interface CarsStore {
   add: (input: CarInput) => Promise<void>;
   update: (
     id: string,
-    patch: Partial<Pick<Car, "name" | "fuelEfficiencyKml" | "tankSizeLiters">>
+    patch: Partial<Pick<Car, "name" | "fuelEfficiencyKml" | "tankSizeLiters" | "maxPassengers">>
   ) => Promise<void>;
   remove: (id: string) => Promise<{ ok: true } | { ok: false; status: number; tripCount?: number }>;
 }
@@ -50,6 +51,7 @@ export const useCars = create<CarsStore>()(
           name: input.name.trim(),
           fuelEfficiencyKml: input.fuelEfficiencyKml ?? null,
           tankSizeLiters: input.tankSizeLiters ?? null,
+          maxPassengers: input.maxPassengers ?? null,
         };
         set((s) => ({ cars: [...s.cars, optimistic] }));
         try {

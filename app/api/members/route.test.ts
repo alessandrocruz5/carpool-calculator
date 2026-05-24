@@ -55,18 +55,46 @@ beforeEach(() => {
 });
 
 describe("GET /api/members", () => {
-  it("returns mapped members of the active group", async () => {
-    setSupa({ tables: { members: [{ data: [row], error: null }] } });
+  it("returns members enriched with displayName, email, and isSelf", async () => {
+    setSupa({
+      auth: { userId: "u1", email: "driver@test.com" },
+      tables: {
+        members: [{ data: [row], error: null }],
+        profiles: [{ data: [{ user_id: "u2", display_name: "Bob" }], error: null }],
+      },
+    });
     const res = await GET();
     expect(await res.json()).toEqual([
-      {
+      expect.objectContaining({
         userId: "u2",
         groupId: "g1",
         role: "passenger",
         passengerId: null,
         createdAt: "x",
-      },
+        displayName: "Bob",
+        email: null,   // not self
+        isSelf: false,
+      }),
     ]);
+  });
+
+  it("marks isSelf and exposes email for the current user", async () => {
+    const selfRow = { ...row, user_id: "u1" };
+    setSupa({
+      auth: { userId: "u1", email: "me@test.com" },
+      tables: {
+        members: [{ data: [selfRow], error: null }],
+        profiles: [{ data: [{ user_id: "u1", display_name: "Me" }], error: null }],
+      },
+    });
+    const res = await GET();
+    const body = await res.json();
+    expect(body[0]).toMatchObject({
+      userId: "u1",
+      isSelf: true,
+      email: "me@test.com",
+      displayName: "Me",
+    });
   });
 
   it("returns empty when no active group", async () => {
