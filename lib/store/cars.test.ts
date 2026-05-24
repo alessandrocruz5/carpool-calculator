@@ -22,6 +22,7 @@ const car: Car = {
   name: "Civic",
   fuelEfficiencyKml: 12.5,
   tankSizeLiters: 45,
+  maxPassengers: null,
 };
 
 beforeEach(() => {

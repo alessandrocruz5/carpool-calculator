@@ -82,6 +82,7 @@ describe("settings mappers", () => {
       split_1p_driver: 40,
       split_2p_driver: 25,
       split_3p_driver: 19,
+      split_4p_driver: 16,
       updated_at: "x",
     });
     expect(r.mileageKmPerL).toBe(10.5);
