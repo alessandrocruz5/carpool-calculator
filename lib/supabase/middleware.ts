@@ -82,10 +82,25 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // New users visiting / with no group memberships should go through
+  // onboarding to create or join their first group.
+  if (userId && isPageRoute && pathname === '/' && !memberExists) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/onboarding'
+    return NextResponse.redirect(url)
+  }
+
   // If the user has no active-group cookie, send them to /groups to pick or
   // create one before they can use any part of the app.
+  // /onboarding is exempt — it's where zero-group users land first.
   const carpoolCookie = request.cookies.get('carpool-group')?.value
-  if (userId && isPageRoute && !carpoolCookie && pathname !== '/groups') {
+  if (
+    userId &&
+    isPageRoute &&
+    !carpoolCookie &&
+    pathname !== '/groups' &&
+    pathname !== '/onboarding'
+  ) {
     const url = request.nextUrl.clone()
     url.pathname = '/groups'
     return NextResponse.redirect(url)
