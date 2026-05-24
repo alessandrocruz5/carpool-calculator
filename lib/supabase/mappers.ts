@@ -113,6 +113,7 @@ export function fromDbMember(r: DbMember): Member {
     role: r.role,
     passengerId: r.passenger_id,
     createdAt: r.created_at,
+    displayName: null,
   };
 }
 
