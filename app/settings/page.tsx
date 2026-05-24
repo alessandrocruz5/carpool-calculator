@@ -173,6 +173,12 @@ export default function SettingsPage() {
           onChange={(v) => setSettings({ split3pDriver: v })}
           integer
         />
+        <Field
+          label="4 passengers"
+          value={settings.split4pDriver}
+          onChange={(v) => setSettings({ split4pDriver: v })}
+          integer
+        />
       </section>
 
       <section className="bg-white rounded-xl border border-slate-200 p-4">

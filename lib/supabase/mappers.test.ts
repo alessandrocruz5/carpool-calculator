@@ -166,6 +166,7 @@ describe("car mappers", () => {
         name: "Civic",
         fuel_efficiency_kml: "12.5" as unknown as number,
         tank_size_liters: "45" as unknown as number,
+        max_passengers: null,
         created_at: "x",
       })
     ).toEqual({
@@ -174,6 +175,7 @@ describe("car mappers", () => {
       name: "Civic",
       fuelEfficiencyKml: 12.5,
       tankSizeLiters: 45,
+      maxPassengers: null,
     });
   });
 
@@ -184,10 +186,12 @@ describe("car mappers", () => {
       name: "Civic",
       fuel_efficiency_kml: null,
       tank_size_liters: null,
+      max_passengers: null,
       created_at: "x",
     });
     expect(c.fuelEfficiencyKml).toBeNull();
     expect(c.tankSizeLiters).toBeNull();
+    expect(c.maxPassengers).toBeNull();
   });
 
   it("converts new-car payload to snake_case", () => {
@@ -197,12 +201,14 @@ describe("car mappers", () => {
         name: "Civic",
         fuelEfficiencyKml: 12.5,
         tankSizeLiters: 45,
+        maxPassengers: 4,
       })
     ).toEqual({
       owner_user_id: "u1",
       name: "Civic",
       fuel_efficiency_kml: 12.5,
       tank_size_liters: 45,
+      max_passengers: 4,
     });
   });
 });

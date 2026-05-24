@@ -10,6 +10,7 @@ export interface CalcSettings {
   split1pDriver: number;
   split2pDriver: number;
   split3pDriver: number;
+  split4pDriver: number;
 }
 
 export interface LegInput {
@@ -39,6 +40,7 @@ export const DEFAULT_SETTINGS: CalcSettings = {
   split1pDriver: 40,
   split2pDriver: 25,
   split3pDriver: 19,
+  split4pDriver: 16,
 };
 
 export function round2(n: number): number {
@@ -49,7 +51,9 @@ export function driverRatio(passengerCount: number, settings: CalcSettings): num
   if (passengerCount <= 0) return 1;
   if (passengerCount === 1) return settings.split1pDriver / 100;
   if (passengerCount === 2) return settings.split2pDriver / 100;
-  return settings.split3pDriver / 100;
+  if (passengerCount === 3) return settings.split3pDriver / 100;
+  if (passengerCount === 4) return settings.split4pDriver / 100;
+  return settings.split4pDriver / 100;
 }
 
 export function calcLeg(

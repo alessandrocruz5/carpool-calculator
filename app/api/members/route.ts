@@ -17,13 +17,42 @@ export async function GET() {
   } catch {
     return NextResponse.json([]);
   }
+
+  // Identify current user to mark isSelf and expose their email
+  const { data: { user } } = await supabase.auth.getUser();
+  const currentUserId = user?.id ?? null;
+
   const { data, error } = await supabase
     .from("members")
     .select("*")
     .eq("group_id", groupId)
     .order("created_at", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(((data ?? []) as DbMember[]).map(fromDbMember));
+
+  const members = (data ?? []) as DbMember[];
+
+  // Fetch display names from profiles for all members
+  const userIds = members.map((m) => m.user_id);
+  const { data: profiles } = userIds.length > 0
+    ? await supabase.from("profiles").select("user_id, display_name").in("user_id", userIds)
+    : { data: [] };
+
+  const profileMap = new Map(
+    ((profiles ?? []) as { user_id: string; display_name: string | null }[]).map(
+      (p) => [p.user_id, p.display_name]
+    )
+  );
+
+  return NextResponse.json(
+    members.map((m) => ({
+      // Original fields (keep the store working)
+      ...fromDbMember(m),
+      // Enriched fields for MembersAdmin
+      displayName: profileMap.get(m.user_id) ?? null,
+      email: m.user_id === currentUserId ? (user?.email ?? null) : null,
+      isSelf: m.user_id === currentUserId,
+    }))
+  );
 }
 
 export async function POST(req: Request) {
