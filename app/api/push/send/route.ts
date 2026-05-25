@@ -21,6 +21,10 @@ async function handle(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  // RLS bypass required: cron job has no user session; must fan-out across all
+  // groups to read gas_prices, enumerate every driver in members, fetch all
+  // matching push_subscriptions, and prune expired endpoints — operations that
+  // span multiple users/groups and cannot be scoped to a single JWT.
   const admin = createAdminClient();
 
   const { data: latest, error: gpErr } = await admin
