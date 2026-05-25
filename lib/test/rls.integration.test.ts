@@ -48,6 +48,9 @@ async function signedInAs(
 
 d("RLS isolation across groups", () => {
   beforeAll(async () => {
+    // RLS bypass required: test seeder must call auth.admin.createUser() (admin-only
+    // Auth API) and insert rows across two disjoint groups to set up the isolation
+    // assertions — both operations are impossible with an anon/user-scoped client.
     const admin = createClient(URL!, SERVICE!, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
