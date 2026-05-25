@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth/requireDriver";
+import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,13 @@ export async function POST(req: Request) {
   const supabase = await createClient();
   const auth = await requireUser(supabase);
   if (!auth.ok) return auth.response;
+
+  const limited = await enforceRateLimit(
+    "push:subscribe",
+    getIdentifier(req, auth.userId),
+    { requests: 5, window: "1 m" }
+  );
+  if (limited) return limited;
 
   const body = (await req.json()) as SubscriptionBody;
   if (!body.endpoint || !body.keys?.p256dh || !body.keys?.auth) {

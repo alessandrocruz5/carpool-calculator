@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
@@ -5,6 +6,10 @@ import { requireActiveGroupId } from "@/lib/group";
 import { MembersAdmin } from "./MembersAdmin";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 export default async function MembersAdminPage() {
   const supabase = await createClient();

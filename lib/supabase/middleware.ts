@@ -106,6 +106,26 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Server-side gate on /admin/* — RLS already protects the data, but we
+  // don't want the admin shell to render for anyone who can't drive in the
+  // active group. Require a members row for (user, active group) with a
+  // driver-capable role.
+  if (userId && isPageRoute && pathname.startsWith('/admin') && carpoolCookie) {
+    const { data: adminMember } = await supabase
+      .from('members')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('group_id', carpoolCookie)
+      .maybeSingle()
+    const adminRole = (adminMember as { role: string } | null)?.role
+    if (adminRole !== 'driver' && adminRole !== 'both') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/'
+      url.searchParams.set('error', 'forbidden')
+      return NextResponse.redirect(url)
+    }
+  }
+
   // Forward auth + role to downstream RSCs via request headers so the root
   // layout can read them without re-querying Supabase. We rebuild the response
   // with the augmented request headers and copy over any auth cookies that

@@ -4,6 +4,7 @@ import { fromDbMember } from "@/lib/supabase/mappers";
 import type { DbMember } from "@/lib/supabase/types";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { getActiveGroupId, requireActiveGroupId } from "@/lib/group";
+import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,12 @@ export async function POST(req: Request) {
   const groupId = groupCheck.groupId;
   const auth = await requireGroupDriver(supabase, groupId);
   if (!auth.ok) return auth.response;
+  const limited = await enforceRateLimit(
+    "members:invite",
+    getIdentifier(req, auth.userId),
+    { requests: 5, window: "1 m" }
+  );
+  if (limited) return limited;
   const body = (await req.json()) as { email: string; role: Role };
   const email = body.email?.trim();
   if (!email)

@@ -71,6 +71,9 @@ async function main() {
     );
     process.exit(1);
   }
+  // RLS bypass required: one-time migration script runs outside any user session
+  // and must read/write trips, gas_prices, and trip_payments across ALL groups
+  // with no JWT — a user-scoped client would silently return empty result sets.
   const supabase = createClient(url, serviceKey);
 
   const { data: settingsRow } = await supabase
