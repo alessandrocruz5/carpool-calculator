@@ -89,6 +89,17 @@ The RLS regression suite in `lib/test/rls.integration.test.ts` runs end-to-end a
 
 The suite seeds two groups with disjoint owners and asserts that user A's PostgREST `select` against `trips`, `passengers`, `settings`, `fillups`, and `trip_payments` cannot leak rows belonging to user B's group (and vice versa).
 
+## Analytics
+
+The app uses [Vercel Analytics](https://vercel.com/docs/analytics) and [Vercel Speed Insights](https://vercel.com/docs/speed-insights) for privacy-friendly page-view and Core Web Vitals tracking. Both are wired in via `<Analytics />` and `<SpeedInsights />` in `app/layout.tsx`.
+
+- No cookies are set, so no cookie banner is required.
+- Visitor IP addresses are hashed daily and never stored long-term, so the data is anonymous (GDPR/CCPA-friendly).
+- Data is only collected on production deployments (the script auto-detects `NODE_ENV` and is a no-op locally / in test builds).
+- **Do Not Track**: `@vercel/analytics` v2 does not bake in a client-side DNT check, but since it collects no cookies, no `localStorage`/`sessionStorage`, no persistent visitor IDs, and no raw IPs, it is considered privacy-friendly by default. Visitors who want a hard opt-out can install any tracker-blocker (uBlock Origin, Brave Shields, etc.); the `/_vercel/insights/*` endpoints are on the common blocklists.
+
+Enable Analytics and Speed Insights in the Vercel dashboard for the project; no additional env vars are required.
+
 ## Notes
 
 - Gas price: manual entry every Tuesday (no Petron/DOE API)

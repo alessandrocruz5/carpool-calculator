@@ -9,6 +9,8 @@ const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 import { HydrateStores } from "@/components/HydrateStores";
 import { ToastProvider } from "@/components/Toast";
 import { PASSENGER_TAB_HREFS } from "@/lib/auth/passengerAccess";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: "Carpool Calculator",
@@ -81,6 +83,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </nav>
         </div>
         </ToastProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
