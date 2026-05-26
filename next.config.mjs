@@ -52,4 +52,15 @@ export default withSentryConfig(withPWA(nextConfig), {
   hideSourceMaps: true,
   disableLogger: true,
   automaticVercelMonitors: false,
+  sourcemaps: {
+    disable: false,
+  },
+  release: {
+    name: process.env.VERCEL_GIT_COMMIT_SHA,
+    create: true,
+    finalize: true,
+    deploy: {
+      env: process.env.VERCEL_ENV || process.env.NODE_ENV || "development",
+    },
+  },
 });
