@@ -8,6 +8,11 @@ import { cn } from "@/lib/utils";
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 import { HydrateStores } from "@/components/HydrateStores";
 import { ToastProvider } from "@/components/Toast";
+import { SyncIssues } from "@/components/SyncIssues";
+import { ConnectionStatus } from "@/components/ui/connection-status";
+import { ServiceWorkerUpdate } from "@/components/ServiceWorkerUpdate";
+import { InstallBanner } from "@/components/InstallBanner";
+import { SignOutButton } from "@/components/SignOutButton";
 import { PASSENGER_TAB_HREFS } from "@/lib/auth/passengerAccess";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -15,6 +20,20 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 export const metadata: Metadata = {
   title: "Carpool Calculator",
   description: "Per-leg carpool cost split",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Carpool",
+  },
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
 };
 
 export const viewport: Viewport = {
@@ -48,7 +67,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <ToastProvider>
         <HydrateStores />
+        <SyncIssues />
+        <ServiceWorkerUpdate />
         <div className="min-h-screen flex flex-col">
+          <ConnectionStatus />
+          <InstallBanner />
           <header className="bg-brand-600 text-white px-4 py-3 shadow">
             <div className="max-w-3xl mx-auto flex items-center justify-between">
               <Link href="/" className="font-semibold">Carpool</Link>
@@ -56,9 +79,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <Link href="/account" className="hover:underline">Account</Link>
                 <Link href="/groups" className="hover:underline">Groups</Link>
                 <Link href="/admin/members" className="hover:underline">Members</Link>
-                <form action="/auth/signout" method="post">
-                  <button type="submit" className="hover:underline">Sign out</button>
-                </form>
+                <SignOutButton />
               </div>
             </div>
           </header>

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { NotificationsToggle } from "@/components/push/NotificationsToggle";
 
 export default function AccountForm() {
   const [password, setPassword] = useState("");
@@ -82,6 +83,7 @@ export default function AccountForm() {
           {errMsg && <p className="text-sm text-red-600">{errMsg}</p>}
         </form>
       </section>
+      <NotificationsToggle />
     </div>
   );
 }
