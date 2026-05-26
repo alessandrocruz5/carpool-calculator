@@ -79,6 +79,7 @@ Each driver can register one or more cars under **Account → Cars**. Every car 
 
 ```bash
 npm test           # unit + route tests via vitest
+npm run e2e        # Playwright E2E (see e2e/README.md)
 ```
 
 The RLS regression suite in `lib/test/rls.integration.test.ts` runs end-to-end against a Supabase **dev branch**. It is skipped unless these env vars are set when invoking `npm test`:
@@ -88,6 +89,29 @@ The RLS regression suite in `lib/test/rls.integration.test.ts` runs end-to-end a
 - `RLS_TEST_ANON_KEY` (or `RLS_TEST_PUBLISHABLE_KEY`) — the publishable key, used to sign in as each seeded user
 
 The suite seeds two groups with disjoint owners and asserts that user A's PostgREST `select` against `trips`, `passengers`, `settings`, `fillups`, and `trip_payments` cannot leak rows belonging to user B's group (and vice versa).
+
+### Running RLS tests in CI
+
+The `rls-integration` job in `.github/workflows/ci.yml` runs the suite against a Supabase dev branch. To turn it on:
+
+1. In the Supabase dashboard, create a dev branch dedicated to CI (e.g. `ci-rls`).
+2. In GitHub → repo **Settings → Secrets and variables → Actions**, add:
+   - `RLS_TEST_SUPABASE_URL` — the dev branch project URL
+   - `RLS_TEST_SERVICE_ROLE_KEY` — the dev branch secret key (`sb_secret_…`)
+   - `RLS_TEST_ANON_KEY` — the dev branch publishable key (`sb_publishable_…`)
+3. The job runs automatically on push to `main`. To run it on a PR, add the `run-rls-tests` label — this keeps the dev branch free from per-PR burn.
+
+### CI status checks required for merge
+
+Configure these as required status checks in GitHub → repo **Settings → Branches → `main`**:
+
+- `lint-and-typecheck` — `npm run lint` + `tsc --noEmit`
+- `test` — vitest unit + route tests
+- `e2e` — Playwright golden path (PRs only)
+
+Optional (run on demand or on push to `main`):
+
+- `rls-integration` — gated by the `run-rls-tests` label on PRs
 
 ## Analytics
 

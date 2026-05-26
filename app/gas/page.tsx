@@ -22,7 +22,7 @@ export default function GasPage() {
 
       {isTuesday() && (
         <div className="bg-brand-50 border border-brand-500 text-brand-700 text-sm rounded-lg p-3">
-          It's Tuesday — time for the weekly price update.
+          It&apos;s Tuesday — time for the weekly price update.
         </div>
       )}
 
