@@ -1,7 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { NotificationsToggle } from "@/components/push/NotificationsToggle";
+import { useToast } from "@/components/Toast";
 
 export default function AccountForm() {
   const [password, setPassword] = useState("");
@@ -10,6 +12,14 @@ export default function AccountForm() {
     "idle"
   );
   const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  const [currentEmail, setCurrentEmail] = useState<string | null>(null);
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentEmail(data.user?.email ?? null);
+    });
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -83,7 +93,206 @@ export default function AccountForm() {
           {errMsg && <p className="text-sm text-red-600">{errMsg}</p>}
         </form>
       </section>
+
       <NotificationsToggle />
+
+      <ChangeEmailSection currentEmail={currentEmail} />
+      <ExportDataSection />
+      <DeleteAccountSection currentEmail={currentEmail} />
     </div>
+  );
+}
+
+function ChangeEmailSection({
+  currentEmail,
+}: {
+  currentEmail: string | null;
+}) {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "working" | "pending" | "error">(
+    "idle"
+  );
+  const [msg, setMsg] = useState<string | null>(null);
+  const [pendingFor, setPendingFor] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    setState("working");
+    try {
+      const res = await fetch("/api/account/change-email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        pending_email?: string;
+      };
+      if (!res.ok) {
+        if (res.status === 429) {
+          throw new Error("Too many email changes. Try again in an hour.");
+        }
+        throw new Error(body.error ?? "Couldn't start email change.");
+      }
+      setPendingFor(body.pending_email ?? email);
+      setState("pending");
+      setEmail("");
+    } catch (err) {
+      setState("error");
+      setMsg(err instanceof Error ? err.message : "Failed.");
+    }
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+      <h2 className="font-semibold">Change email</h2>
+      <p className="text-sm text-slate-600">
+        Current: <span className="font-mono">{currentEmail ?? "—"}</span>
+      </p>
+      {state === "pending" && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-3 text-sm">
+          Pending confirmation. Check both <strong>{currentEmail}</strong> and{" "}
+          <strong>{pendingFor}</strong> &mdash; Supabase needs you to click the
+          link in each inbox before the change takes effect.
+        </div>
+      )}
+      <form onSubmit={onSubmit} className="space-y-3">
+        <input
+          type="email"
+          required
+          autoComplete="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="new@example.com"
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={state === "working"}
+          className="w-full bg-brand-600 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-60"
+        >
+          {state === "working" ? "Sending..." : "Send confirmation"}
+        </button>
+        {msg && <p className="text-sm text-red-600">{msg}</p>}
+      </form>
+    </section>
+  );
+}
+
+function ExportDataSection() {
+  return (
+    <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+      <h2 className="font-semibold">Download my data</h2>
+      <p className="text-sm text-slate-600">
+        Get a JSON copy of your profile, group memberships, cars, fillups,
+        trips and payments. Other members&rsquo; personal details are redacted.
+      </p>
+      <a
+        href="/api/account/export"
+        download
+        className="inline-block w-full text-center bg-slate-100 hover:bg-slate-200 text-slate-900 text-sm rounded-lg px-3 py-2"
+      >
+        Download JSON
+      </a>
+    </section>
+  );
+}
+
+function DeleteAccountSection({
+  currentEmail,
+}: {
+  currentEmail: string | null;
+}) {
+  const router = useRouter();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [state, setState] = useState<"idle" | "working" | "error">("idle");
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const canConfirm =
+    !!currentEmail && typed.trim().toLowerCase() === currentEmail.toLowerCase();
+
+  async function onConfirm() {
+    setState("working");
+    setMsg(null);
+    try {
+      const res = await fetch("/api/account/delete", { method: "POST" });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok) {
+        throw new Error(
+          body.message ?? body.error ?? "Couldn't delete the account."
+        );
+      }
+      try {
+        await createClient().auth.signOut();
+      } catch {
+        // ignore
+      }
+      toast.show({ message: "Account deleted." });
+      router.replace("/");
+      router.refresh();
+    } catch (err) {
+      setState("error");
+      setMsg(err instanceof Error ? err.message : "Failed.");
+    }
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-red-200 p-4 space-y-3">
+      <h2 className="font-semibold text-red-700">Delete account</h2>
+      <p className="text-sm text-slate-600">
+        Permanently delete your account, group memberships, push
+        subscriptions and fillups you own. This cannot be undone.
+      </p>
+      {!open ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="w-full border border-red-300 text-red-700 text-sm rounded-lg px-3 py-2 hover:bg-red-50"
+        >
+          Delete account&hellip;
+        </button>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-sm text-slate-700">
+            Type{" "}
+            <span className="font-mono">{currentEmail ?? "your email"}</span>{" "}
+            to confirm.
+          </p>
+          <input
+            type="email"
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder="you@example.com"
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setOpen(false);
+                setTyped("");
+                setState("idle");
+                setMsg(null);
+              }}
+              className="flex-1 border border-slate-300 text-sm rounded-lg px-3 py-2"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={!canConfirm || state === "working"}
+              className="flex-1 bg-red-600 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-50"
+            >
+              {state === "working" ? "Deleting…" : "Delete forever"}
+            </button>
+          </div>
+          {msg && <p className="text-sm text-red-600">{msg}</p>}
+        </div>
+      )}
+    </section>
   );
 }
