@@ -6,6 +6,7 @@ import { usePayments } from "@/lib/store/payments";
 import { useRoster } from "@/lib/store/roster";
 import { PHP } from "@/components/PHP";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
+import { ReportIssueButton } from "./ReportIssueButton";
 
 export default function PaymentsPage() {
   const { payments, markPaid, markManyPaid } = usePayments();
@@ -140,6 +141,7 @@ export default function PaymentsPage() {
                     </span>
                     <span className="flex items-center gap-2">
                       <PHP value={r.amountPhp} />
+                      <ReportIssueButton tripId={r.tripId} tripDate={r.date} />
                       {isDriver && (
                         <button
                           onClick={() =>

@@ -141,3 +141,18 @@ export interface DbProfile {
   created_at: string;
   updated_at: string;
 }
+
+export type TripDisputeStatus = "open" | "resolved" | "dismissed";
+
+export interface DbTripDispute {
+  id: string;
+  group_id: string;
+  trip_id: string;
+  reporter_user_id: string;
+  reason: string;
+  status: TripDisputeStatus;
+  resolution_note: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+}

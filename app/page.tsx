@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import dayjs from "dayjs";
 import Link from "next/link";
 import { LegCard, type LegState } from "@/components/LegCard";
@@ -20,7 +21,11 @@ import { calcDay } from "@/lib/calc";
 import { daysSince } from "@/lib/week";
 
 export default function TodayPage() {
-  const today = dayjs().format("YYYY-MM-DD");
+  const searchParams = useSearchParams();
+  const dateParam = searchParams.get("date");
+  const isValidDate = dateParam != null && /^\d{4}-\d{2}-\d{2}$/.test(dateParam);
+  const today = isValidDate ? (dateParam as string) : dayjs().format("YYYY-MM-DD");
+  const isPastEdit = isValidDate && today !== dayjs().format("YYYY-MM-DD");
   const { settings, gasPrice, gasPriceUpdatedAt } = useSettings();
   const { passengers } = useRoster();
   const { fillups } = useFillups();
@@ -46,6 +51,17 @@ export default function TodayPage() {
 
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
+
+  useEffect(() => {
+    const t = trips.find((x) => x.date === today);
+    if (!t) return;
+    setMorning(t.morning);
+    setEvening(t.evening);
+    setCarId(t.carId ?? "");
+    setDriverUserId(t.driverUserId ?? null);
+    // Reload state only when navigating to a different date.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [today]);
 
   useEffect(() => {
     (async () => {
@@ -133,7 +149,10 @@ export default function TodayPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">{dayjs().format("ddd, MMM D")}</h1>
+          <h1 className="text-xl font-semibold">{dayjs(today).format("ddd, MMM D")}</h1>
+          {isPastEdit && (
+            <p className="text-[11px] text-amber-700">Editing past trip</p>
+          )}
           <p className="text-xs text-slate-500">
             Gas <PHP value={gasPrice} />/L · Mileage {effectiveMileage.toFixed(2)} km/L
           </p>
