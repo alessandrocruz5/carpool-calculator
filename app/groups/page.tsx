@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { MemberRole } from "@/lib/supabase/types";
+import { markOnboardingPending } from "@/components/OnboardingTour";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +74,7 @@ export default function GroupsPage() {
         body: JSON.stringify({ groupId: group.id }),
       });
       setNewName("");
+      markOnboardingPending();
       // Send the driver straight to Members so they can invite their carpool.
       window.location.assign("/admin/members");
     } catch (err) {

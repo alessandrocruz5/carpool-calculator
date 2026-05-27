@@ -8,6 +8,7 @@ import { rollingMileage } from "@/lib/mileage";
 import { PHP } from "@/components/PHP";
 import { useToast } from "@/components/Toast";
 import { EnablePushReminders } from "@/components/push/EnablePushReminders";
+import { ONBOARDING_START_EVENT } from "@/components/OnboardingTour";
 
 export default function SettingsPage() {
   const { settings, setSettings } = useSettings();
@@ -286,6 +287,24 @@ export default function SettingsPage() {
       </section>
 
       <EnablePushReminders />
+
+      <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+        <h2 className="font-semibold">App tour</h2>
+        <p className="text-sm text-slate-600">
+          Replay the first-visit walkthrough.
+        </p>
+        <button
+          onClick={() => {
+            try {
+              localStorage.removeItem("cc:onboarding:done");
+            } catch {}
+            window.dispatchEvent(new Event(ONBOARDING_START_EVENT));
+          }}
+          className="bg-brand-600 text-white text-sm rounded-lg px-3 py-2"
+        >
+          Show tour again
+        </button>
+      </section>
     </div>
   );
 }
