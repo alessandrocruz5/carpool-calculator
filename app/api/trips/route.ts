@@ -22,6 +22,7 @@ export async function GET() {
       .from("trips")
       .select(TRIP_SELECT)
       .eq("group_id", group.groupId)
+      .is("archived_at", null)
       .order("date", { ascending: true }),
     supabase
       .from("gas_prices")
