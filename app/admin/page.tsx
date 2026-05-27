@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
 import { ArchiveTripsPanel } from "./ArchiveTripsPanel";
+import { DisputesPanel } from "./DisputesPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,8 @@ export default async function AdminPage() {
         <Link className="underline" href="/admin/members">Members</Link>
         <Link className="underline" href="/admin/audit">Audit log</Link>
       </nav>
+
+      <DisputesPanel />
 
       <ArchiveTripsPanel />
     </div>
