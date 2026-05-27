@@ -14,6 +14,7 @@ import { ServiceWorkerUpdate } from "@/components/ServiceWorkerUpdate";
 import { InstallBanner } from "@/components/InstallBanner";
 import { SignOutButton } from "@/components/SignOutButton";
 import { WhatsNew } from "@/components/WhatsNew";
+import { OnboardingTour } from "@/components/OnboardingTour";
 import { getLatestVersion } from "@/lib/changelog";
 import { PASSENGER_TAB_HREFS } from "@/lib/auth/passengerAccess";
 import { Analytics } from "@vercel/analytics/next";
@@ -82,7 +83,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <div className="flex items-center gap-3 text-xs opacity-90">
                 <Link href="/account" className="hover:underline">Account</Link>
                 <Link href="/groups" className="hover:underline">Groups</Link>
-                <Link href="/admin/members" className="hover:underline">Members</Link>
+                <Link href="/admin/members" data-tour="nav-members" className="hover:underline">Members</Link>
                 <SignOutButton />
               </div>
             </div>
@@ -107,6 +108,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <Link
                   key={n.href}
                   href={n.href}
+                  data-tour={`nav-${n.label.toLowerCase()}`}
                   className="py-3 text-center text-slate-700 hover:text-brand-600"
                 >
                   {n.label}
@@ -115,6 +117,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </div>
           </nav>
         </div>
+        <OnboardingTour />
         </ToastProvider>
         <Analytics />
         <SpeedInsights />
