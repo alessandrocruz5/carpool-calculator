@@ -13,6 +13,8 @@ import { ConnectionStatus } from "@/components/ui/connection-status";
 import { ServiceWorkerUpdate } from "@/components/ServiceWorkerUpdate";
 import { InstallBanner } from "@/components/InstallBanner";
 import { SignOutButton } from "@/components/SignOutButton";
+import { WhatsNew } from "@/components/WhatsNew";
+import { getLatestVersion } from "@/lib/changelog";
 import { PASSENGER_TAB_HREFS } from "@/lib/auth/passengerAccess";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -56,6 +58,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // so we don't have to make the same two Supabase round-trips here.
   const h = await headers();
   const role = h.get("x-user-role");
+  const latestVersion = getLatestVersion();
 
   const visibleNav =
     role === "passenger"
@@ -69,6 +72,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <HydrateStores />
         <SyncIssues />
         <ServiceWorkerUpdate />
+        <WhatsNew latestVersion={latestVersion} />
         <div className="min-h-screen flex flex-col">
           <ConnectionStatus />
           <InstallBanner />
@@ -89,6 +93,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/legal/privacy" className="hover:underline">Privacy</Link>
               <Link href="/legal/terms" className="hover:underline">Terms</Link>
               <Link href="/legal/contact" className="hover:underline">Contact</Link>
+              <Link href="/changelog" className="hover:underline">Changelog</Link>
             </div>
           </footer>
           <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200">
