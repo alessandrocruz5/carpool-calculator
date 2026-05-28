@@ -109,18 +109,26 @@ async function main(): Promise<void> {
   const probes: Array<{ name: string; run: () => Promise<unknown> }> = [
     {
       name: "select trips by group_id limit 50",
-      run: () =>
-        supabase.from("trips").select("*").eq("group_id", groupId).limit(50),
+      run: async () =>
+        await supabase
+          .from("trips")
+          .select("*")
+          .eq("group_id", groupId)
+          .limit(50),
     },
     {
       name: "select fillups by group_id limit 50",
-      run: () =>
-        supabase.from("fillups").select("*").eq("group_id", groupId).limit(50),
+      run: async () =>
+        await supabase
+          .from("fillups")
+          .select("*")
+          .eq("group_id", groupId)
+          .limit(50),
     },
     {
       name: "select push_subscriptions by user_id",
-      run: () =>
-        supabase
+      run: async () =>
+        await supabase
           .from("push_subscriptions")
           .select("*")
           .eq("user_id", userId),
