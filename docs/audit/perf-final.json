@@ -1,0 +1,23 @@
+{
+  "captured_at": "2026-05-29",
+  "status": "not_run",
+  "script": "scripts/perf-probe.ts",
+  "project_id": "vcmarwmweysxqhhgdcwc",
+  "reason": "scripts/perf-probe.ts could not be executed in this remote audit environment. It requires (1) NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) in .env.local and (2) the @supabase/supabase-js dependency installed. This environment has neither a service-role key (only .env.example is present) nor installed node_modules. The probe also intentionally must not be pointed at production. This matches the documented situation in Sprint 2 and Sprint 3 results.",
+  "baseline_comparison": "No prior perf-baseline.json was ever captured (same credential gap across the whole audit), so there is no recorded median/p95 baseline to diff against.",
+  "expected_impact_of_shipped_changes": "The probe reads `trips`, `fillups`, and `push_subscriptions` plus an insert+delete round-trip on `trips`. Of the shipped DB changes: 0019 only adds an index to `trip_disputes` (not probed); 0020 drops `trips_group_date_idx` and `members_user_group_idx`, but the probe's trips query (`WHERE group_id = $1 LIMIT 50`) is served by the retained `trips_group_id_idx`, and `members` is not probed. No probe regression is expected.",
+  "how_to_capture": [
+    "Point at a dev/preview branch (NOT production).",
+    "Add NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to .env.local.",
+    "npm install (to provide @supabase/supabase-js).",
+    "npx tsx scripts/perf-probe.ts <group_id> <user_id>",
+    "Note: the script writes to docs/audit/perf-baseline.json; rename or redirect the output to docs/audit/perf-final.json to track it as the final capture."
+  ],
+  "probes": [
+    "SELECT * FROM trips WHERE group_id = $1 LIMIT 50",
+    "SELECT * FROM fillups WHERE group_id = $1 LIMIT 50",
+    "SELECT * FROM push_subscriptions WHERE user_id = $1",
+    "INSERT + DELETE round-trip on a throwaway trips row"
+  ],
+  "results": []
+}
