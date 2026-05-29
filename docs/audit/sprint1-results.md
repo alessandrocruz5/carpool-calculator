@@ -87,3 +87,11 @@ Sprint 1 lockdown is in effect: the `anon` role can no longer execute any
 `SECURITY DEFINER` function in `public`. The unchanged advisor count reflects
 that the surviving warnings are for *intentional* `authenticated` access, which
 this sprint deliberately preserves.
+
+## Manual steps
+
+These cannot be applied via the Supabase MCP tools (auth config is not exposed)
+and must be completed in the dashboard:
+
+- [ ] Enable "Leaked password protection" in Supabase Dashboard → Auth → Policies → Password
+- [ ] Verify by attempting signup with password "password123" (should reject)
