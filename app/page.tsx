@@ -12,7 +12,7 @@ import { useFillups } from "@/lib/store/fillups";
 import { useCars } from "@/lib/store/cars";
 import { useMembers } from "@/lib/store/members";
 import { useGroups } from "@/lib/store/groups";
-import { createClient } from "@/lib/supabase/client";
+import { useProfile } from "@/lib/store/profile";
 import { useToast } from "@/components/Toast";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
 import { DriverSelect } from "@/components/DriverSelect";
@@ -33,6 +33,7 @@ export default function TodayPage() {
   const { trips, upsert } = useTrips();
   const { members } = useMembers();
   const activeGroupId = useGroups((s) => s.activeGroupId);
+  const userId = useProfile((s) => s.profile?.userId ?? null);
   const toast = useToast();
   const isDriver = useIsDriver();
 
@@ -47,7 +48,6 @@ export default function TodayPage() {
   const [driverUserId, setDriverUserId] = useState<string | null>(
     existing?.driverUserId ?? null
   );
-  const [userId, setUserId] = useState<string | null>(null);
 
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
@@ -62,15 +62,6 @@ export default function TodayPage() {
     // Reload state only when navigating to a different date.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await createClient().auth.getClaims();
-      setUserId(
-        (data?.claims as { sub?: string } | undefined)?.sub ?? null
-      );
-    })();
-  }, []);
 
   // Default the car picker to the trip's saved car, else the only car.
   useEffect(() => {
