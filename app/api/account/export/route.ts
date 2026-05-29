@@ -25,23 +25,25 @@ export async function GET() {
 
   const admin = createAdminClient();
 
-  // Caller's email (for filename + redaction of "self" entries).
-  const { data: userInfo } = await admin.auth.admin.getUserById(userId);
+  // Batch 1: all queries that only need userId (fully independent).
+  const [
+    { data: userInfo },
+    { data: profile },
+    { data: members },
+    { data: cars },
+    { data: fillups },
+    { data: tripsDriven },
+  ] = await Promise.all([
+    admin.auth.admin.getUserById(userId),
+    admin.from("profiles").select("*").eq("user_id", userId).maybeSingle(),
+    admin.from("members").select("*").eq("user_id", userId),
+    admin.from("cars").select("*").eq("owner_user_id", userId),
+    admin.from("fillups").select("*").eq("owner_user_id", userId),
+    admin.from("trips").select("*").eq("driver_user_id", userId),
+  ]);
+
   const callerEmail = userInfo?.user?.email ?? null;
-
-  // profiles
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("*")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  // members (caller's own rows)
-  const { data: members } = await admin
-    .from("members")
-    .select("*")
-    .eq("user_id", userId);
-
+  const drivenTripIds = (tripsDriven ?? []).map((t) => t.id);
   const groupIds = Array.from(new Set((members ?? []).map((m) => m.group_id)));
   const passengerIds = Array.from(
     new Set(
@@ -51,54 +53,31 @@ export async function GET() {
     )
   );
 
-  // cars owned by user
-  const { data: cars } = await admin
-    .from("cars")
-    .select("*")
-    .eq("owner_user_id", userId);
-
-  // fillups owned by user
-  const { data: fillups } = await admin
-    .from("fillups")
-    .select("*")
-    .eq("owner_user_id", userId);
-
-  // trips driven by user
-  const { data: tripsDriven } = await admin
-    .from("trips")
-    .select("*")
-    .eq("driver_user_id", userId);
-
-  const drivenTripIds = (tripsDriven ?? []).map((t) => t.id);
-
-  // trip_legs for those trips
-  const { data: drivenLegs } =
+  // Batch 2: queries that depend on ids derived from batch 1 (all independent
+  // of each other, so run together).
+  const [
+    { data: drivenLegs },
+    { data: ridersForUser },
+    { data: paymentsAsRider },
+    { data: paymentsAsDriver },
+    { data: groups },
+  ] = await Promise.all([
     drivenTripIds.length > 0
-      ? await admin.from("trip_legs").select("*").in("trip_id", drivenTripIds)
-      : { data: [] as unknown[] };
-
-  // trip_leg_riders involving the user's passenger ids
-  const { data: ridersForUser } =
+      ? admin.from("trip_legs").select("*").in("trip_id", drivenTripIds)
+      : Promise.resolve({ data: [] as unknown[] }),
     passengerIds.length > 0
-      ? await admin
-          .from("trip_leg_riders")
-          .select("*")
-          .in("passenger_id", passengerIds)
-      : { data: [] as unknown[] };
-
-  // payments involving the user (as rider, via passenger_id, or for trips they drove)
-  const { data: paymentsAsRider } =
+      ? admin.from("trip_leg_riders").select("*").in("passenger_id", passengerIds)
+      : Promise.resolve({ data: [] as unknown[] }),
     passengerIds.length > 0
-      ? await admin
-          .from("trip_payments")
-          .select("*")
-          .in("passenger_id", passengerIds)
-      : { data: [] as unknown[] };
-
-  const { data: paymentsAsDriver } =
+      ? admin.from("trip_payments").select("*").in("passenger_id", passengerIds)
+      : Promise.resolve({ data: [] as unknown[] }),
     drivenTripIds.length > 0
-      ? await admin.from("trip_payments").select("*").in("trip_id", drivenTripIds)
-      : { data: [] as unknown[] };
+      ? admin.from("trip_payments").select("*").in("trip_id", drivenTripIds)
+      : Promise.resolve({ data: [] as unknown[] }),
+    groupIds.length > 0
+      ? admin.from("groups").select("id, name, owner_user_id, created_at").in("id", groupIds)
+      : Promise.resolve({ data: [] as unknown[] }),
+  ]);
 
   // De-duplicate payments by composite key (trip_id, passenger_id).
   const paymentKey = (p: { trip_id: string; passenger_id: string }) =>
@@ -117,12 +96,6 @@ export async function GET() {
     paymentMap.set(paymentKey(p), p);
   }
   const payments = Array.from(paymentMap.values());
-
-  // Groups the user belongs to (name only, for context).
-  const { data: groups } =
-    groupIds.length > 0
-      ? await admin.from("groups").select("id, name, owner_user_id, created_at").in("id", groupIds)
-      : { data: [] as unknown[] };
 
   const exportedAt = new Date().toISOString();
   const payload = {
@@ -144,7 +117,6 @@ export async function GET() {
     trip_legs_ridden: ridersForUser ?? [],
     payments,
     _redacted: {
-      // If we ever embed other users' emails alongside trips, hash them here.
       example_email_hash: callerEmail ? hashEmail(callerEmail) : null,
     },
   };
