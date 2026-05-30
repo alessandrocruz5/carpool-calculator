@@ -20,3 +20,8 @@ next-env.d.ts
 
 # one-off DB migration data export (contains member emails)
 old_project_data.sql
+
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/

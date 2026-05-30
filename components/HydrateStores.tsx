@@ -7,7 +7,7 @@ import { applyGroupScope } from "@/lib/store/groupScope";
 import { installOutbox, subscribe } from "@/lib/outbox";
 
 export function HydrateStores() {
-  const [queued, setQueued] = useState(0);
+  const [pending, setPending] = useState(0);
   const activeGroupId = useGroups((s) => s.activeGroupId);
 
   useEffect(() => {
@@ -15,7 +15,7 @@ export function HydrateStores() {
     useProfile.getState().hydrate();
     useCars.getState().hydrate();
     installOutbox();
-    const unsub = subscribe((n) => setQueued(n));
+    const unsub = subscribe((s) => setPending(s.pending));
     return unsub;
   }, []);
 
@@ -24,10 +24,10 @@ export function HydrateStores() {
     void applyGroupScope(activeGroupId);
   }, [activeGroupId]);
 
-  if (queued <= 0) return null;
+  if (pending <= 0) return null;
   return (
-    <div className="fixed top-3 right-3 z-50 bg-amber-100 text-amber-900 border border-amber-300 text-xs px-2 py-1 rounded-full shadow-sm">
-      {queued} queued
+    <div className="fixed top-3 left-3 z-40 bg-amber-100 text-amber-900 border border-amber-300 text-xs px-2 py-1 rounded-full shadow-sm">
+      {pending} queued
     </div>
   );
 }

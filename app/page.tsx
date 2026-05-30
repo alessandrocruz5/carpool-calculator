@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import dayjs from "dayjs";
 import Link from "next/link";
 import { LegCard, type LegState } from "@/components/LegCard";
@@ -11,7 +12,7 @@ import { useFillups } from "@/lib/store/fillups";
 import { useCars } from "@/lib/store/cars";
 import { useMembers } from "@/lib/store/members";
 import { useGroups } from "@/lib/store/groups";
-import { createClient } from "@/lib/supabase/client";
+import { useProfile } from "@/lib/store/profile";
 import { useToast } from "@/components/Toast";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
 import { DriverSelect } from "@/components/DriverSelect";
@@ -20,7 +21,11 @@ import { calcDay } from "@/lib/calc";
 import { daysSince } from "@/lib/week";
 
 export default function TodayPage() {
-  const today = dayjs().format("YYYY-MM-DD");
+  const searchParams = useSearchParams();
+  const dateParam = searchParams.get("date");
+  const isValidDate = dateParam != null && /^\d{4}-\d{2}-\d{2}$/.test(dateParam);
+  const today = isValidDate ? (dateParam as string) : dayjs().format("YYYY-MM-DD");
+  const isPastEdit = isValidDate && today !== dayjs().format("YYYY-MM-DD");
   const { settings, gasPrice, gasPriceUpdatedAt } = useSettings();
   const { passengers } = useRoster();
   const { fillups } = useFillups();
@@ -28,6 +33,7 @@ export default function TodayPage() {
   const { trips, upsert } = useTrips();
   const { members } = useMembers();
   const activeGroupId = useGroups((s) => s.activeGroupId);
+  const userId = useProfile((s) => s.profile?.userId ?? null);
   const toast = useToast();
   const isDriver = useIsDriver();
 
@@ -42,19 +48,20 @@ export default function TodayPage() {
   const [driverUserId, setDriverUserId] = useState<string | null>(
     existing?.driverUserId ?? null
   );
-  const [userId, setUserId] = useState<string | null>(null);
 
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
 
   useEffect(() => {
-    (async () => {
-      const { data } = await createClient().auth.getClaims();
-      setUserId(
-        (data?.claims as { sub?: string } | undefined)?.sub ?? null
-      );
-    })();
-  }, []);
+    const t = trips.find((x) => x.date === today);
+    if (!t) return;
+    setMorning(t.morning);
+    setEvening(t.evening);
+    setCarId(t.carId ?? "");
+    setDriverUserId(t.driverUserId ?? null);
+    // Reload state only when navigating to a different date.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [today]);
 
   // Default the car picker to the trip's saved car, else the only car.
   useEffect(() => {
@@ -136,7 +143,10 @@ export default function TodayPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">{dayjs().format("ddd, MMM D")}</h1>
+          <h1 className="text-xl font-semibold">{dayjs(today).format("ddd, MMM D")}</h1>
+          {isPastEdit && (
+            <p className="text-[11px] text-amber-700">Editing past trip</p>
+          )}
           <p className="text-xs text-slate-500">
             Gas <PHP value={gasPrice} />/L · Mileage {effectiveMileage.toFixed(2)} km/L
           </p>

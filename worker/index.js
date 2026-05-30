@@ -1,5 +1,12 @@
 // Custom service worker injected by next-pwa via customWorkerSrc.
 // next-pwa wraps Workbox around this file and registers it as the SW.
+// SW_VERSION: 2 — bump to force browsers to detect an update during dev testing.
+
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
 
 self.addEventListener("push", (event) => {
   let data = {};

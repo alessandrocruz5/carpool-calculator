@@ -1,8 +1,20 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+const ERROR_COPY: Record<string, string> = {
+  expired: "That sign-in link has expired. Send a new one.",
+  invalid: "That sign-in link isn't valid. Send a new one.",
+  invalid_link: "That sign-in link isn't valid. Send a new one.",
+  used: "That sign-in link has already been used. Send a new one.",
+  rate_limited: "Too many sign-in attempts. Try again in an hour.",
+};
+
 export default function LoginForm() {
+  const params = useSearchParams();
+  const errorParam = params?.get("error") ?? null;
   const [mode, setMode] = useState<"password" | "magic">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -10,6 +22,13 @@ export default function LoginForm() {
     "idle"
   );
   const [errMsg, setErrMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (errorParam) {
+      setStatus("error");
+      setErrMsg(ERROR_COPY[errorParam] ?? "Couldn't sign you in. Try again.");
+    }
+  }, [errorParam]);
 
   function switchMode(next: "password" | "magic") {
     setMode(next);
@@ -46,13 +65,20 @@ export default function LoginForm() {
     setStatus("working");
     setErrMsg(null);
     try {
-      const supabase = createClient();
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { emailRedirectTo: `${siteUrl}/auth/confirm` },
+      const res = await fetch("/api/auth/magic-link", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
       });
-      if (error) throw error;
+      if (res.status === 429) {
+        throw new Error(
+          "Too many sign-in attempts for this email. Try again in an hour."
+        );
+      }
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? "Couldn't send the sign-in link.");
+      }
       setStatus("sent");
     } catch (err) {
       setStatus("error");
@@ -148,6 +174,12 @@ export default function LoginForm() {
           </button>
         </>
       )}
+      <p className="text-xs text-slate-500 text-center pt-2">
+        By signing in you agree to our{" "}
+        <Link href="/legal/terms" className="underline">Terms</Link>
+        {" "}and{" "}
+        <Link href="/legal/privacy" className="underline">Privacy Policy</Link>.
+      </p>
     </div>
   );
 }
