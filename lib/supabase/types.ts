@@ -21,6 +21,7 @@ export interface DbCar {
   name: string;
   fuel_efficiency_kml: number | null;
   tank_size_liters: number | null;
+  max_passengers: number | null;
   created_at: string;
 }
 
@@ -81,6 +82,7 @@ export interface DbSettings {
   split_1p_driver: number;
   split_2p_driver: number;
   split_3p_driver: number;
+  split_4p_driver: number;
   updated_at: string;
 }
 

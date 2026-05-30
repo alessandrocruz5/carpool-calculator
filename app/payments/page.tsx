@@ -6,6 +6,8 @@ import { usePayments } from "@/lib/store/payments";
 import { useRoster } from "@/lib/store/roster";
 import { PHP } from "@/components/PHP";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { CheckCircle2 } from "lucide-react";
 import { ReportIssueButton } from "./ReportIssueButton";
 
 export default function PaymentsPage() {
@@ -68,21 +70,17 @@ export default function PaymentsPage() {
         </Link>
       </div>
 
-      <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
-        <div className="flex justify-between text-sm font-medium">
-          <span>Total outstanding</span>
-          <PHP value={grandTotal} />
-        </div>
-        <p className="text-xs text-slate-500">
-          {entries.length} passenger{entries.length === 1 ? "" : "s"} with
-          unpaid balances.
-        </p>
-      </section>
-
-      {entries.length === 0 && (
-        <section className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-500">
-            Everyone is paid up. 🎉
+      {entries.length === 0 ? (
+        <EmptyState icon={CheckCircle2} headline="No outstanding payments" />
+      ) : (
+        <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+          <div className="flex justify-between text-sm font-medium">
+            <span>Total outstanding</span>
+            <PHP value={grandTotal} />
+          </div>
+          <p className="text-xs text-slate-500">
+            {entries.length} passenger{entries.length === 1 ? "" : "s"} with
+            unpaid balances.
           </p>
         </section>
       )}

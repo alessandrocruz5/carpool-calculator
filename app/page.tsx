@@ -94,6 +94,9 @@ export default function TodayPage() {
   const effectiveMileage =
     carEfficiency || settings.mileageKmPerL || measuredMileage || 10.5;
   const liveSettings = { ...settings, mileageKmPerL: effectiveMileage };
+  // Use the car's max_passengers from the DB; fall back to undefined (no cap)
+  // so the passenger roster size becomes the practical limit instead of 3.
+  const maxPassengers = selectedCar?.maxPassengers ?? undefined;
 
   const activePassengers = passengers.filter((p) => p.active);
   const stale = gasPriceUpdatedAt ? daysSince(gasPriceUpdatedAt) > 7 : true;
@@ -227,7 +230,9 @@ export default function TodayPage() {
 
         {driverUserId && driverUserId !== userId && (
           <p className="text-sm text-slate-600">
-            Car: chosen by {driverUserId}
+            Car: chosen by {
+              members.find((m) => m.userId === driverUserId)?.displayName ?? driverUserId
+            }
           </p>
         )}
       </section>
@@ -240,6 +245,7 @@ export default function TodayPage() {
         gasPrice={gasPrice}
         settings={liveSettings}
         readOnly={!isDriver}
+        maxPassengers={maxPassengers}
       />
       <LegCard
         leg="evening"
@@ -249,6 +255,7 @@ export default function TodayPage() {
         gasPrice={gasPrice}
         settings={liveSettings}
         readOnly={!isDriver}
+        maxPassengers={maxPassengers}
       />
 
       <section className="bg-white rounded-xl border border-slate-200 p-4">

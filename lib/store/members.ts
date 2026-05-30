@@ -10,6 +10,7 @@ export interface Member {
   role: MemberRole;
   passengerId: string | null;
   createdAt: string;
+  displayName: string | null;
 }
 
 interface MembersStore {

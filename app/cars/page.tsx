@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useCars, type Car } from "@/lib/store/cars";
 import { useFillups } from "@/lib/store/fillups";
 import { rollingMileage } from "@/lib/mileage";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Car as CarIcon } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +20,17 @@ function isPositiveNumberInput(v: string): boolean {
   return Number.isFinite(n) && n > 0;
 }
 
+function isPositiveIntegerInput(v: string): boolean {
+  if (v.trim() === "") return true;
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n > 0;
+}
+
+function intOrNull(v: string): number | null {
+  const n = parseInt(v, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export default function CarsPage() {
   const { cars, add, update, remove } = useCars();
   const { fillups } = useFillups();
@@ -25,13 +38,16 @@ export default function CarsPage() {
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
 
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [kml, setKml] = useState("");
   const [tank, setTank] = useState("");
+  const [maxPax, setMaxPax] = useState("");
 
   const kmlValid = isPositiveNumberInput(kml);
   const tankValid = isPositiveNumberInput(tank);
-  const canAdd = name.trim().length > 0 && kmlValid && tankValid;
+  const maxPaxValid = isPositiveIntegerInput(maxPax);
+  const canAdd = name.trim().length > 0 && kmlValid && tankValid && maxPaxValid;
 
   function addCar() {
     if (!canAdd) return;
@@ -39,10 +55,12 @@ export default function CarsPage() {
       name: name.trim(),
       fuelEfficiencyKml: numOrNull(kml),
       tankSizeLiters: numOrNull(tank),
+      maxPassengers: intOrNull(maxPax),
     });
     setName("");
     setKml("");
     setTank("");
+    setMaxPax("");
   }
 
   if (!hydrated) return null;
@@ -54,6 +72,7 @@ export default function CarsPage() {
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <h2 className="font-semibold">Add a car</h2>
         <input
+          ref={nameInputRef}
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Car name"
@@ -88,6 +107,20 @@ export default function CarsPage() {
               </p>
             )}
           </div>
+          <div className="flex-1">
+            <input
+              value={maxPax}
+              onChange={(e) => setMaxPax(e.target.value)}
+              inputMode="numeric"
+              placeholder="Max pax"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+            />
+            {!maxPaxValid && (
+              <p className="text-red-600 text-xs mt-1">
+                Must be a whole number greater than 0
+              </p>
+            )}
+          </div>
           <button
             type="button"
             onClick={addCar}
@@ -100,12 +133,14 @@ export default function CarsPage() {
       </section>
 
       {cars.length === 0 && (
-        <section className="bg-white rounded-xl border border-slate-200 p-4">
-          <p className="text-sm text-slate-600">
-            No cars yet. Add one above — km/L and tank size are used to
-            estimate fuel cost per trip.
-          </p>
-        </section>
+        <EmptyState
+          icon={CarIcon}
+          headline="Add your first car"
+          cta={{
+            label: "Add a car",
+            onClick: () => nameInputRef.current?.focus(),
+          }}
+        />
       )}
 
       {cars.map((car) => (
@@ -134,7 +169,7 @@ function CarCard({
   car: Car;
   measured: number | null;
   onUpdate: (
-    patch: Partial<Pick<Car, "name" | "fuelEfficiencyKml" | "tankSizeLiters">>
+    patch: Partial<Pick<Car, "name" | "fuelEfficiencyKml" | "tankSizeLiters" | "maxPassengers">>
   ) => void;
   onRemove: () => Promise<
     { ok: true } | { ok: false; status: number; tripCount?: number }
@@ -144,11 +179,13 @@ function CarCard({
   const [name, setName] = useState(car.name);
   const [kml, setKml] = useState(car.fuelEfficiencyKml?.toString() ?? "");
   const [tank, setTank] = useState(car.tankSizeLiters?.toString() ?? "");
+  const [maxPax, setMaxPax] = useState(car.maxPassengers?.toString() ?? "");
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const kmlValid = isPositiveNumberInput(kml);
   const tankValid = isPositiveNumberInput(tank);
-  const canSave = kmlValid && tankValid;
+  const maxPaxValid = isPositiveIntegerInput(maxPax);
+  const canSave = kmlValid && tankValid && maxPaxValid;
 
   async function handleRemove() {
     if (!window.confirm("Delete this car?")) return;
@@ -173,6 +210,7 @@ function CarCard({
       name: name.trim() || car.name,
       fuelEfficiencyKml: numOrNull(kml),
       tankSizeLiters: numOrNull(tank),
+      maxPassengers: intOrNull(maxPax),
     });
     setEditing(false);
   }
@@ -215,6 +253,20 @@ function CarCard({
                 </p>
               )}
             </div>
+            <div className="flex-1">
+              <input
+                value={maxPax}
+                onChange={(e) => setMaxPax(e.target.value)}
+                inputMode="numeric"
+                placeholder="Max pax"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              />
+              {!maxPaxValid && (
+                <p className="text-red-600 text-xs mt-1">
+                  Must be a whole number greater than 0
+                </p>
+              )}
+            </div>
           </div>
           <div className="flex gap-2">
             <button
@@ -245,6 +297,8 @@ function CarCard({
                 : "—"}
               {" · "}
               Measured {measured != null ? `${measured.toFixed(2)} km/L` : "—"}
+              {" · "}
+              {car.maxPassengers != null ? `${car.maxPassengers} passengers` : "pax not set"}
             </div>
           </div>
           <div className="flex gap-3 text-xs">

@@ -11,6 +11,7 @@ interface CarBody {
   name?: string;
   fuelEfficiencyKml?: number | null;
   tankSizeLiters?: number | null;
+  maxPassengers?: number | null;
 }
 
 export async function GET() {
@@ -38,6 +39,7 @@ export async function POST(req: Request) {
     name: body.name.trim(),
     fuelEfficiencyKml: body.fuelEfficiencyKml ?? null,
     tankSizeLiters: body.tankSizeLiters ?? null,
+    maxPassengers: body.maxPassengers ?? null,
   });
   if (body.id) insert.id = body.id;
   const { data, error } = await supabase
@@ -61,6 +63,8 @@ export async function PATCH(req: Request) {
     patch.fuel_efficiency_kml = body.fuelEfficiencyKml;
   if (body.tankSizeLiters !== undefined)
     patch.tank_size_liters = body.tankSizeLiters;
+  if (body.maxPassengers !== undefined)
+    patch.max_passengers = body.maxPassengers;
   const { data, error } = await supabase
     .from("cars")
     .update(patch)

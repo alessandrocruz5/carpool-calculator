@@ -1,6 +1,7 @@
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { resolvePostConfirmRedirect } from "@/lib/auth/resolvePostConfirmRedirect";
 
 type ErrorCode = "expired" | "invalid" | "used";
 
@@ -33,20 +34,30 @@ export async function GET(request: NextRequest) {
 
   const supabase = await createClient();
 
+  let confirmed = false;
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
-      await supabase.rpc("claim_member_invite");
-      return NextResponse.redirect(new URL(next, request.url));
-    }
-    return errorRedirect(request, classifyError(error.message));
+    if (error) return errorRedirect(request, classifyError(error.message));
+    confirmed = true;
   } else if (token_hash && type) {
     const { error } = await supabase.auth.verifyOtp({ type, token_hash });
-    if (!error) {
-      await supabase.rpc("claim_member_invite");
-      return NextResponse.redirect(new URL(next, request.url));
-    }
-    return errorRedirect(request, classifyError(error.message));
+    if (error) return errorRedirect(request, classifyError(error.message));
+    confirmed = true;
+  }
+
+  if (confirmed) {
+    // Claim any pending invites before we decide where to send the user.
+    await supabase.rpc("claim_member_invite");
+
+    // Route based on group membership:
+    //   0 groups  → /onboarding (new user, needs to create or join a group)
+    //   ≥1 groups → ?next= param (if safe) or /
+    const { data: { user } } = await supabase.auth.getUser();
+    const destination = user
+      ? await resolvePostConfirmRedirect({ supabase, userId: user.id, next })
+      : next;
+
+    return NextResponse.redirect(new URL(destination, request.url));
   }
 
   return errorRedirect(request, "invalid");
