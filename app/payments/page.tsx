@@ -8,6 +8,7 @@ import { PHP } from "@/components/PHP";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CheckCircle2 } from "lucide-react";
+import { ReportIssueButton } from "./ReportIssueButton";
 
 export default function PaymentsPage() {
   const { payments, markPaid, markManyPaid } = usePayments();
@@ -138,6 +139,7 @@ export default function PaymentsPage() {
                     </span>
                     <span className="flex items-center gap-2">
                       <PHP value={r.amountPhp} />
+                      <ReportIssueButton tripId={r.tripId} tripDate={r.date} />
                       {isDriver && (
                         <button
                           onClick={() =>

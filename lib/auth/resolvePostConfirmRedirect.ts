@@ -30,7 +30,6 @@ export async function resolvePostConfirmRedirect({
   userId,
   next,
 }: {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: { from(table: string): any };
   userId: string;
   next: string;

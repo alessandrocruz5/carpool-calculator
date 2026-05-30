@@ -56,8 +56,9 @@ export async function GET(req: Request) {
 
   let q = supabase
     .from("trip_payments")
-    .select("trip_id, passenger_id, amount_php, paid, paid_at, trips!inner(date)")
-    .eq("group_id", group.groupId);
+    .select("trip_id, passenger_id, amount_php, paid, paid_at, trips!inner(date, archived_at)")
+    .eq("group_id", group.groupId)
+    .is("trips.archived_at", null);
 
   if (passengerId) q = q.eq("passenger_id", passengerId);
   if (paid === "true") q = q.eq("paid", true);

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
 import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
+import { log } from "@/lib/log";
 
 export const dynamic = "force-dynamic";
 
@@ -134,12 +135,12 @@ export async function POST(req: Request) {
         );
       await replaceRows(`Payments-${tab}`, paymentTabHeaders, sortedRows);
     } else {
-      console.error("payments export query failed", payErr);
+      log.error("payments export query failed", { err: payErr });
     }
 
     return NextResponse.json({ ok: true, rows: written });
   } catch (e) {
-    console.error("sheets export failed", e);
+    log.error("sheets export failed", e);
     return NextResponse.json(
       { ok: false, error: "export_failed" },
       { status: 500 }

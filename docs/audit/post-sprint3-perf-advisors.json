@@ -1,0 +1,35 @@
+{
+  "_meta": {
+    "project": "vcmarwmweysxqhhgdcwc (sabay)",
+    "captured": "2026-05-29",
+    "after": "0020_drop_unused_indexes.sql applied",
+    "tool": "get_advisors type=performance",
+    "summary": {
+      "unused_index": 18,
+      "unindexed_foreign_keys": 0,
+      "auth_rls_initplan": 0,
+      "multiple_permissive_policies": 0
+    },
+    "note": "Down from 20 unused_index in post-sprint2 (dropped trips_group_date_idx + members_user_group_idx). No unindexed_foreign_keys finding was introduced by the drops."
+  },
+  "lints": [
+    {"name": "unused_index", "level": "INFO", "table": "trips", "index": "trips_car_id_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "trips", "index": "trips_driver_user_id_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "trips", "index": "trips_gas_price_id_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "trip_legs", "index": "trip_legs_group_id_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "trip_leg_riders", "index": "trip_leg_riders_group_id_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "trip_leg_riders", "index": "trip_leg_riders_passenger_id_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "members", "index": "members_group_id_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "members", "index": "members_passenger_id_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "fillups", "index": "fillups_car_id_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "fillups", "index": "fillups_owner_user_id_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "groups", "index": "groups_owner_user_id_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "member_invites", "index": "member_invites_invited_by_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "trip_payments", "index": "trip_payments_passenger_unpaid_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "push_subscriptions", "index": "push_subscriptions_user_id_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "trip_disputes", "index": "trip_disputes_group_status_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "trip_disputes", "index": "trip_disputes_trip_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "trip_disputes", "index": "trip_disputes_reporter_idx"},
+    {"name": "unused_index", "level": "INFO", "table": "trip_disputes", "index": "trip_disputes_resolved_by_idx"}
+  ]
+}

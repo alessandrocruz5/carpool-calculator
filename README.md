@@ -79,6 +79,7 @@ Each driver can register one or more cars under **Account → Cars**. Every car 
 
 ```bash
 npm test           # unit + route tests via vitest
+npm run e2e        # Playwright E2E (see e2e/README.md)
 ```
 
 The RLS regression suite in `lib/test/rls.integration.test.ts` runs end-to-end against a Supabase **dev branch**. It is skipped unless these env vars are set when invoking `npm test`:
@@ -88,6 +89,40 @@ The RLS regression suite in `lib/test/rls.integration.test.ts` runs end-to-end a
 - `RLS_TEST_ANON_KEY` (or `RLS_TEST_PUBLISHABLE_KEY`) — the publishable key, used to sign in as each seeded user
 
 The suite seeds two groups with disjoint owners and asserts that user A's PostgREST `select` against `trips`, `passengers`, `settings`, `fillups`, and `trip_payments` cannot leak rows belonging to user B's group (and vice versa).
+
+### Running RLS tests in CI
+
+The `rls-integration` job in `.github/workflows/ci.yml` runs the suite against a Supabase dev branch. To turn it on:
+
+1. In the Supabase dashboard, create a dev branch dedicated to CI (e.g. `ci-rls`).
+2. In GitHub → repo **Settings → Secrets and variables → Actions**, add:
+   - `RLS_TEST_SUPABASE_URL` — the dev branch project URL
+   - `RLS_TEST_SERVICE_ROLE_KEY` — the dev branch secret key (`sb_secret_…`)
+   - `RLS_TEST_ANON_KEY` — the dev branch publishable key (`sb_publishable_…`)
+3. The job runs automatically on push to `main`. To run it on a PR, add the `run-rls-tests` label — this keeps the dev branch free from per-PR burn.
+
+### CI status checks required for merge
+
+Configure these as required status checks in GitHub → repo **Settings → Branches → `main`**:
+
+- `lint-and-typecheck` — `npm run lint` + `tsc --noEmit`
+- `test` — vitest unit + route tests
+- `e2e` — Playwright golden path (PRs only)
+
+Optional (run on demand or on push to `main`):
+
+- `rls-integration` — gated by the `run-rls-tests` label on PRs
+
+## Analytics
+
+The app uses [Vercel Analytics](https://vercel.com/docs/analytics) and [Vercel Speed Insights](https://vercel.com/docs/speed-insights) for privacy-friendly page-view and Core Web Vitals tracking. Both are wired in via `<Analytics />` and `<SpeedInsights />` in `app/layout.tsx`.
+
+- No cookies are set, so no cookie banner is required.
+- Visitor IP addresses are hashed daily and never stored long-term, so the data is anonymous (GDPR/CCPA-friendly).
+- Data is only collected on production deployments (the script auto-detects `NODE_ENV` and is a no-op locally / in test builds).
+- **Do Not Track**: `@vercel/analytics` v2 does not bake in a client-side DNT check, but since it collects no cookies, no `localStorage`/`sessionStorage`, no persistent visitor IDs, and no raw IPs, it is considered privacy-friendly by default. Visitors who want a hard opt-out can install any tracker-blocker (uBlock Origin, Brave Shields, etc.); the `/_vercel/insights/*` endpoints are on the common blocklists.
+
+Enable Analytics and Speed Insights in the Vercel dashboard for the project; no additional env vars are required.
 
 ## Notes
 

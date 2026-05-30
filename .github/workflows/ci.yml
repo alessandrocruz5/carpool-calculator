@@ -6,6 +6,18 @@ on:
   pull_request:
 
 jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npm run lint
+      - run: npx tsc --noEmit
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -14,17 +26,58 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-      - name: Cache node_modules
-        uses: actions/cache@v4
-        with:
-          path: node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-modules-
-      - run: npm ci
-      - run: npx tsc --noEmit
+      - run: npm ci --legacy-peer-deps
       - run: npm test
+
+  rls-integration:
+    # Only run on PRs labeled "run-rls-tests" or on push to main — the RLS
+    # suite hits a real Supabase dev branch, so we don't burn it on every PR.
+    if: >
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-rls-tests'))
+      || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npm test -- rls.integration
+        env:
+          RLS_TEST_SUPABASE_URL: ${{ secrets.RLS_TEST_SUPABASE_URL }}
+          RLS_TEST_SERVICE_ROLE_KEY: ${{ secrets.RLS_TEST_SERVICE_ROLE_KEY }}
+          RLS_TEST_ANON_KEY: ${{ secrets.RLS_TEST_ANON_KEY }}
+
+  e2e:
+    # Playwright runs are slow; only on PRs, after lint/typecheck passes.
+    if: github.event_name == 'pull_request'
+    needs: lint-and-typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci --legacy-peer-deps
+      - run: npx playwright install --with-deps chromium
       - run: npm run build
         env:
-          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.E2E_SUPABASE_PUBLISHABLE_KEY || 'placeholder' }}
+      - name: Run Playwright
+        run: npx playwright test
+        env:
+          BASE_URL: http://localhost:3000
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.E2E_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.E2E_SUPABASE_PUBLISHABLE_KEY || 'placeholder' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.E2E_SUPABASE_SERVICE_ROLE_KEY }}
+          E2E_AUTH_BYPASS_SECRET: ${{ secrets.E2E_AUTH_BYPASS_SECRET }}
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
