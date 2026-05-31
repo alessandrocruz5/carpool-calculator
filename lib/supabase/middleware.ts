@@ -63,17 +63,45 @@ export async function updateSession(request: NextRequest) {
     !pathname.startsWith('/auth') &&
     !pathname.startsWith('/login')
 
+  // Read the active-group cookie early so the member lookup can be scoped to
+  // it. Without this scope, maybeSingle() would fail with a multiple-rows
+  // error whenever a user belongs to more than one group, incorrectly setting
+  // memberExists=false and triggering a / → /onboarding → / redirect loop.
+  const carpoolCookie = request.cookies.get('carpool-group')?.value
+
   let role: string | null = null
   let memberExists = false
   if (userId && isPageRoute) {
-    const { data: member } = await supabase
-      .from('members')
-      .select('role')
-      .eq('user_id', userId)
-      .maybeSingle()
-    if (member) {
-      memberExists = true
-      role = (member as { role: string }).role
+    if (carpoolCookie) {
+      // Scope the lookup to the active group — one row at most, correct role.
+      const { data: member } = await supabase
+        .from('members')
+        .select('role')
+        .eq('user_id', userId)
+        .eq('group_id', carpoolCookie)
+        .maybeSingle()
+      if (member) {
+        memberExists = true
+        role = (member as { role: string }).role
+      } else {
+        // Cookie references a group the user left; check any membership.
+        const { data: anyMember } = await supabase
+          .from('members')
+          .select('group_id')
+          .eq('user_id', userId)
+          .limit(1)
+          .maybeSingle()
+        memberExists = anyMember !== null
+      }
+    } else {
+      // No cookie yet — just check whether the user has any membership.
+      const { data: anyMember } = await supabase
+        .from('members')
+        .select('group_id')
+        .eq('user_id', userId)
+        .limit(1)
+        .maybeSingle()
+      memberExists = anyMember !== null
     }
   }
 
@@ -94,7 +122,6 @@ export async function updateSession(request: NextRequest) {
   // If the user has no active-group cookie, send them to /groups to pick or
   // create one before they can use any part of the app.
   // /onboarding is exempt — it's where zero-group users land first.
-  const carpoolCookie = request.cookies.get('carpool-group')?.value
   if (
     userId &&
     isPageRoute &&
