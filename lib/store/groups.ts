@@ -30,16 +30,21 @@ export const useGroups = create<GroupsStore>()(
         try {
           const res = await fetch("/api/groups", { cache: "no-store" });
           if (!res.ok) throw new Error(await res.text());
-          const data = (await res.json()) as Group[];
+          const data = (await res.json()) as (Group & { isActive?: boolean })[];
           const currentActiveId = get().activeGroupId;
+          // Prefer the server-authoritative active group (from session cookie)
+          // so a group switch via GroupSwitcher is reflected after page reload.
+          // Without this, stale localStorage overrides the cookie and
+          // applyGroupScope loads the wrong group's data.
+          const serverActiveId = data.find((g) => g.isActive)?.id ?? null;
           const resolvedId =
-            currentActiveId && data.some((g) => g.id === currentActiveId)
+            serverActiveId ??
+            (currentActiveId && data.some((g) => g.id === currentActiveId)
               ? currentActiveId
-              : data[0]?.id ?? null;
+              : data[0]?.id ?? null);
           set({ groups: data, hydrated: true, activeGroupId: resolvedId });
-          // If we picked a different group than what the cookie knows about,
-          // call switchTo so the server cookie stays in sync.
-          if (resolvedId && resolvedId !== currentActiveId) {
+          // Sync cookie only when we fell back (no server-active group found).
+          if (!serverActiveId && resolvedId && resolvedId !== currentActiveId) {
             await get().switchTo(resolvedId);
           }
         } catch (err) {
