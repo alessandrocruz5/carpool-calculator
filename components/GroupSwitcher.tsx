@@ -17,13 +17,10 @@ export function GroupSwitcher() {
       try {
         const res = await fetch("/api/groups", { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as {
-          groups: GroupItem[];
-          activeId: string | null;
-        };
-        setGroups(data.groups);
-        const active = data.groups.find((g) => g.isActive);
-        setActiveId(active?.id ?? data.activeId ?? "");
+        const data = (await res.json()) as GroupItem[];
+        setGroups(data);
+        const active = data.find((g) => g.isActive);
+        setActiveId(active?.id ?? "");
       } catch {
         // header switcher is non-critical; ignore load failures
       }
@@ -38,10 +35,10 @@ export function GroupSwitcher() {
     if (!value || value === activeId) return;
     setBusy(true);
     try {
-      const res = await fetch("/api/groups", {
-        method: "PUT",
+      const res = await fetch("/api/groups/switch", {
+        method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: value }),
+        body: JSON.stringify({ groupId: value }),
       });
       if (!res.ok) throw new Error(await res.text());
       window.location.assign("/");
