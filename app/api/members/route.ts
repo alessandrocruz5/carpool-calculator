@@ -129,6 +129,15 @@ export async function PATCH(req: Request) {
     }
   }
 
+  // Deactivate passenger when downgrading to driver-only
+  if (body.role === "driver" && updated.passenger_id) {
+    await supabase
+      .from("passengers")
+      .update({ active: false })
+      .eq("id", updated.passenger_id)
+      .eq("group_id", groupId);
+  }
+
   return NextResponse.json(fromDbMember(updated));
 }
 
