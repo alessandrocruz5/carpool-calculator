@@ -234,6 +234,7 @@ describe("trip mapper", () => {
             trip_id: "t1",
             leg: "morning",
             route: "skyway",
+            distance_km: 21,
             trip_leg_riders: [
               { group_id: "g1", trip_leg_id: "l1", passenger_id: "p1" },
               { group_id: "g1", trip_leg_id: "l1", passenger_id: "p2" },
@@ -245,6 +246,7 @@ describe("trip mapper", () => {
             trip_id: "t1",
             leg: "evening",
             route: "slex",
+            distance_km: 25,
             trip_leg_riders: [
               { group_id: "g1", trip_leg_id: "l2", passenger_id: "p1" },
             ],
