@@ -53,6 +53,13 @@ export async function POST(req: Request) {
   const groupId = group.groupId;
   const body = (await req.json()) as StoredTrip;
 
+  if (!(body.morning.distanceKm > 0) || !(body.evening.distanceKm > 0)) {
+    return NextResponse.json(
+      { error: "distance_km must be positive for both legs" },
+      { status: 400 }
+    );
+  }
+
   // When a car/driver is attached, validate ownership + group membership and
   // resolve the car's fuel efficiency for the cost calculation below.
   let carMileageKmPerL: number | null = null;
@@ -148,8 +155,8 @@ export async function POST(req: Request) {
   if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
 
   const legsToInsert = [
-    { group_id: groupId, trip_id: tripId, leg: "morning" as const, route: body.morning.route },
-    { group_id: groupId, trip_id: tripId, leg: "evening" as const, route: body.evening.route },
+    { group_id: groupId, trip_id: tripId, leg: "morning" as const, route: body.morning.route, distance_km: body.morning.distanceKm },
+    { group_id: groupId, trip_id: tripId, leg: "evening" as const, route: body.evening.route, distance_km: body.evening.distanceKm },
   ];
   const { data: legRows, error: legErr } = await supabase
     .from("trip_legs")
@@ -205,8 +212,8 @@ export async function POST(req: Request) {
     {
       date: body.date,
       gasPricePhpPerL: body.gasPrice,
-      morning: body.morning,
-      evening: body.evening,
+      morning: { ...body.morning, distanceKm: body.morning.distanceKm },
+      evening: { ...body.evening, distanceKm: body.evening.distanceKm },
     },
     calcSettings
   );
