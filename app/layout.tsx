@@ -21,12 +21,12 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
-  title: "Carpool Calculator",
+  title: "Sabay",
   description: "Per-leg carpool cost split",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Carpool",
+    title: "Sabay",
   },
   icons: {
     icon: [
@@ -46,7 +46,7 @@ export const viewport: Viewport = {
 };
 
 const nav = [
-  { href: "/", label: "Today" },
+  { href: "/", label: "Trip" },
   { href: "/log", label: "Log" },
   { href: "/payments", label: "Payments" },
   { href: "/gas", label: "Gas" },
@@ -79,7 +79,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <InstallBanner />
           <header className="bg-brand-600 text-white px-4 py-3 shadow">
             <div className="max-w-3xl mx-auto flex items-center justify-between">
-              <Link href="/" className="font-semibold">Carpool</Link>
+              <Link href="/" className="font-semibold">Sabay</Link>
               <div className="flex items-center gap-3 text-xs opacity-90">
                 <Link href="/account" className="hover:underline">Account</Link>
                 <Link href="/groups" className="hover:underline">Groups</Link>

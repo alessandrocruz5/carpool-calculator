@@ -21,7 +21,7 @@ export default async function OnboardingPage() {
   return (
     <div className="max-w-md mx-auto space-y-6">
       <div className="space-y-1">
-        <h1 className="text-xl font-semibold">Welcome to Carpool</h1>
+        <h1 className="text-xl font-semibold">Welcome to Sabay</h1>
         <p className="text-sm text-slate-500">
           Create your first group to start tracking trips and splitting costs.
         </p>

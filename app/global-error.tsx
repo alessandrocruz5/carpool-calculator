@@ -19,7 +19,7 @@ export default function GlobalError({
         <div className="min-h-screen flex flex-col">
           <header className="bg-brand-600 text-white px-4 py-3 shadow">
             <div className="max-w-3xl mx-auto flex items-center justify-between">
-              <span className="font-semibold">Carpool</span>
+              <span className="font-semibold">Sabay</span>
             </div>
           </header>
           <main className="flex-1 max-w-3xl w-full mx-auto p-4">

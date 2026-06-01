@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Carpool Calculator",
+  title: "Privacy Policy — Sabay",
 };
 
 const CONTACT_EMAIL = "alessandrorafaelcruz@gmail.com";
@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <p className="text-sm text-slate-600">Last updated: {LAST_UPDATED}</p>
 
       <p>
-        Carpool Calculator (&ldquo;the app&rdquo;, &ldquo;we&rdquo;) is a small
+        Sabay (&ldquo;the app&rdquo;, &ldquo;we&rdquo;) is a small
         tool for splitting fuel and parking costs between members of a carpool.
         This page explains what personal data we collect, why we collect it,
         how long we keep it, and the rights you have under the EU General

@@ -11,7 +11,7 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { href: "/", label: "Today" },
+  { href: "/", label: "Trip" },
   { href: "/log", label: "Log" },
   { href: "/week", label: "Week" },
   { href: "/gas", label: "Gas" },
