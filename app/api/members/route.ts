@@ -154,12 +154,12 @@ export async function DELETE(req: Request) {
 
   const isDriverRole = (r: Role) => r === "driver" || r === "both";
   if (targetRow && isDriverRole(targetRow.role)) {
-    const { count } = await supabase
+    const { data: driverRows } = await supabase
       .from("members")
-      .select("user_id", { count: "exact", head: true })
+      .select("user_id")
       .eq("group_id", groupId)
       .or("role.eq.driver,role.eq.both");
-    if ((count ?? 0) <= 1) {
+    if ((driverRows ?? []).length <= 1) {
       return NextResponse.json(
         { error: "Can't remove the last driver. Link another driver first." },
         { status: 400 }
