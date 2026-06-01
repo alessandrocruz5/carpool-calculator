@@ -169,7 +169,8 @@ describe("DELETE /api/members", () => {
       tables: {
         members: [
           { data: { role: "driver" }, error: null },
-          { data: [{ user_id: "u1", role: "driver" }], error: null },
+          { data: { role: "driver", passenger_id: null }, error: null },
+          { data: [{ user_id: "u1" }], error: null },
         ],
       },
     });
@@ -184,13 +185,7 @@ describe("DELETE /api/members", () => {
       tables: {
         members: [
           { data: { role: "driver" }, error: null },
-          {
-            data: [
-              { user_id: "u1", role: "driver" },
-              { user_id: "u2", role: "passenger" },
-            ],
-            error: null,
-          },
+          { data: { role: "passenger", passenger_id: null }, error: null },
           { data: null, error: null },
         ],
       },
