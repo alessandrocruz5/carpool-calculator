@@ -39,10 +39,18 @@ export default function TodayPage() {
 
   const existing = trips.find((t) => t.date === today);
   const [morning, setMorning] = useState<LegState>(
-    existing?.morning ?? { route: "skyway", passengerIds: [] }
+    existing?.morning ?? {
+      route: "skyway",
+      passengerIds: [],
+      distanceKm: settings.roundTripKm / 2,
+    }
   );
   const [evening, setEvening] = useState<LegState>(
-    existing?.evening ?? { route: "skyway", passengerIds: [] }
+    existing?.evening ?? {
+      route: "skyway",
+      passengerIds: [],
+      distanceKm: settings.roundTripKm / 2,
+    }
   );
   const [carId, setCarId] = useState<string>(existing?.carId ?? "");
   const [driverUserId, setDriverUserId] = useState<string | null>(
@@ -105,13 +113,17 @@ export default function TodayPage() {
     {
       date: today,
       gasPricePhpPerL: gasPrice,
-      morning: { route: morning.route, passengerIds: morning.passengerIds },
-      evening: { route: evening.route, passengerIds: evening.passengerIds },
+      morning: { route: morning.route, passengerIds: morning.passengerIds, distanceKm: morning.distanceKm },
+      evening: { route: evening.route, passengerIds: evening.passengerIds, distanceKm: evening.distanceKm },
     },
     liveSettings
   );
 
   async function save() {
+    if (!(morning.distanceKm > 0) || !(evening.distanceKm > 0)) {
+      toast.show({ message: "Enter a distance (km) for both legs." });
+      return;
+    }
     try {
       const pair =
         driverUserId && carId

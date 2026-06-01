@@ -107,10 +107,12 @@ async function main() {
         morning: {
           route: morning?.route ?? "skyway",
           passengerIds: morning?.trip_leg_riders.map((r) => r.passenger_id) ?? [],
+          distanceKm: Number(morning?.distance_km ?? 21),
         },
         evening: {
           route: evening?.route ?? "skyway",
           passengerIds: evening?.trip_leg_riders.map((r) => r.passenger_id) ?? [],
+          distanceKm: Number(evening?.distance_km ?? 21),
         },
       },
       calcSettings

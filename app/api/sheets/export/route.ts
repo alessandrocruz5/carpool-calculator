@@ -16,8 +16,8 @@ interface Body {
     date: string;
     gasPrice: number;
     parkingFee: number;
-    morning: { route: Route; passengerIds: string[] };
-    evening: { route: Route; passengerIds: string[] };
+    morning: { route: Route; passengerIds: string[]; distanceKm: number };
+    evening: { route: Route; passengerIds: string[]; distanceKm: number };
   }>;
   passengers: { id: string; name: string }[];
   settings: CalcSettings;
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
       for (const legName of ["morning", "evening"] as const) {
         const leg = t[legName];
         const breakdown = calcLeg(
-          { leg: legName, route: leg.route, passengerCount: leg.passengerIds.length },
+          { leg: legName, route: leg.route, passengerCount: leg.passengerIds.length, distanceKm: leg.distanceKm },
           t.gasPrice,
           body.settings
         );
