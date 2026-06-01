@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Sign-in problem — Carpool Calculator",
+  title: "Sign-in problem — Sabay",
   robots: { index: false, follow: false },
 };
 

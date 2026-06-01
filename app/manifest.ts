@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Carpool Calculator",
-    short_name: "Carpool",
+    name: "Sabay",
+    short_name: "Sabay",
     description: "Per-leg carpool cost calculator for Mt. McDo ↔ office runs",
     start_url: "/",
     display: "standalone",

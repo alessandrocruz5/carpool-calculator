@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Contact — Carpool Calculator",
+  title: "Contact — Sabay",
 };
 
 const CONTACT_EMAIL = "alessandrorafaelcruz@gmail.com";

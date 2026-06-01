@@ -121,7 +121,7 @@ export default function TodayPage() {
 
   async function save() {
     if (!(morning.distanceKm > 0) || !(evening.distanceKm > 0)) {
-      toast.show({ message: "Enter a distance (km) for both legs." });
+      toast.show({ message: "Enter a distance (km) for both legs.", variant: "info" });
       return;
     }
     try {
@@ -138,10 +138,14 @@ export default function TodayPage() {
         evening,
         ...pair,
       });
-      toast.show({ message: existing ? "Trip updated." : "Trip saved." });
+      toast.show({
+        message: existing ? "Trip updated." : "Trip saved.",
+        variant: "success",
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       toast.show({
+        variant: "error",
         message: /forbidden|403/i.test(msg)
           ? "Couldn't save — only the driver can log trips."
           : "Couldn't save trip. Check your connection and try again.",
@@ -153,7 +157,7 @@ export default function TodayPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-20 -mx-4 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/75">
         <div>
           <h1 className="text-xl font-semibold">{dayjs(today).format("ddd, MMM D")}</h1>
           {isPastEdit && (
