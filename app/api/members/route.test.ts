@@ -10,6 +10,20 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => supaState.current!.client),
 }));
 
+const adminEmails: { current: Record<string, string | null> } = { current: {} };
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(() => ({
+    auth: {
+      admin: {
+        getUserById: vi.fn(async (id: string) => ({
+          data: { user: { email: adminEmails.current[id] ?? null } },
+          error: null,
+        })),
+      },
+    },
+  })),
+}));
+
 vi.mock("@/lib/auth/activeGroup", () => ({
   ACTIVE_GROUP_COOKIE: "carpool-group",
   getActiveGroupId: vi.fn(async () => groupState.id),
@@ -52,10 +66,12 @@ const row = {
 beforeEach(() => {
   supaState.current = null;
   groupState.id = "g1";
+  adminEmails.current = {};
 });
 
 describe("GET /api/members", () => {
   it("returns members enriched with displayName, email, and isSelf", async () => {
+    adminEmails.current = { u2: "bob@test.com" };
     setSupa({
       auth: { userId: "u1", email: "driver@test.com" },
       tables: {
@@ -72,10 +88,28 @@ describe("GET /api/members", () => {
         passengerId: null,
         createdAt: "x",
         displayName: "Bob",
-        email: null,   // not self
+        email: "bob@test.com",   // fetched for all members
         isSelf: false,
       }),
     ]);
+  });
+
+  it("shows email for members with no profile instead of a raw id", async () => {
+    adminEmails.current = { u2: "noprofile@test.com" };
+    setSupa({
+      auth: { userId: "u1", email: "driver@test.com" },
+      tables: {
+        members: [{ data: [row], error: null }],
+        profiles: [{ data: [], error: null }],
+      },
+    });
+    const res = await GET();
+    expect((await res.json())[0]).toMatchObject({
+      userId: "u2",
+      displayName: null,
+      email: "noprofile@test.com",
+      isSelf: false,
+    });
   });
 
   it("marks isSelf and exposes email for the current user", async () => {

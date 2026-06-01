@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { fromDbMember } from "@/lib/supabase/mappers";
 import type { DbMember } from "@/lib/supabase/types";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
@@ -44,13 +45,34 @@ export async function GET() {
     )
   );
 
+  // Fetch emails for ALL members (not just the current user) so the list can
+  // show a human-readable label instead of a raw UUID. auth.users is not
+  // queryable with the user-scoped client, so use the admin client and look
+  // up each member by id. The current user's email is already known.
+  const emailMap = new Map<string, string | null>();
+  if (currentUserId) emailMap.set(currentUserId, user?.email ?? null);
+  const missingEmailIds = userIds.filter((id) => !emailMap.has(id));
+  if (missingEmailIds.length > 0) {
+    try {
+      const admin = createAdminClient();
+      const lookups = await Promise.all(
+        missingEmailIds.map((id) => admin.auth.admin.getUserById(id))
+      );
+      missingEmailIds.forEach((id, i) => {
+        emailMap.set(id, lookups[i].data?.user?.email ?? null);
+      });
+    } catch {
+      // If the admin client isn't configured, fall back to ids gracefully.
+    }
+  }
+
   return NextResponse.json(
     members.map((m) => ({
       // Original fields (keep the store working)
       ...fromDbMember(m),
       // Enriched fields for MembersAdmin
       displayName: profileMap.get(m.user_id) ?? null,
-      email: m.user_id === currentUserId ? (user?.email ?? null) : null,
+      email: emailMap.get(m.user_id) ?? null,
       isSelf: m.user_id === currentUserId,
     }))
   );
