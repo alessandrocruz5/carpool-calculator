@@ -25,7 +25,7 @@ const STEPS: Step[] = [
   {
     target: "nav-members",
     title: "Invite your carpool",
-    body: "Add drivers and passengers from Members at the top.",
+    body: "Open the account menu (top-right) and tap Members to add drivers and passengers.",
   },
   {
     target: "nav-gas",
