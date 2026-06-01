@@ -104,6 +104,7 @@ export interface DbTripLeg {
   trip_id: string;
   leg: "morning" | "evening";
   route: "skyway" | "slex";
+  distance_km: number;
 }
 
 export interface DbTripLegRider {

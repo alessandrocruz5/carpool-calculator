@@ -17,12 +17,14 @@ export interface LegInput {
   leg: LegName;
   route: Route;
   passengerCount: number;
+  distanceKm: number;
 }
 
 export interface LegBreakdown {
   leg: LegName;
   route: Route;
   passengerCount: number;
+  distanceKm: number;
   gasCost: number;
   tollCost: number;
   parkingCost: number;
@@ -61,7 +63,7 @@ export function calcLeg(
   gasPricePhpPerL: number,
   settings: CalcSettings
 ): LegBreakdown {
-  const distance = settings.roundTripKm / 2;
+  const distance = input.distanceKm;
   const gasCost = (distance / settings.mileageKmPerL) * gasPricePhpPerL;
   const tollCost = input.route === "skyway" ? settings.tollSkywayPhp : settings.tollSlexPhp;
   const parkingCost = input.leg === "morning" ? settings.parkingFeePhp : 0;
@@ -76,6 +78,7 @@ export function calcLeg(
     leg: input.leg,
     route: input.route,
     passengerCount: input.passengerCount,
+    distanceKm: input.distanceKm,
     gasCost: round2(gasCost),
     tollCost: round2(tollCost),
     parkingCost: round2(parkingCost),
@@ -88,8 +91,8 @@ export function calcLeg(
 export interface DayInput {
   date: string;
   gasPricePhpPerL: number;
-  morning: { route: Route; passengerIds: string[] };
-  evening: { route: Route; passengerIds: string[] };
+  morning: { route: Route; passengerIds: string[]; distanceKm: number };
+  evening: { route: Route; passengerIds: string[]; distanceKm: number };
 }
 
 export interface DayBreakdown {
@@ -102,12 +105,12 @@ export interface DayBreakdown {
 
 export function calcDay(input: DayInput, settings: CalcSettings): DayBreakdown {
   const morning = calcLeg(
-    { leg: "morning", route: input.morning.route, passengerCount: input.morning.passengerIds.length },
+    { leg: "morning", route: input.morning.route, passengerCount: input.morning.passengerIds.length, distanceKm: input.morning.distanceKm },
     input.gasPricePhpPerL,
     settings
   );
   const evening = calcLeg(
-    { leg: "evening", route: input.evening.route, passengerCount: input.evening.passengerIds.length },
+    { leg: "evening", route: input.evening.route, passengerCount: input.evening.passengerIds.length, distanceKm: input.evening.distanceKm },
     input.gasPricePhpPerL,
     settings
   );
