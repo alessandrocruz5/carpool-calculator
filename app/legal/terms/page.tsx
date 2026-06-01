@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Carpool Calculator",
+  title: "Terms of Service — Sabay",
 };
 
 const CONTACT_EMAIL = "alessandrorafaelcruz@gmail.com";
@@ -15,7 +15,7 @@ export default function TermsPage() {
       <p className="text-sm text-slate-600">Last updated: {LAST_UPDATED}</p>
 
       <p>
-        By creating an account or using Carpool Calculator (&ldquo;the
+        By creating an account or using Sabay (&ldquo;the
         app&rdquo;) you agree to these terms. If you do not agree, please
         stop using the app.
       </p>

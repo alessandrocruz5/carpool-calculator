@@ -132,7 +132,7 @@ export function NotificationsToggle() {
             </li>
             <li>
               <span className="font-medium">iOS:</span> Settings → Notifications
-              → Carpool → Allow Notifications.
+              → Sabay → Allow Notifications.
             </li>
             <li>
               <span className="font-medium">Firefox:</span> click the padlock →

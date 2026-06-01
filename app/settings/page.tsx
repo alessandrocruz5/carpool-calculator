@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
+import { Car as CarIcon, ChevronRight } from "lucide-react";
 import dayjs from "dayjs";
 import { useSettings } from "@/lib/store/settings";
 import { useRoster, type Passenger } from "@/lib/store/roster";
@@ -90,6 +92,17 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Settings</h1>
+
+      <Link
+        href="/cars"
+        className="flex items-center justify-between bg-white rounded-xl border border-slate-200 p-4 hover:border-brand-500 transition-colors"
+      >
+        <span className="flex items-center gap-2 font-medium">
+          <CarIcon className="h-5 w-5 text-slate-400" aria-hidden />
+          Manage cars
+        </span>
+        <ChevronRight className="h-5 w-5 text-slate-400" aria-hidden />
+      </Link>
 
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <h2 className="font-semibold">Roster</h2>
