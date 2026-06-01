@@ -100,7 +100,36 @@ export async function PATCH(req: Request) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(fromDbMember(data as DbMember));
+  const updated = data as DbMember;
+
+  // When role changes to a passenger-capable role, ensure a passenger record
+  // exists so the member appears in the trip roster on the Today page.
+  if ((body.role === "passenger" || body.role === "both") && !updated.passenger_id) {
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("user_id", body.userId)
+      .maybeSingle();
+    const name =
+      (profileRow as { display_name?: string | null } | null)?.display_name?.trim() ||
+      body.userId.slice(0, 8);
+    const { data: passenger, error: pErr } = await supabase
+      .from("passengers")
+      .insert({ group_id: groupId, name, active: true })
+      .select()
+      .single();
+    if (!pErr && passenger) {
+      const passengerId = (passenger as { id: string }).id;
+      await supabase
+        .from("members")
+        .update({ passenger_id: passengerId })
+        .eq("group_id", groupId)
+        .eq("user_id", body.userId);
+      updated.passenger_id = passengerId;
+    }
+  }
+
+  return NextResponse.json(fromDbMember(updated));
 }
 
 export async function DELETE(req: Request) {
