@@ -129,6 +129,15 @@ export async function PATCH(req: Request) {
     }
   }
 
+  // Deactivate passenger when downgrading to driver-only
+  if (body.role === "driver" && updated.passenger_id) {
+    await supabase
+      .from("passengers")
+      .update({ active: false })
+      .eq("id", updated.passenger_id)
+      .eq("group_id", groupId);
+  }
+
   return NextResponse.json(fromDbMember(updated));
 }
 
@@ -144,20 +153,27 @@ export async function DELETE(req: Request) {
   if (!userId)
     return NextResponse.json({ error: "missing userId" }, { status: 400 });
 
-  const { data: rows, error } = await supabase
+  const { data: targetRow, error } = await supabase
     .from("members")
-    .select("user_id, role")
-    .eq("group_id", groupId);
+    .select("role, passenger_id")
+    .eq("group_id", groupId)
+    .eq("user_id", userId)
+    .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const members = (rows ?? []) as { user_id: string; role: Role }[];
-  const target = members.find((m) => m.user_id === userId);
+
   const isDriverRole = (r: Role) => r === "driver" || r === "both";
-  const driverCount = members.filter((m) => isDriverRole(m.role)).length;
-  if (target && isDriverRole(target.role) && driverCount <= 1) {
-    return NextResponse.json(
-      { error: "Can't remove the last driver. Link another driver first." },
-      { status: 400 }
-    );
+  if (targetRow && isDriverRole(targetRow.role)) {
+    const { data: driverRows } = await supabase
+      .from("members")
+      .select("user_id")
+      .eq("group_id", groupId)
+      .or("role.eq.driver,role.eq.both");
+    if ((driverRows ?? []).length <= 1) {
+      return NextResponse.json(
+        { error: "Can't remove the last driver. Link another driver first." },
+        { status: 400 }
+      );
+    }
   }
 
   const { error: delErr } = await supabase
@@ -167,5 +183,14 @@ export async function DELETE(req: Request) {
     .eq("user_id", userId);
   if (delErr)
     return NextResponse.json({ error: delErr.message }, { status: 500 });
+
+  if (targetRow?.passenger_id) {
+    await supabase
+      .from("passengers")
+      .update({ active: false })
+      .eq("id", targetRow.passenger_id)
+      .eq("group_id", groupId);
+  }
+
   return NextResponse.json({ ok: true });
 }
