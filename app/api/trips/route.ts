@@ -9,7 +9,7 @@ import {
 import type { StoredTrip } from "@/lib/store/trips";
 import type { DbGasPrice, DbSettings, DbFillup } from "@/lib/supabase/types";
 import { calcDay, DEFAULT_SETTINGS } from "@/lib/calc";
-import { rollingMileage } from "@/lib/mileage";
+import { rollingMileage, resolveEffectiveMileage } from "@/lib/mileage";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
 
@@ -214,12 +214,15 @@ export async function POST(req: Request) {
   const fillups = (fillupRows ?? []).map((f) => fromDbFillup(f as DbFillup));
   const carMeasured = body.carId ? rollingMileage(fillups, 5, body.carId) : null;
   const overallRolling = rollingMileage(fillups);
-  const effectiveMileage =
-    (carMileageKmPerL != null && carMileageKmPerL > 0 ? carMileageKmPerL : 0) ||
-    carMeasured ||
-    baseSettings.mileageKmPerL ||
-    overallRolling ||
-    DEFAULT_SETTINGS.mileageKmPerL;
+  const carEfficiency =
+    carMileageKmPerL != null && carMileageKmPerL > 0 ? carMileageKmPerL : carMeasured;
+  const effectiveMileage = resolveEffectiveMileage({
+    carEfficiency,
+    override: baseSettings.mileageKmPerL,
+    overrideEnabled: baseSettings.mileageOverrideEnabled,
+    rollingAvg: overallRolling,
+    fallback: DEFAULT_SETTINGS.mileageKmPerL,
+  });
   const calcSettings = { ...baseSettings, mileageKmPerL: effectiveMileage };
 
   const breakdown = calcDay(

@@ -74,6 +74,7 @@ describe("settings mappers", () => {
     const r = fromDbSettings({
       group_id: "g1",
       mileage_kml_override: null,
+      mileage_override_enabled: false,
       round_trip_km: 42,
       parking_fee_php: 90,
       toll_skyway_php: 164,
@@ -87,8 +88,34 @@ describe("settings mappers", () => {
     // 0 signals "no manual override" so callers fall back to the measured
     // rolling average instead of masking it with the default.
     expect(r.mileageKmPerL).toBe(0);
+    expect(r.mileageOverrideEnabled).toBe(false);
     expect(r.roundTripKm).toBe(42);
     expect(r.split2pDriver).toBe(25);
+  });
+
+  it("reads the mileage override toggle", () => {
+    const base = {
+      group_id: "g1",
+      mileage_kml_override: 12.5,
+      round_trip_km: 42,
+      parking_fee_php: 90,
+      toll_skyway_php: 164,
+      toll_slex_php: 124,
+      split_1p_driver: 40,
+      split_2p_driver: 25,
+      split_3p_driver: 19,
+      split_4p_driver: 16,
+      updated_at: "x",
+    };
+    expect(
+      fromDbSettings({ ...base, mileage_override_enabled: true }).mileageOverrideEnabled
+    ).toBe(true);
+    expect(toDbSettingsPatch({ mileageOverrideEnabled: true })).toEqual({
+      mileage_override_enabled: true,
+    });
+    expect(toDbSettingsPatch({ mileageOverrideEnabled: false })).toEqual({
+      mileage_override_enabled: false,
+    });
   });
 
   it("converts partial patches to snake_case, dropping unset fields", () => {

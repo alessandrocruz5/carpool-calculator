@@ -74,6 +74,7 @@ export interface DbFillup {
 export interface DbSettings {
   group_id: string;
   mileage_kml_override: number | null;
+  mileage_override_enabled: boolean;
   round_trip_km: number;
   parking_fee_php: number;
   toll_skyway_php: number;
