@@ -16,7 +16,7 @@ import { useProfile } from "@/lib/store/profile";
 import { useToast } from "@/components/Toast";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
 import { DriverSelect } from "@/components/DriverSelect";
-import { rollingMileage } from "@/lib/mileage";
+import { rollingMileage, resolveEffectiveMileage } from "@/lib/mileage";
 import { calcDay } from "@/lib/calc";
 import { daysSince } from "@/lib/week";
 
@@ -99,8 +99,12 @@ export default function TodayPage() {
   const carEfficiency =
     selectedCar?.fuelEfficiencyKml || carMeasured || null;
   const measuredMileage = rollingMileage(fillups);
-  const effectiveMileage =
-    carEfficiency || settings.mileageKmPerL || measuredMileage || 10.5;
+  const effectiveMileage = resolveEffectiveMileage({
+    carEfficiency,
+    override: settings.mileageKmPerL,
+    overrideEnabled: settings.mileageOverrideEnabled,
+    rollingAvg: measuredMileage,
+  });
   const liveSettings = { ...settings, mileageKmPerL: effectiveMileage };
   // Use the car's max_passengers from the DB; fall back to undefined (no cap)
   // so the passenger roster size becomes the practical limit instead of 3.

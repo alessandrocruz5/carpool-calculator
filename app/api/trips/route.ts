@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fromDbTrip, fromDbSettings, type DbTripWithLegs } from "@/lib/supabase/mappers";
+import {
+  fromDbTrip,
+  fromDbSettings,
+  fromDbFillup,
+  type DbTripWithLegs,
+} from "@/lib/supabase/mappers";
 import type { StoredTrip } from "@/lib/store/trips";
-import type { DbGasPrice, DbSettings } from "@/lib/supabase/types";
+import type { DbGasPrice, DbSettings, DbFillup } from "@/lib/supabase/types";
 import { calcDay, DEFAULT_SETTINGS } from "@/lib/calc";
+import { rollingMileage, resolveEffectiveMileage } from "@/lib/mileage";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
 
@@ -198,15 +204,26 @@ export async function POST(req: Request) {
   const baseSettings = settingsRow
     ? fromDbSettings(settingsRow as DbSettings)
     : DEFAULT_SETTINGS;
-  // The chosen car's measured efficiency takes precedence over the group
-  // settings override; calc's signature is unchanged.
-  const calcSettings =
-    carMileageKmPerL != null && carMileageKmPerL > 0
-      ? { ...baseSettings, mileageKmPerL: carMileageKmPerL }
-      : baseSettings;
-  if (!(calcSettings.mileageKmPerL > 0)) {
-    calcSettings.mileageKmPerL = DEFAULT_SETTINGS.mileageKmPerL;
-  }
+  // Resolve the effective mileage with the same precedence as the trip UI so
+  // the saved payment split matches what the user sees:
+  // car rated → car measured → manual override → overall rolling avg → default.
+  const { data: fillupRows } = await supabase
+    .from("fillups")
+    .select("*")
+    .eq("group_id", groupId);
+  const fillups = (fillupRows ?? []).map((f) => fromDbFillup(f as DbFillup));
+  const carMeasured = body.carId ? rollingMileage(fillups, 5, body.carId) : null;
+  const overallRolling = rollingMileage(fillups);
+  const carEfficiency =
+    carMileageKmPerL != null && carMileageKmPerL > 0 ? carMileageKmPerL : carMeasured;
+  const effectiveMileage = resolveEffectiveMileage({
+    carEfficiency,
+    override: baseSettings.mileageKmPerL,
+    overrideEnabled: baseSettings.mileageOverrideEnabled,
+    rollingAvg: overallRolling,
+    fallback: DEFAULT_SETTINGS.mileageKmPerL,
+  });
+  const calcSettings = { ...baseSettings, mileageKmPerL: effectiveMileage };
 
   const breakdown = calcDay(
     {

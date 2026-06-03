@@ -129,10 +129,13 @@ export function fromDbSettings(r: DbSettings): CalcSettings {
 
   return {
     roundTripKm: Number(r.round_trip_km),
+    // 0 means "no manual override" so callers can fall back to the measured
+    // rolling average; only a positive stored value is treated as an override.
     mileageKmPerL:
       r.mileage_kml_override != null && Number(r.mileage_kml_override) > 0
         ? Number(r.mileage_kml_override)
-        : DEFAULT_SETTINGS.mileageKmPerL,
+        : 0,
+    mileageOverrideEnabled: r.mileage_override_enabled ?? false,
     parkingFeePhp: Number(r.parking_fee_php),
     tollSkywayPhp: Number(r.toll_skyway_php),
     tollSlexPhp: Number(r.toll_slex_php),
@@ -148,7 +151,11 @@ export function toDbSettingsPatch(
 ): Partial<Omit<DbSettings, "id" | "updated_at">> {
   const out: Partial<Omit<DbSettings, "id" | "updated_at">> = {};
   if (s.roundTripKm !== undefined) out.round_trip_km = s.roundTripKm;
-  if (s.mileageKmPerL !== undefined) out.mileage_kml_override = s.mileageKmPerL;
+  // Store a cleared/zero override as NULL so it reads back as "no override".
+  if (s.mileageKmPerL !== undefined)
+    out.mileage_kml_override = s.mileageKmPerL > 0 ? s.mileageKmPerL : null;
+  if (s.mileageOverrideEnabled !== undefined)
+    out.mileage_override_enabled = s.mileageOverrideEnabled;
   if (s.parkingFeePhp !== undefined) out.parking_fee_php = s.parkingFeePhp;
   if (s.tollSkywayPhp !== undefined) out.toll_skyway_php = s.tollSkywayPhp;
   if (s.tollSlexPhp !== undefined) out.toll_slex_php = s.tollSlexPhp;

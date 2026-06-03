@@ -4,6 +4,12 @@ export type LegName = "morning" | "evening";
 export interface CalcSettings {
   roundTripKm: number;
   mileageKmPerL: number;
+  /**
+   * When true, the manual mileage override takes priority over the measured
+   * rolling average. When false, the rolling average is preferred and the
+   * override is only used as a fallback when no rolling average exists yet.
+   */
+  mileageOverrideEnabled: boolean;
   parkingFeePhp: number;
   tollSkywayPhp: number;
   tollSlexPhp: number;
@@ -36,6 +42,7 @@ export interface LegBreakdown {
 export const DEFAULT_SETTINGS: CalcSettings = {
   roundTripKm: 42,
   mileageKmPerL: 10.5,
+  mileageOverrideEnabled: false,
   parkingFeePhp: 90,
   tollSkywayPhp: 164,
   tollSlexPhp: 124,

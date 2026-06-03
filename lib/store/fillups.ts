@@ -1,8 +1,9 @@
 "use client";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Fillup } from "@/lib/mileage";
+import { rollingMileage, type Fillup } from "@/lib/mileage";
 import { resilientFetch } from "@/lib/outbox";
+import { useSettings } from "@/lib/store/settings";
 
 interface FillupsStore {
   fillups: Fillup[];
@@ -34,7 +35,16 @@ export const useFillups = create<FillupsStore>()(
             ? crypto.randomUUID()
             : `${Date.now()}-${Math.random()}`;
         const optimistic: Fillup = { ...f, id };
+        const hadRolling = rollingMileage(get().fillups) != null;
         set((s) => ({ fillups: [...s.fillups, optimistic] }));
+        // Once a rolling average first becomes computable, the rolling figure
+        // takes over and the manual override is switched off automatically.
+        if (!hadRolling && rollingMileage(get().fillups) != null) {
+          const { settings, setSettings } = useSettings.getState();
+          if (settings.mileageOverrideEnabled) {
+            void setSettings({ mileageOverrideEnabled: false });
+          }
+        }
         try {
           const res = await resilientFetch("/api/fillups", {
             method: "POST",
