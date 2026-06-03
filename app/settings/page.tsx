@@ -7,8 +7,9 @@ import { useSettings } from "@/lib/store/settings";
 import { useRoster, type Passenger } from "@/lib/store/roster";
 import { useCars } from "@/lib/store/cars";
 import { useFillups } from "@/lib/store/fillups";
-import { rollingMileage } from "@/lib/mileage";
+import { rollingMileage, resolveEffectiveMileage } from "@/lib/mileage";
 import { PHP } from "@/components/PHP";
+import { Switch } from "@/components/Switch";
 import { useToast } from "@/components/Toast";
 import { EnablePushReminders } from "@/components/push/EnablePushReminders";
 import { ONBOARDING_START_EVENT } from "@/components/OnboardingTour";
@@ -36,9 +37,21 @@ export default function SettingsPage() {
     if (v != null) series.push(v);
   }
   const override = settings.mileageKmPerL;
+  const overrideEnabled = settings.mileageOverrideEnabled;
+  const hasOverride = override > 0;
+  const hasRolling = rolling != null && rolling > 0;
+  // The override is what actually drives trips when it's switched on, or when
+  // there's no rolling average to fall back to yet.
+  const overrideInEffect = hasOverride && (overrideEnabled || !hasRolling);
+  const effectiveMileage = resolveEffectiveMileage({
+    override,
+    overrideEnabled,
+    rollingAvg: rolling,
+  });
   const divergencePct =
     rolling && override ? Math.abs(override - rolling) / rolling : null;
-  const overrideOff = divergencePct != null && divergencePct > 0.15;
+  const overrideOff =
+    overrideInEffect && divergencePct != null && divergencePct > 0.15;
 
   async function handleAdd() {
     const name = newName.trim();
@@ -206,18 +219,36 @@ export default function SettingsPage() {
         {series.length >= 2 && (
           <Sparkline values={series} className="mt-1 mb-2" />
         )}
-        <div className="flex justify-between text-sm">
+        <div className="flex items-center justify-between text-sm mt-1">
           <span className="text-slate-500">Manual override</span>
-          <input
-            type="number"
-            step="0.01"
-            value={settings.mileageKmPerL || ""}
-            onChange={(e) =>
-              setSettings({ mileageKmPerL: parseFloat(e.target.value) || 0 })
-            }
-            className="w-24 border border-slate-300 rounded px-2 py-0.5 text-right"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              step="0.01"
+              placeholder="km/L"
+              value={settings.mileageKmPerL || ""}
+              onChange={(e) =>
+                setSettings({ mileageKmPerL: parseFloat(e.target.value) || 0 })
+              }
+              className="w-24 border border-slate-300 rounded px-2 py-0.5 text-right"
+            />
+            <Switch
+              checked={overrideEnabled}
+              disabled={!hasOverride}
+              label="Use manual override"
+              onChange={(next) => setSettings({ mileageOverrideEnabled: next })}
+            />
+          </div>
         </div>
+        <p className="text-xs text-slate-400 mt-1">
+          {overrideInEffect
+            ? `Using manual override — trips run at ${effectiveMileage.toFixed(2)} km/L.`
+            : hasRolling
+              ? `Using rolling average (${rolling!.toFixed(2)} km/L). Switch on to use the override${hasOverride ? "" : " once set"}.`
+              : hasOverride
+                ? `No rolling average yet — using the override (${override.toFixed(2)} km/L) until one is computed.`
+                : "Add an override value and switch it on to use it instead of the rolling average."}
+        </p>
         {overrideOff && (
           <div
             role="alert"
