@@ -72,7 +72,6 @@ export interface DbFillup {
 }
 
 export interface DbSettings {
-  id: number;
   group_id: string;
   mileage_kml_override: number | null;
   round_trip_km: number;
@@ -120,29 +119,6 @@ export interface DbTripPayment {
   amount_php: number;
   paid: boolean;
   paid_at: string | null;
-}
-
-export interface DbGroup {
-  id: string;
-  name: string;
-  owner_user_id: string;
-  created_at: string;
-}
-
-export interface DbMember {
-  group_id: string;
-  user_id: string;
-  role: "driver" | "passenger" | "both";
-  passenger_id: string | null;
-  created_at: string;
-}
-
-export interface DbProfile {
-  user_id: string;
-  display_name: string | null;
-  avatar_url: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 export type TripDisputeStatus = "open" | "resolved" | "dismissed";
