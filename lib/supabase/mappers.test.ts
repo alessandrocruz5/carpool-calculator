@@ -72,7 +72,6 @@ describe("passenger mapper", () => {
 describe("settings mappers", () => {
   it("falls back to default mileage when override is null", () => {
     const r = fromDbSettings({
-      id: 1,
       group_id: "g1",
       mileage_kml_override: null,
       round_trip_km: 42,
