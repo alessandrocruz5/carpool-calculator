@@ -70,7 +70,7 @@ describe("passenger mapper", () => {
 });
 
 describe("settings mappers", () => {
-  it("falls back to default mileage when override is null", () => {
+  it("reports no override (0) when mileage override is null", () => {
     const r = fromDbSettings({
       group_id: "g1",
       mileage_kml_override: null,
@@ -84,7 +84,9 @@ describe("settings mappers", () => {
       split_4p_driver: 16,
       updated_at: "x",
     });
-    expect(r.mileageKmPerL).toBe(10.5);
+    // 0 signals "no manual override" so callers fall back to the measured
+    // rolling average instead of masking it with the default.
+    expect(r.mileageKmPerL).toBe(0);
     expect(r.roundTripKm).toBe(42);
     expect(r.split2pDriver).toBe(25);
   });
@@ -96,6 +98,12 @@ describe("settings mappers", () => {
     expect(toDbSettingsPatch({ mileageKmPerL: 11.2, split1pDriver: 45 })).toEqual({
       mileage_kml_override: 11.2,
       split_1p_driver: 45,
+    });
+  });
+
+  it("clears the mileage override to NULL when set to 0", () => {
+    expect(toDbSettingsPatch({ mileageKmPerL: 0 })).toEqual({
+      mileage_kml_override: null,
     });
   });
 });
