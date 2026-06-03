@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const TRIP_SELECT =
   "id, date, parking_fee_php, notes, car_id, driver_user_id, gas_price_id, " +
-  "trip_legs(leg, route, trip_leg_riders(passenger_id))";
+  "trip_legs(leg, route, distance_km, trip_leg_riders(passenger_id))";
 
 export async function GET() {
   const supabase = await createClient();
