@@ -139,7 +139,7 @@ export async function POST(req: Request) {
         car_id: body.carId ?? null,
         driver_user_id: body.driverUserId ?? null,
       },
-      { onConflict: "date" }
+      { onConflict: "group_id,date" }
     )
     .select()
     .single();
