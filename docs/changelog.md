@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.5.0 — 2026-06-04
+
+Mileage override system overhaul
+
+- Added an explicit toggle to control whether the manual mileage override takes priority over the measured rolling average — the rolling average is preferred by default once fill-up data is available.
+- Introduced `resolveEffectiveMileage()` as the single source of truth for mileage resolution across the UI and trip-creation API, so payment splits always match what the settings screen displays.
+- Rolling average is now written back to the car record on every fill-up, so cost estimates stay current without requiring a page refresh.
+- The override is automatically disabled the first time a rolling average becomes computable, so users see real measured data by default.
+- Database migration adds `mileage_override_enabled` to the settings table.
+
+## 1.4.1 — 2026-06-03
+
+Constraint & migration fixes
+
+- Fixed trips and gas prices unique constraints to be scoped per group, preventing false conflicts when multiple groups share the same date.
+- Fixed gas price upsert to use the new group-scoped constraint.
+- Fixed three CRUD constraint bugs introduced by the per-leg distance migrations.
+- Reconciled migration filenames to match the live Supabase ledger timestamps (internal, no schema change).
+
+## 1.4.0 — 2026-06-02
+
+Per-leg distance tracking & navigation redesign
+
+- Each trip leg now carries its own distance, enabling accurate cost splits for asymmetric morning and evening routes. Existing trips are backfilled from the round-trip setting.
+- Distance input added to the trip UI for morning and evening legs independently.
+- Full navigation IA redesign: account, groups, members, and sign-out collapsed into a single account menu; bottom tabs now driven by a centralised `navConfig` with role-based filtering and Lucide icons.
+- Toast notifications upgraded with success, error, and info variants, improved animations, dismiss button, and proper ARIA attributes.
+- App rebranded from "Carpool Calculator" to "Sabay" across all page titles, metadata, and the PWA manifest.
+- "Manage cars" shortcut added to the settings page.
+
+## 1.3.1 — 2026-06-01
+
+Member management fixes
+
+- Linked passenger is now deactivated automatically when a member is removed from the group.
+- Passenger is deactivated when a member's role changes from passenger to driver.
+- Fixed field-reference errors in the audit log triggers for trips and trip legs.
+- Members list now shows the member's email address instead of a raw UUID.
+
 ## 1.3.0 — 2026-06-01
 
 Member visibility & group switching
