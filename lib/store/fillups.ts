@@ -4,6 +4,7 @@ import { persist } from "zustand/middleware";
 import { rollingMileage, type Fillup } from "@/lib/mileage";
 import { resilientFetch } from "@/lib/outbox";
 import { useSettings } from "@/lib/store/settings";
+import { useCars } from "@/lib/store/cars";
 
 interface FillupsStore {
   fillups: Fillup[];
@@ -43,6 +44,16 @@ export const useFillups = create<FillupsStore>()(
           const { settings, setSettings } = useSettings.getState();
           if (settings.mileageOverrideEnabled) {
             void setSettings({ mileageOverrideEnabled: false });
+          }
+        }
+        // Persist the car-specific rolling average back to the car record so
+        // every group that uses the same car sees the real measured efficiency.
+        if (f.carId) {
+          const carRolling = rollingMileage(get().fillups, 5, f.carId);
+          if (carRolling != null) {
+            void useCars.getState().update(f.carId, {
+              fuelEfficiencyKml: Math.round(carRolling * 1000) / 1000,
+            });
           }
         }
         try {
