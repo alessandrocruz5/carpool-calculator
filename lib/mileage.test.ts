@@ -45,12 +45,23 @@ describe("rollingMileage", () => {
 });
 
 describe("resolveEffectiveMileage", () => {
-  it("car efficiency always wins", () => {
+  it("enabled override wins over car efficiency", () => {
     expect(
       resolveEffectiveMileage({
         carEfficiency: 14,
         override: 12,
         overrideEnabled: true,
+        rollingAvg: 10,
+      })
+    ).toBe(12);
+  });
+
+  it("car efficiency wins when override is disabled", () => {
+    expect(
+      resolveEffectiveMileage({
+        carEfficiency: 14,
+        override: 12,
+        overrideEnabled: false,
         rollingAvg: 10,
       })
     ).toBe(14);
