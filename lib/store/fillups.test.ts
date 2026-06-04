@@ -4,6 +4,7 @@ import { installDomShim } from "@/lib/test/dom-shim";
 installDomShim();
 
 import { useFillups } from "./fillups";
+import { useCars } from "./cars";
 import type { Fillup } from "@/lib/mileage";
 
 const fetchMock = vi.fn();
@@ -29,6 +30,7 @@ const fillup: Fillup = {
 beforeEach(() => {
   fetchMock.mockReset();
   useFillups.setState({ fillups: [], hydrated: false });
+  useCars.setState({ cars: [], hydrated: false });
 });
 
 describe("fillups store", () => {
@@ -74,5 +76,36 @@ describe("fillups store", () => {
       .mockResolvedValueOnce(jsonResponse([fillup]));
     await useFillups.getState().remove("f1");
     expect(useFillups.getState().fillups).toEqual([fillup]);
+  });
+
+  it("writes rolling average back to car.fuelEfficiencyKml when a second fill-up for the same car arrives", async () => {
+    const first: Fillup = { id: "f0", carId: "c1", date: "2026-05-01", liters: 30, totalPhp: 2000, odometerKm: 12000 };
+    useFillups.setState({ fillups: [first], hydrated: true });
+    useCars.setState({
+      cars: [{ id: "c1", name: "Jazz", fuelEfficiencyKml: 10.5, tankSizeLiters: null, maxPassengers: null, ownerUserId: "u1" }],
+      hydrated: true,
+    });
+    // Both the fillup POST and the car PATCH return ok
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+    const { id: _drop, ...input } = {
+      id: "f1", carId: "c1", date: "2026-05-15", liters: 25, totalPhp: 1800, odometerKm: 12300,
+    };
+    void _drop;
+    await useFillups.getState().add(input);
+
+    // Rolling avg: (12300 - 12000) / 25 = 12 km/L — local state updated immediately
+    expect(useCars.getState().cars[0].fuelEfficiencyKml).toBe(12);
+
+    // PATCH /api/cars should have been called with the measured efficiency
+    await vi.waitFor(() => {
+      const carPatch = fetchMock.mock.calls.find(
+        ([url, init]) => url === "/api/cars" && (init as RequestInit).method === "PATCH"
+      );
+      expect(carPatch).toBeTruthy();
+      const body = JSON.parse((carPatch![1] as RequestInit).body as string);
+      expect(body.id).toBe("c1");
+      expect(body.fuelEfficiencyKml).toBe(12);
+    });
   });
 });

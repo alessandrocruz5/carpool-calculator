@@ -93,8 +93,8 @@ export default function TodayPage() {
   }, [members, existing, userId, driverUserId]);
 
   const selectedCar = cars.find((c) => c.id === carId);
-  // A chosen car resolves the trip's efficiency: its rated value first, then
-  // its measured rolling mileage, then the group setting / overall measured.
+  // A chosen car contributes its efficiency, but an enabled group-level override
+  // always beats even the car's own rated value.
   const carMeasured = carId ? rollingMileage(fillups, 5, carId) : null;
   const carEfficiency =
     selectedCar?.fuelEfficiencyKml || carMeasured || null;
