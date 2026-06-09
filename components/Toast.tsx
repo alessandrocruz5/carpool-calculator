@@ -1,5 +1,8 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
+
+type ToastVariant = "default" | "success" | "error" | "info";
 
 interface ToastAction {
   label: string;
@@ -11,10 +14,16 @@ interface ToastItem {
   message: string;
   action?: ToastAction;
   durationMs: number;
+  variant: ToastVariant;
 }
 
 interface ToastApi {
-  show: (opts: { message: string; action?: ToastAction; durationMs?: number }) => void;
+  show: (opts: {
+    message: string;
+    action?: ToastAction;
+    durationMs?: number;
+    variant?: ToastVariant;
+  }) => void;
 }
 
 const ToastContext = createContext<ToastApi | null>(null);
@@ -31,6 +40,32 @@ export function useToast(): ToastApi {
   return ctx;
 }
 
+const VARIANT_STYLES: Record<
+  ToastVariant,
+  { container: string; icon: React.ReactNode; accent: string }
+> = {
+  default: {
+    container: "bg-slate-900 text-white",
+    icon: <Info className="h-4 w-4 text-slate-300" aria-hidden />,
+    accent: "text-brand-300",
+  },
+  success: {
+    container: "bg-white text-slate-900 border border-emerald-200",
+    icon: <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />,
+    accent: "text-emerald-700",
+  },
+  error: {
+    container: "bg-white text-slate-900 border border-red-200",
+    icon: <AlertCircle className="h-4 w-4 text-red-600" aria-hidden />,
+    accent: "text-red-700",
+  },
+  info: {
+    container: "bg-white text-slate-900 border border-brand-500/30",
+    icon: <Info className="h-4 w-4 text-brand-600" aria-hidden />,
+    accent: "text-brand-700",
+  },
+};
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -45,12 +80,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const show = useCallback<ToastApi["show"]>(
-    ({ message, action, durationMs = 5000 }) => {
+    ({ message, action, durationMs = 5000, variant = "default" }) => {
       const id =
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random()}`;
-      setToasts((t) => [...t, { id, message, action, durationMs }]);
+      setToasts((t) => [...t, { id, message, action, durationMs, variant }]);
       const handle = setTimeout(() => dismiss(id), durationMs);
       timers.current.set(id, handle);
     },
@@ -68,26 +103,43 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ show }}>
       {children}
-      <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className="pointer-events-auto bg-slate-900 text-white text-sm rounded-lg shadow-lg px-4 py-2 flex items-center gap-3 min-w-[240px]"
-          >
-            <span className="flex-1">{t.message}</span>
-            {t.action && (
+      <div
+        className="fixed inset-x-0 bottom-20 z-50 flex flex-col items-center gap-2 px-4 pointer-events-none"
+        role="region"
+        aria-live="polite"
+        aria-label="Notifications"
+      >
+        {toasts.map((t) => {
+          const style = VARIANT_STYLES[t.variant];
+          return (
+            <div
+              key={t.id}
+              role="status"
+              className={`pointer-events-auto w-full max-w-sm rounded-xl shadow-lg ring-1 ring-black/5 px-4 py-3 flex items-center gap-3 text-sm animate-in fade-in slide-in-from-bottom-2 duration-200 ${style.container}`}
+            >
+              <span className="shrink-0">{style.icon}</span>
+              <span className="flex-1 leading-snug">{t.message}</span>
+              {t.action && (
+                <button
+                  onClick={() => {
+                    t.action!.onClick();
+                    dismiss(t.id);
+                  }}
+                  className={`text-xs font-semibold underline underline-offset-2 ${style.accent}`}
+                >
+                  {t.action.label}
+                </button>
+              )}
               <button
-                onClick={() => {
-                  t.action!.onClick();
-                  dismiss(t.id);
-                }}
-                className="text-brand-300 underline text-xs font-medium"
+                onClick={() => dismiss(t.id)}
+                aria-label="Dismiss"
+                className="shrink-0 rounded-md p-0.5 opacity-60 hover:opacity-100 transition-opacity"
               >
-                {t.action.label}
+                <X className="h-4 w-4" aria-hidden />
               </button>
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );

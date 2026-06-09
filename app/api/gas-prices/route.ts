@@ -38,7 +38,7 @@ export async function POST(req: Request) {
         effective_date: date,
         price_per_liter: body.price,
       },
-      { onConflict: "effective_date" }
+      { onConflict: "group_id,effective_date" }
     )
     .select()
     .single();

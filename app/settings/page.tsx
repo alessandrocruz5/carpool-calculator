@@ -1,11 +1,15 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
+import { Car as CarIcon, ChevronRight } from "lucide-react";
 import dayjs from "dayjs";
 import { useSettings } from "@/lib/store/settings";
 import { useRoster, type Passenger } from "@/lib/store/roster";
+import { useCars } from "@/lib/store/cars";
 import { useFillups } from "@/lib/store/fillups";
-import { rollingMileage } from "@/lib/mileage";
+import { rollingMileage, resolveEffectiveMileage } from "@/lib/mileage";
 import { PHP } from "@/components/PHP";
+import { Switch } from "@/components/Switch";
 import { useToast } from "@/components/Toast";
 import { EnablePushReminders } from "@/components/push/EnablePushReminders";
 import { ONBOARDING_START_EVENT } from "@/components/OnboardingTour";
@@ -13,11 +17,13 @@ import { ONBOARDING_START_EVENT } from "@/components/OnboardingTour";
 export default function SettingsPage() {
   const { settings, setSettings } = useSettings();
   const { passengers, add, remove, toggleActive } = useRoster();
+  const { cars } = useCars();
   const { fillups, add: addFillup, remove: removeFillup } = useFillups();
   const toast = useToast();
   const [newName, setNewName] = useState("");
 
   const [fillupDate, setFillupDate] = useState(dayjs().format("YYYY-MM-DD"));
+  const [fillupCarId, setFillupCarId] = useState("");
   const [liters, setLiters] = useState("");
   const [total, setTotal] = useState("");
   const [odo, setOdo] = useState("");
@@ -31,9 +37,21 @@ export default function SettingsPage() {
     if (v != null) series.push(v);
   }
   const override = settings.mileageKmPerL;
+  const overrideEnabled = settings.mileageOverrideEnabled;
+  const hasOverride = override > 0;
+  const hasRolling = rolling != null && rolling > 0;
+  // The override is what actually drives trips when it's switched on, or when
+  // there's no rolling average to fall back to yet.
+  const overrideInEffect = hasOverride && (overrideEnabled || !hasRolling);
+  const effectiveMileage = resolveEffectiveMileage({
+    override,
+    overrideEnabled,
+    rollingAvg: rolling,
+  });
   const divergencePct =
     rolling && override ? Math.abs(override - rolling) / rolling : null;
-  const overrideOff = divergencePct != null && divergencePct > 0.15;
+  const overrideOff =
+    overrideInEffect && divergencePct != null && divergencePct > 0.15;
 
   async function handleAdd() {
     const name = newName.trim();
@@ -68,9 +86,12 @@ export default function SettingsPage() {
     }
   }
 
+  const selectedCarId = fillupCarId || cars[0]?.id || "";
+
   function submitFillup() {
-    if (!liters || !total || !odo) return;
+    if (!liters || !total || !odo || !selectedCarId) return;
     addFillup({
+      carId: selectedCarId,
       date: fillupDate,
       liters: parseFloat(liters),
       totalPhp: parseFloat(total),
@@ -84,6 +105,17 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Settings</h1>
+
+      <Link
+        href="/cars"
+        className="flex items-center justify-between bg-white rounded-xl border border-slate-200 p-4 hover:border-brand-500 transition-colors"
+      >
+        <span className="flex items-center gap-2 font-medium">
+          <CarIcon className="h-5 w-5 text-slate-400" aria-hidden />
+          Manage cars
+        </span>
+        <ChevronRight className="h-5 w-5 text-slate-400" aria-hidden />
+      </Link>
 
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <h2 className="font-semibold">Roster</h2>
@@ -168,6 +200,12 @@ export default function SettingsPage() {
           onChange={(v) => setSettings({ split3pDriver: v })}
           integer
         />
+        <Field
+          label="4 passengers"
+          value={settings.split4pDriver}
+          onChange={(v) => setSettings({ split4pDriver: v })}
+          integer
+        />
       </section>
 
       <section className="bg-white rounded-xl border border-slate-200 p-4">
@@ -181,18 +219,36 @@ export default function SettingsPage() {
         {series.length >= 2 && (
           <Sparkline values={series} className="mt-1 mb-2" />
         )}
-        <div className="flex justify-between text-sm">
+        <div className="flex items-center justify-between text-sm mt-1">
           <span className="text-slate-500">Manual override</span>
-          <input
-            type="number"
-            step="0.01"
-            value={settings.mileageKmPerL || ""}
-            onChange={(e) =>
-              setSettings({ mileageKmPerL: parseFloat(e.target.value) || 0 })
-            }
-            className="w-24 border border-slate-300 rounded px-2 py-0.5 text-right"
-          />
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              step="0.01"
+              placeholder="km/L"
+              value={settings.mileageKmPerL || ""}
+              onChange={(e) =>
+                setSettings({ mileageKmPerL: parseFloat(e.target.value) || 0 })
+              }
+              className="w-24 border border-slate-300 rounded px-2 py-0.5 text-right"
+            />
+            <Switch
+              checked={overrideEnabled}
+              disabled={!hasOverride}
+              label="Use manual override"
+              onChange={(next) => setSettings({ mileageOverrideEnabled: next })}
+            />
+          </div>
         </div>
+        <p className="text-xs text-slate-400 mt-1">
+          {overrideInEffect
+            ? `Using manual override — trips run at ${effectiveMileage.toFixed(2)} km/L.`
+            : hasRolling
+              ? `Using rolling average (${rolling!.toFixed(2)} km/L). Switch on to use the override${hasOverride ? "" : " once set"}.`
+              : hasOverride
+                ? `No rolling average yet — using the override (${override.toFixed(2)} km/L) until one is computed.`
+                : "Add an override value and switch it on to use it instead of the rolling average."}
+        </p>
         {overrideOff && (
           <div
             role="alert"
@@ -209,6 +265,26 @@ export default function SettingsPage() {
 
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <h2 className="font-semibold">Log fill-up</h2>
+        {cars.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            Add a car first to log a fill-up.
+          </p>
+        ) : (
+          <label className="block text-sm">
+            <span className="text-slate-600">Car</span>
+            <select
+              value={selectedCarId}
+              onChange={(e) => setFillupCarId(e.target.value)}
+              className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2"
+            >
+              {cars.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="block text-sm">
           <span className="text-slate-600">Date</span>
           <input
@@ -250,7 +326,8 @@ export default function SettingsPage() {
         </label>
         <button
           onClick={submitFillup}
-          className="w-full bg-brand-600 text-white rounded-lg px-3 py-2 font-medium"
+          disabled={!selectedCarId}
+          className="w-full bg-brand-600 text-white rounded-lg px-3 py-2 font-medium disabled:opacity-50"
         >
           Add fill-up
         </button>

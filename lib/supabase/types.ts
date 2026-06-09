@@ -21,6 +21,7 @@ export interface DbCar {
   name: string;
   fuel_efficiency_kml: number | null;
   tank_size_liters: number | null;
+  max_passengers: number | null;
   created_at: string;
 }
 
@@ -71,9 +72,9 @@ export interface DbFillup {
 }
 
 export interface DbSettings {
-  id: number;
   group_id: string;
   mileage_kml_override: number | null;
+  mileage_override_enabled: boolean;
   round_trip_km: number;
   parking_fee_php: number;
   toll_skyway_php: number;
@@ -81,6 +82,7 @@ export interface DbSettings {
   split_1p_driver: number;
   split_2p_driver: number;
   split_3p_driver: number;
+  split_4p_driver: number;
   updated_at: string;
 }
 
@@ -102,6 +104,7 @@ export interface DbTripLeg {
   trip_id: string;
   leg: "morning" | "evening";
   route: "skyway" | "slex";
+  distance_km: number;
 }
 
 export interface DbTripLegRider {
@@ -117,29 +120,6 @@ export interface DbTripPayment {
   amount_php: number;
   paid: boolean;
   paid_at: string | null;
-}
-
-export interface DbGroup {
-  id: string;
-  name: string;
-  owner_user_id: string;
-  created_at: string;
-}
-
-export interface DbMember {
-  group_id: string;
-  user_id: string;
-  role: "driver" | "passenger" | "both";
-  passenger_id: string | null;
-  created_at: string;
-}
-
-export interface DbProfile {
-  user_id: string;
-  display_name: string | null;
-  avatar_url: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 export type TripDisputeStatus = "open" | "resolved" | "dismissed";

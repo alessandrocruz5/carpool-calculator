@@ -37,12 +37,12 @@ export default function GroupsPage() {
       setGroups(data);
       // Single group with no active cookie: switch silently and go to dashboard.
       if (data.length === 1 && !data[0].isActive) {
-        await fetch("/api/groups/switch", {
+        const switchRes = await fetch("/api/groups/switch", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ groupId: data[0].id }),
         });
-        window.location.assign("/");
+        if (switchRes.ok) window.location.assign("/");
       }
     } catch (err) {
       console.error("groups load failed", err);

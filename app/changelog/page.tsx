@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getChangelog } from "@/lib/changelog";
 
 export const metadata: Metadata = {
-  title: "Changelog — Carpool Calculator",
+  title: "Changelog — Sabay",
 };
 
 interface Block {
@@ -57,7 +57,7 @@ export default function ChangelogPage() {
       <header>
         <h1 className="text-2xl font-semibold">Changelog</h1>
         <p className="text-sm text-slate-600">
-          A running list of notable changes to Carpool Calculator.
+          A running list of notable changes to Sabay.
         </p>
       </header>
 

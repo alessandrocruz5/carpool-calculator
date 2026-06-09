@@ -10,6 +10,20 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => supaState.current!.client),
 }));
 
+const adminEmails: { current: Record<string, string | null> } = { current: {} };
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(() => ({
+    auth: {
+      admin: {
+        getUserById: vi.fn(async (id: string) => ({
+          data: { user: { email: adminEmails.current[id] ?? null } },
+          error: null,
+        })),
+      },
+    },
+  })),
+}));
+
 vi.mock("@/lib/auth/activeGroup", () => ({
   ACTIVE_GROUP_COOKIE: "carpool-group",
   getActiveGroupId: vi.fn(async () => groupState.id),
@@ -52,21 +66,69 @@ const row = {
 beforeEach(() => {
   supaState.current = null;
   groupState.id = "g1";
+  adminEmails.current = {};
 });
 
 describe("GET /api/members", () => {
-  it("returns mapped members of the active group", async () => {
-    setSupa({ tables: { members: [{ data: [row], error: null }] } });
+  it("returns members enriched with displayName, email, and isSelf", async () => {
+    adminEmails.current = { u2: "bob@test.com" };
+    setSupa({
+      auth: { userId: "u1", email: "driver@test.com" },
+      tables: {
+        members: [{ data: [row], error: null }],
+        profiles: [{ data: [{ user_id: "u2", display_name: "Bob" }], error: null }],
+      },
+    });
     const res = await GET();
     expect(await res.json()).toEqual([
-      {
+      expect.objectContaining({
         userId: "u2",
         groupId: "g1",
         role: "passenger",
         passengerId: null,
         createdAt: "x",
-      },
+        displayName: "Bob",
+        email: "bob@test.com",   // fetched for all members
+        isSelf: false,
+      }),
     ]);
+  });
+
+  it("shows email for members with no profile instead of a raw id", async () => {
+    adminEmails.current = { u2: "noprofile@test.com" };
+    setSupa({
+      auth: { userId: "u1", email: "driver@test.com" },
+      tables: {
+        members: [{ data: [row], error: null }],
+        profiles: [{ data: [], error: null }],
+      },
+    });
+    const res = await GET();
+    expect((await res.json())[0]).toMatchObject({
+      userId: "u2",
+      displayName: null,
+      email: "noprofile@test.com",
+      isSelf: false,
+    });
+  });
+
+  it("marks isSelf and exposes email for the current user", async () => {
+    const selfRow = { ...row, user_id: "u1" };
+    setSupa({
+      auth: { userId: "u1", email: "me@test.com" },
+      tables: {
+        members: [{ data: [selfRow], error: null }],
+        profiles: [{ data: [{ user_id: "u1", display_name: "Me" }], error: null }],
+      },
+    });
+    const res = await GET();
+    const body = await res.json();
+    expect(body[0]).toMatchObject({
+      userId: "u1",
+      isSelf: true,
+      email: "me@test.com",
+      displayName: "Me",
+    });
   });
 
   it("returns empty when no active group", async () => {
@@ -141,7 +203,8 @@ describe("DELETE /api/members", () => {
       tables: {
         members: [
           { data: { role: "driver" }, error: null },
-          { data: [{ user_id: "u1", role: "driver" }], error: null },
+          { data: { role: "driver", passenger_id: null }, error: null },
+          { data: [{ user_id: "u1" }], error: null },
         ],
       },
     });
@@ -156,13 +219,7 @@ describe("DELETE /api/members", () => {
       tables: {
         members: [
           { data: { role: "driver" }, error: null },
-          {
-            data: [
-              { user_id: "u1", role: "driver" },
-              { user_id: "u2", role: "passenger" },
-            ],
-            error: null,
-          },
+          { data: { role: "passenger", passenger_id: null }, error: null },
           { data: null, error: null },
         ],
       },

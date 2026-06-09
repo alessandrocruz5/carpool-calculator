@@ -20,6 +20,7 @@ const carRow = {
   name: "Civic",
   fuel_efficiency_kml: 12.5,
   tank_size_liters: 45,
+  max_passengers: null,
   created_at: "x",
 };
 
@@ -39,6 +40,7 @@ describe("GET /api/cars", () => {
         name: "Civic",
         fuelEfficiencyKml: 12.5,
         tankSizeLiters: 45,
+        maxPassengers: null,
       },
     ]);
     const eqArgs = supa

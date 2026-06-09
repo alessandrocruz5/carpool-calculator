@@ -39,6 +39,8 @@ export function makeBuilder(getResult: () => QueryResult, calls: BuilderCall[] =
 export interface AuthState {
   /** when null/undefined, getClaims returns no user (unauthenticated) */
   userId?: string | null;
+  /** email for the authenticated user */
+  email?: string | null;
   /** role row returned for the members lookup. null = not a member */
   member?: { role: string; group_id?: string } | null;
 }
@@ -96,6 +98,15 @@ export function makeSupabase(opts: {
     return { data: { claims: { sub: auth.userId } } };
   });
 
+  const getUser = vi.fn(async () => {
+    if (auth.userId == null) return { data: { user: null } };
+    return {
+      data: {
+        user: { id: auth.userId, email: auth.email ?? `${auth.userId}@test.com` },
+      },
+    };
+  });
+
   const rpcMock = vi.fn((name: string, args?: unknown) => {
     rpcLog.push({ name, args });
     return makeBuilder(() => {
@@ -107,7 +118,7 @@ export function makeSupabase(opts: {
 
   return {
     client: {
-      auth: { getClaims },
+      auth: { getClaims, getUser },
       from: fromMock,
       rpc: rpcMock,
     },

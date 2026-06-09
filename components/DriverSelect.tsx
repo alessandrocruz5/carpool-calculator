@@ -30,7 +30,7 @@ export function DriverSelect({
       <option value="">— pick a driver —</option>
       {drivers.map((m) => (
         <option key={m.userId} value={m.userId}>
-          {m.userId === currentUserId ? "You" : m.userId}
+          {m.userId === currentUserId ? "You" : (m.displayName ?? m.userId)}
         </option>
       ))}
     </select>

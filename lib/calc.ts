@@ -4,24 +4,33 @@ export type LegName = "morning" | "evening";
 export interface CalcSettings {
   roundTripKm: number;
   mileageKmPerL: number;
+  /**
+   * When true, the manual mileage override takes priority over the measured
+   * rolling average. When false, the rolling average is preferred and the
+   * override is only used as a fallback when no rolling average exists yet.
+   */
+  mileageOverrideEnabled: boolean;
   parkingFeePhp: number;
   tollSkywayPhp: number;
   tollSlexPhp: number;
   split1pDriver: number;
   split2pDriver: number;
   split3pDriver: number;
+  split4pDriver: number;
 }
 
 export interface LegInput {
   leg: LegName;
   route: Route;
   passengerCount: number;
+  distanceKm: number;
 }
 
 export interface LegBreakdown {
   leg: LegName;
   route: Route;
   passengerCount: number;
+  distanceKm: number;
   gasCost: number;
   tollCost: number;
   parkingCost: number;
@@ -33,12 +42,14 @@ export interface LegBreakdown {
 export const DEFAULT_SETTINGS: CalcSettings = {
   roundTripKm: 42,
   mileageKmPerL: 10.5,
+  mileageOverrideEnabled: false,
   parkingFeePhp: 90,
   tollSkywayPhp: 164,
   tollSlexPhp: 124,
   split1pDriver: 40,
   split2pDriver: 25,
   split3pDriver: 19,
+  split4pDriver: 16,
 };
 
 export function round2(n: number): number {
@@ -49,7 +60,9 @@ export function driverRatio(passengerCount: number, settings: CalcSettings): num
   if (passengerCount <= 0) return 1;
   if (passengerCount === 1) return settings.split1pDriver / 100;
   if (passengerCount === 2) return settings.split2pDriver / 100;
-  return settings.split3pDriver / 100;
+  if (passengerCount === 3) return settings.split3pDriver / 100;
+  if (passengerCount === 4) return settings.split4pDriver / 100;
+  return settings.split4pDriver / 100;
 }
 
 export function calcLeg(
@@ -57,7 +70,7 @@ export function calcLeg(
   gasPricePhpPerL: number,
   settings: CalcSettings
 ): LegBreakdown {
-  const distance = settings.roundTripKm / 2;
+  const distance = input.distanceKm;
   const gasCost = (distance / settings.mileageKmPerL) * gasPricePhpPerL;
   const tollCost = input.route === "skyway" ? settings.tollSkywayPhp : settings.tollSlexPhp;
   const parkingCost = input.leg === "morning" ? settings.parkingFeePhp : 0;
@@ -72,6 +85,7 @@ export function calcLeg(
     leg: input.leg,
     route: input.route,
     passengerCount: input.passengerCount,
+    distanceKm: input.distanceKm,
     gasCost: round2(gasCost),
     tollCost: round2(tollCost),
     parkingCost: round2(parkingCost),
@@ -84,8 +98,8 @@ export function calcLeg(
 export interface DayInput {
   date: string;
   gasPricePhpPerL: number;
-  morning: { route: Route; passengerIds: string[] };
-  evening: { route: Route; passengerIds: string[] };
+  morning: { route: Route; passengerIds: string[]; distanceKm: number };
+  evening: { route: Route; passengerIds: string[]; distanceKm: number };
 }
 
 export interface DayBreakdown {
@@ -98,12 +112,12 @@ export interface DayBreakdown {
 
 export function calcDay(input: DayInput, settings: CalcSettings): DayBreakdown {
   const morning = calcLeg(
-    { leg: "morning", route: input.morning.route, passengerCount: input.morning.passengerIds.length },
+    { leg: "morning", route: input.morning.route, passengerCount: input.morning.passengerIds.length, distanceKm: input.morning.distanceKm },
     input.gasPricePhpPerL,
     settings
   );
   const evening = calcLeg(
-    { leg: "evening", route: input.evening.route, passengerCount: input.evening.passengerIds.length },
+    { leg: "evening", route: input.evening.route, passengerCount: input.evening.passengerIds.length, distanceKm: input.evening.distanceKm },
     input.gasPricePhpPerL,
     settings
   );

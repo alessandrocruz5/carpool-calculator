@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fromDbTrip, fromDbSettings, type DbTripWithLegs } from "@/lib/supabase/mappers";
+import {
+  fromDbTrip,
+  fromDbSettings,
+  fromDbFillup,
+  type DbTripWithLegs,
+} from "@/lib/supabase/mappers";
 import type { StoredTrip } from "@/lib/store/trips";
-import type { DbGasPrice, DbSettings } from "@/lib/supabase/types";
+import type { DbGasPrice, DbSettings, DbFillup } from "@/lib/supabase/types";
 import { calcDay, DEFAULT_SETTINGS } from "@/lib/calc";
+import { rollingMileage, resolveEffectiveMileage } from "@/lib/mileage";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
 
@@ -11,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 const TRIP_SELECT =
   "id, date, parking_fee_php, notes, car_id, driver_user_id, gas_price_id, " +
-  "trip_legs(leg, route, trip_leg_riders(passenger_id))";
+  "trip_legs(leg, route, distance_km, trip_leg_riders(passenger_id))";
 
 export async function GET() {
   const supabase = await createClient();
@@ -52,6 +58,13 @@ export async function POST(req: Request) {
   if (!denied.ok) return denied.response;
   const groupId = group.groupId;
   const body = (await req.json()) as StoredTrip;
+
+  if (!(body.morning.distanceKm > 0) || !(body.evening.distanceKm > 0)) {
+    return NextResponse.json(
+      { error: "distance_km must be positive for both legs" },
+      { status: 400 }
+    );
+  }
 
   // When a car/driver is attached, validate ownership + group membership and
   // resolve the car's fuel efficiency for the cost calculation below.
@@ -132,7 +145,7 @@ export async function POST(req: Request) {
         car_id: body.carId ?? null,
         driver_user_id: body.driverUserId ?? null,
       },
-      { onConflict: "date" }
+      { onConflict: "group_id,date" }
     )
     .select()
     .single();
@@ -148,8 +161,8 @@ export async function POST(req: Request) {
   if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
 
   const legsToInsert = [
-    { group_id: groupId, trip_id: tripId, leg: "morning" as const, route: body.morning.route },
-    { group_id: groupId, trip_id: tripId, leg: "evening" as const, route: body.evening.route },
+    { group_id: groupId, trip_id: tripId, leg: "morning" as const, route: body.morning.route, distance_km: body.morning.distanceKm },
+    { group_id: groupId, trip_id: tripId, leg: "evening" as const, route: body.evening.route, distance_km: body.evening.distanceKm },
   ];
   const { data: legRows, error: legErr } = await supabase
     .from("trip_legs")
@@ -191,22 +204,33 @@ export async function POST(req: Request) {
   const baseSettings = settingsRow
     ? fromDbSettings(settingsRow as DbSettings)
     : DEFAULT_SETTINGS;
-  // The chosen car's measured efficiency takes precedence over the group
-  // settings override; calc's signature is unchanged.
-  const calcSettings =
-    carMileageKmPerL != null && carMileageKmPerL > 0
-      ? { ...baseSettings, mileageKmPerL: carMileageKmPerL }
-      : baseSettings;
-  if (!(calcSettings.mileageKmPerL > 0)) {
-    calcSettings.mileageKmPerL = DEFAULT_SETTINGS.mileageKmPerL;
-  }
+  // Resolve the effective mileage with the same precedence as the trip UI so
+  // the saved payment split matches what the user sees:
+  // car rated → car measured → manual override → overall rolling avg → default.
+  const { data: fillupRows } = await supabase
+    .from("fillups")
+    .select("*")
+    .eq("group_id", groupId);
+  const fillups = (fillupRows ?? []).map((f) => fromDbFillup(f as DbFillup));
+  const carMeasured = body.carId ? rollingMileage(fillups, 5, body.carId) : null;
+  const overallRolling = rollingMileage(fillups);
+  const carEfficiency =
+    carMileageKmPerL != null && carMileageKmPerL > 0 ? carMileageKmPerL : carMeasured;
+  const effectiveMileage = resolveEffectiveMileage({
+    carEfficiency,
+    override: baseSettings.mileageKmPerL,
+    overrideEnabled: baseSettings.mileageOverrideEnabled,
+    rollingAvg: overallRolling,
+    fallback: DEFAULT_SETTINGS.mileageKmPerL,
+  });
+  const calcSettings = { ...baseSettings, mileageKmPerL: effectiveMileage };
 
   const breakdown = calcDay(
     {
       date: body.date,
       gasPricePhpPerL: body.gasPrice,
-      morning: body.morning,
-      evening: body.evening,
+      morning: { ...body.morning, distanceKm: body.morning.distanceKm },
+      evening: { ...body.evening, distanceKm: body.evening.distanceKm },
     },
     calcSettings
   );

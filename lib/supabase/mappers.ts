@@ -25,6 +25,7 @@ export interface Car {
   name: string;
   fuelEfficiencyKml: number | null;
   tankSizeLiters: number | null;
+  maxPassengers: number | null;
 }
 
 export function toDbGroupInsert(
@@ -49,6 +50,7 @@ export function fromDbCar(r: DbCar): Car {
     name: r.name,
     fuelEfficiencyKml: r.fuel_efficiency_kml != null ? Number(r.fuel_efficiency_kml) : null,
     tankSizeLiters: r.tank_size_liters != null ? Number(r.tank_size_liters) : null,
+    maxPassengers: r.max_passengers != null ? Number(r.max_passengers) : null,
   };
 }
 
@@ -60,6 +62,7 @@ export function toDbCarInsert(
     name: c.name,
     fuel_efficiency_kml: c.fuelEfficiencyKml,
     tank_size_liters: c.tankSizeLiters,
+    max_passengers: c.maxPassengers ?? null,
   };
 }
 
@@ -110,6 +113,7 @@ export function fromDbMember(r: DbMember): Member {
     role: r.role,
     passengerId: r.passenger_id,
     createdAt: r.created_at,
+    displayName: null,
   };
 }
 
@@ -125,16 +129,20 @@ export function fromDbSettings(r: DbSettings): CalcSettings {
 
   return {
     roundTripKm: Number(r.round_trip_km),
+    // 0 means "no manual override" so callers can fall back to the measured
+    // rolling average; only a positive stored value is treated as an override.
     mileageKmPerL:
       r.mileage_kml_override != null && Number(r.mileage_kml_override) > 0
         ? Number(r.mileage_kml_override)
-        : DEFAULT_SETTINGS.mileageKmPerL,
+        : 0,
+    mileageOverrideEnabled: r.mileage_override_enabled ?? false,
     parkingFeePhp: Number(r.parking_fee_php),
     tollSkywayPhp: Number(r.toll_skyway_php),
     tollSlexPhp: Number(r.toll_slex_php),
     split1pDriver: r.split_1p_driver,
     split2pDriver: r.split_2p_driver,
     split3pDriver: r.split_3p_driver,
+    split4pDriver: r.split_4p_driver ?? DEFAULT_SETTINGS.split4pDriver,
   };
 }
 
@@ -143,13 +151,18 @@ export function toDbSettingsPatch(
 ): Partial<Omit<DbSettings, "id" | "updated_at">> {
   const out: Partial<Omit<DbSettings, "id" | "updated_at">> = {};
   if (s.roundTripKm !== undefined) out.round_trip_km = s.roundTripKm;
-  if (s.mileageKmPerL !== undefined) out.mileage_kml_override = s.mileageKmPerL;
+  // Store a cleared/zero override as NULL so it reads back as "no override".
+  if (s.mileageKmPerL !== undefined)
+    out.mileage_kml_override = s.mileageKmPerL > 0 ? s.mileageKmPerL : null;
+  if (s.mileageOverrideEnabled !== undefined)
+    out.mileage_override_enabled = s.mileageOverrideEnabled;
   if (s.parkingFeePhp !== undefined) out.parking_fee_php = s.parkingFeePhp;
   if (s.tollSkywayPhp !== undefined) out.toll_skyway_php = s.tollSkywayPhp;
   if (s.tollSlexPhp !== undefined) out.toll_slex_php = s.tollSlexPhp;
   if (s.split1pDriver !== undefined) out.split_1p_driver = s.split1pDriver;
   if (s.split2pDriver !== undefined) out.split_2p_driver = s.split2pDriver;
   if (s.split3pDriver !== undefined) out.split_3p_driver = s.split3pDriver;
+  if (s.split4pDriver !== undefined) out.split_4p_driver = s.split4pDriver;
   return out;
 }
 
@@ -180,10 +193,12 @@ export function fromDbTrip(r: DbTripWithLegs, gasPrice: number): StoredTrip {
     morning: {
       route: morning?.route ?? "skyway",
       passengerIds: morning?.trip_leg_riders.map((x) => x.passenger_id) ?? [],
+      distanceKm: Number(morning?.distance_km ?? 21),
     },
     evening: {
       route: evening?.route ?? "skyway",
       passengerIds: evening?.trip_leg_riders.map((x) => x.passenger_id) ?? [],
+      distanceKm: Number(evening?.distance_km ?? 21),
     },
     notes: r.notes ?? undefined,
   };

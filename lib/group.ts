@@ -2,6 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getRequestUserId } from "@/lib/auth/claims";
 
 export const GROUP_COOKIE = "carpool-group";
 
@@ -13,8 +14,7 @@ export const GROUP_COOKIE = "carpool-group";
 export async function getActiveGroupId(
   supabase: SupabaseClient
 ): Promise<string> {
-  const { data: claims } = await supabase.auth.getClaims();
-  const userId = (claims?.claims as { sub?: string } | undefined)?.sub;
+  const userId = await getRequestUserId(supabase);
   if (!userId) throw new Error("not authenticated");
 
   const cookieStore = await cookies();

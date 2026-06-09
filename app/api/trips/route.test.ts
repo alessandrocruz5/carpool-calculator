@@ -19,8 +19,8 @@ const baseTrip = {
   date: "2026-05-13",
   gasPrice: 65.5,
   parkingFee: 90,
-  morning: { route: "skyway" as const, passengerIds: ["p1"] },
-  evening: { route: "slex" as const, passengerIds: ["p1"] },
+  morning: { route: "skyway" as const, passengerIds: ["p1"], distanceKm: 21 },
+  evening: { route: "slex" as const, passengerIds: ["p1"], distanceKm: 21 },
   notes: null,
 };
 

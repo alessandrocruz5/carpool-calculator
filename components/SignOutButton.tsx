@@ -28,7 +28,13 @@ async function unsubscribePush() {
   }
 }
 
-export function SignOutButton({ className }: { className?: string }) {
+export function SignOutButton({
+  className,
+  children,
+}: {
+  className?: string;
+  children?: React.ReactNode;
+}) {
   const formRef = useRef<HTMLFormElement>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -45,7 +51,7 @@ export function SignOutButton({ className }: { className?: string }) {
       onSubmit={onSubmit}
     >
       <button type="submit" className={className ?? "hover:underline"}>
-        Sign out
+        {children ?? "Sign out"}
       </button>
     </form>
   );

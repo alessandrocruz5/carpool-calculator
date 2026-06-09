@@ -21,9 +21,9 @@ export default function InstallPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Install Carpool</h1>
+      <h1 className="text-xl font-semibold">Install Sabay</h1>
       <p className="text-sm text-slate-600">
-        Installing puts Carpool on your home screen and lets it run full-screen
+        Installing puts Sabay on your home screen and lets it run full-screen
         with offline support.
       </p>
 

@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MemberRole } from "@/lib/supabase/types";
+import { getRequestUserId } from "@/lib/auth/claims";
 
 export type GroupAuthCheck =
   | { ok: true; userId: string; role: MemberRole }
@@ -14,8 +15,7 @@ export type UserCheck =
 export type SimpleAuth = UserCheck;
 
 async function getUserId(supabase: SupabaseClient): Promise<string | null> {
-  const { data } = await supabase.auth.getClaims();
-  return (data?.claims as { sub?: string } | undefined)?.sub ?? null;
+  return getRequestUserId(supabase);
 }
 
 function unauthorized(): { ok: false; response: NextResponse } {

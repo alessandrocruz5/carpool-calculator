@@ -37,7 +37,7 @@ export function InstallBanner() {
   return (
     <div className="bg-brand-50 border-b border-brand-200 text-brand-900 text-xs px-3 py-1.5 flex items-center justify-between gap-3">
       <span>
-        Install Carpool to your home screen for quicker access.{" "}
+        Install Sabay to your home screen for quicker access.{" "}
         <Link href="/install" className="underline font-medium" onClick={dismiss}>
           How
         </Link>

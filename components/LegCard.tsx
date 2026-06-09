@@ -8,6 +8,7 @@ import { PHP } from "./PHP";
 export interface LegState {
   route: Route;
   passengerIds: string[];
+  distanceKm: number;
 }
 
 export function LegCard({
@@ -18,6 +19,7 @@ export function LegCard({
   gasPrice,
   settings,
   readOnly = false,
+  maxPassengers,
 }: {
   leg: LegName;
   state: LegState;
@@ -26,11 +28,12 @@ export function LegCard({
   gasPrice: number;
   settings: CalcSettings;
   readOnly?: boolean;
+  maxPassengers?: number | null;
 }) {
   const breakdown: LegBreakdown = useMemo(
     () =>
       calcLeg(
-        { leg, route: state.route, passengerCount: state.passengerIds.length },
+        { leg, route: state.route, passengerCount: state.passengerIds.length, distanceKm: state.distanceKm },
         gasPrice,
         settings
       ),
@@ -44,17 +47,36 @@ export function LegCard({
         <RouteToggle value={state.route} onChange={(r) => onChange({ ...state, route: r })} readOnly={readOnly} />
       </div>
 
+      <label className="flex items-center justify-between text-sm">
+        <span className="text-slate-500">Distance (km)</span>
+        <input
+          type="number"
+          step="0.1"
+          inputMode="decimal"
+          value={state.distanceKm}
+          onChange={(e) => onChange({ ...state, distanceKm: Number(e.target.value) })}
+          disabled={readOnly}
+          className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-24 text-right disabled:bg-slate-50 disabled:text-slate-500"
+        />
+      </label>
+
       <div>
-        <p className="text-xs text-slate-500 mb-2">Passengers ({state.passengerIds.length}{readOnly ? "" : "/3"})</p>
+        <p className="text-xs text-slate-500 mb-2">
+          Passengers ({state.passengerIds.length}
+          {!readOnly && maxPassengers != null ? `/${maxPassengers}` : ""})
+        </p>
         <PassengerChips
           options={passengers}
           selected={state.passengerIds}
           onChange={(ids) => onChange({ ...state, passengerIds: ids })}
           readOnly={readOnly}
+          maxPassengers={maxPassengers ?? undefined}
         />
       </div>
 
       <dl className="grid grid-cols-2 gap-y-1 text-sm">
+        <dt className="text-slate-500">Distance</dt>
+        <dd className="text-right">{breakdown.distanceKm} km</dd>
         <dt className="text-slate-500">Gas</dt>
         <dd className="text-right"><PHP value={breakdown.gasCost} /></dd>
         <dt className="text-slate-500">Toll ({state.route})</dt>

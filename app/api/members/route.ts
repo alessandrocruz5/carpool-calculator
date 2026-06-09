@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { fromDbMember } from "@/lib/supabase/mappers";
 import type { DbMember } from "@/lib/supabase/types";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
@@ -18,13 +19,63 @@ export async function GET() {
   } catch {
     return NextResponse.json([]);
   }
+
+  // Identify current user to mark isSelf and expose their email
+  const { data: { user } } = await supabase.auth.getUser();
+  const currentUserId = user?.id ?? null;
+
   const { data, error } = await supabase
     .from("members")
     .select("*")
     .eq("group_id", groupId)
     .order("created_at", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(((data ?? []) as DbMember[]).map(fromDbMember));
+
+  const members = (data ?? []) as DbMember[];
+
+  // Fetch display names from profiles for all members
+  const userIds = members.map((m) => m.user_id);
+  const { data: profiles } = userIds.length > 0
+    ? await supabase.from("profiles").select("user_id, display_name").in("user_id", userIds)
+    : { data: [] };
+
+  const profileMap = new Map(
+    ((profiles ?? []) as { user_id: string; display_name: string | null }[]).map(
+      (p) => [p.user_id, p.display_name]
+    )
+  );
+
+  // Fetch emails for ALL members (not just the current user) so the list can
+  // show a human-readable label instead of a raw UUID. auth.users is not
+  // queryable with the user-scoped client, so use the admin client and look
+  // up each member by id. The current user's email is already known.
+  const emailMap = new Map<string, string | null>();
+  if (currentUserId) emailMap.set(currentUserId, user?.email ?? null);
+  const missingEmailIds = userIds.filter((id) => !emailMap.has(id));
+  if (missingEmailIds.length > 0) {
+    try {
+      const admin = createAdminClient();
+      const lookups = await Promise.all(
+        missingEmailIds.map((id) => admin.auth.admin.getUserById(id))
+      );
+      missingEmailIds.forEach((id, i) => {
+        emailMap.set(id, lookups[i].data?.user?.email ?? null);
+      });
+    } catch {
+      // If the admin client isn't configured, fall back to ids gracefully.
+    }
+  }
+
+  return NextResponse.json(
+    members.map((m) => ({
+      // Original fields (keep the store working)
+      ...fromDbMember(m),
+      // Enriched fields for MembersAdmin
+      displayName: profileMap.get(m.user_id) ?? null,
+      email: emailMap.get(m.user_id) ?? null,
+      isSelf: m.user_id === currentUserId,
+    }))
+  );
 }
 
 export async function POST(req: Request) {
@@ -71,7 +122,45 @@ export async function PATCH(req: Request) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json(fromDbMember(data as DbMember));
+  const updated = data as DbMember;
+
+  // When role changes to a passenger-capable role, ensure a passenger record
+  // exists so the member appears in the trip roster on the Today page.
+  if ((body.role === "passenger" || body.role === "both") && !updated.passenger_id) {
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("user_id", body.userId)
+      .maybeSingle();
+    const name =
+      (profileRow as { display_name?: string | null } | null)?.display_name?.trim() ||
+      body.userId.slice(0, 8);
+    const { data: passenger, error: pErr } = await supabase
+      .from("passengers")
+      .insert({ group_id: groupId, name, active: true })
+      .select()
+      .single();
+    if (!pErr && passenger) {
+      const passengerId = (passenger as { id: string }).id;
+      await supabase
+        .from("members")
+        .update({ passenger_id: passengerId })
+        .eq("group_id", groupId)
+        .eq("user_id", body.userId);
+      updated.passenger_id = passengerId;
+    }
+  }
+
+  // Deactivate passenger when downgrading to driver-only
+  if (body.role === "driver" && updated.passenger_id) {
+    await supabase
+      .from("passengers")
+      .update({ active: false })
+      .eq("id", updated.passenger_id)
+      .eq("group_id", groupId);
+  }
+
+  return NextResponse.json(fromDbMember(updated));
 }
 
 export async function DELETE(req: Request) {
@@ -86,20 +175,27 @@ export async function DELETE(req: Request) {
   if (!userId)
     return NextResponse.json({ error: "missing userId" }, { status: 400 });
 
-  const { data: rows, error } = await supabase
+  const { data: targetRow, error } = await supabase
     .from("members")
-    .select("user_id, role")
-    .eq("group_id", groupId);
+    .select("role, passenger_id")
+    .eq("group_id", groupId)
+    .eq("user_id", userId)
+    .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  const members = (rows ?? []) as { user_id: string; role: Role }[];
-  const target = members.find((m) => m.user_id === userId);
+
   const isDriverRole = (r: Role) => r === "driver" || r === "both";
-  const driverCount = members.filter((m) => isDriverRole(m.role)).length;
-  if (target && isDriverRole(target.role) && driverCount <= 1) {
-    return NextResponse.json(
-      { error: "Can't remove the last driver. Link another driver first." },
-      { status: 400 }
-    );
+  if (targetRow && isDriverRole(targetRow.role)) {
+    const { data: driverRows } = await supabase
+      .from("members")
+      .select("user_id")
+      .eq("group_id", groupId)
+      .or("role.eq.driver,role.eq.both");
+    if ((driverRows ?? []).length <= 1) {
+      return NextResponse.json(
+        { error: "Can't remove the last driver. Link another driver first." },
+        { status: 400 }
+      );
+    }
   }
 
   const { error: delErr } = await supabase
@@ -109,5 +205,14 @@ export async function DELETE(req: Request) {
     .eq("user_id", userId);
   if (delErr)
     return NextResponse.json({ error: delErr.message }, { status: 500 });
+
+  if (targetRow?.passenger_id) {
+    await supabase
+      .from("passengers")
+      .update({ active: false })
+      .eq("id", targetRow.passenger_id)
+      .eq("group_id", groupId);
+  }
+
   return NextResponse.json({ ok: true });
 }

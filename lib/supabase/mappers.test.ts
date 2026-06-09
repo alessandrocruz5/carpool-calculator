@@ -70,11 +70,11 @@ describe("passenger mapper", () => {
 });
 
 describe("settings mappers", () => {
-  it("falls back to default mileage when override is null", () => {
+  it("reports no override (0) when mileage override is null", () => {
     const r = fromDbSettings({
-      id: 1,
       group_id: "g1",
       mileage_kml_override: null,
+      mileage_override_enabled: false,
       round_trip_km: 42,
       parking_fee_php: 90,
       toll_skyway_php: 164,
@@ -82,11 +82,40 @@ describe("settings mappers", () => {
       split_1p_driver: 40,
       split_2p_driver: 25,
       split_3p_driver: 19,
+      split_4p_driver: 16,
       updated_at: "x",
     });
-    expect(r.mileageKmPerL).toBe(10.5);
+    // 0 signals "no manual override" so callers fall back to the measured
+    // rolling average instead of masking it with the default.
+    expect(r.mileageKmPerL).toBe(0);
+    expect(r.mileageOverrideEnabled).toBe(false);
     expect(r.roundTripKm).toBe(42);
     expect(r.split2pDriver).toBe(25);
+  });
+
+  it("reads the mileage override toggle", () => {
+    const base = {
+      group_id: "g1",
+      mileage_kml_override: 12.5,
+      round_trip_km: 42,
+      parking_fee_php: 90,
+      toll_skyway_php: 164,
+      toll_slex_php: 124,
+      split_1p_driver: 40,
+      split_2p_driver: 25,
+      split_3p_driver: 19,
+      split_4p_driver: 16,
+      updated_at: "x",
+    };
+    expect(
+      fromDbSettings({ ...base, mileage_override_enabled: true }).mileageOverrideEnabled
+    ).toBe(true);
+    expect(toDbSettingsPatch({ mileageOverrideEnabled: true })).toEqual({
+      mileage_override_enabled: true,
+    });
+    expect(toDbSettingsPatch({ mileageOverrideEnabled: false })).toEqual({
+      mileage_override_enabled: false,
+    });
   });
 
   it("converts partial patches to snake_case, dropping unset fields", () => {
@@ -96,6 +125,12 @@ describe("settings mappers", () => {
     expect(toDbSettingsPatch({ mileageKmPerL: 11.2, split1pDriver: 45 })).toEqual({
       mileage_kml_override: 11.2,
       split_1p_driver: 45,
+    });
+  });
+
+  it("clears the mileage override to NULL when set to 0", () => {
+    expect(toDbSettingsPatch({ mileageKmPerL: 0 })).toEqual({
+      mileage_kml_override: null,
     });
   });
 });
@@ -166,6 +201,7 @@ describe("car mappers", () => {
         name: "Civic",
         fuel_efficiency_kml: "12.5" as unknown as number,
         tank_size_liters: "45" as unknown as number,
+        max_passengers: null,
         created_at: "x",
       })
     ).toEqual({
@@ -174,6 +210,7 @@ describe("car mappers", () => {
       name: "Civic",
       fuelEfficiencyKml: 12.5,
       tankSizeLiters: 45,
+      maxPassengers: null,
     });
   });
 
@@ -184,10 +221,12 @@ describe("car mappers", () => {
       name: "Civic",
       fuel_efficiency_kml: null,
       tank_size_liters: null,
+      max_passengers: null,
       created_at: "x",
     });
     expect(c.fuelEfficiencyKml).toBeNull();
     expect(c.tankSizeLiters).toBeNull();
+    expect(c.maxPassengers).toBeNull();
   });
 
   it("converts new-car payload to snake_case", () => {
@@ -197,12 +236,14 @@ describe("car mappers", () => {
         name: "Civic",
         fuelEfficiencyKml: 12.5,
         tankSizeLiters: 45,
+        maxPassengers: 4,
       })
     ).toEqual({
       owner_user_id: "u1",
       name: "Civic",
       fuel_efficiency_kml: 12.5,
       tank_size_liters: 45,
+      max_passengers: 4,
     });
   });
 });
@@ -227,6 +268,7 @@ describe("trip mapper", () => {
             trip_id: "t1",
             leg: "morning",
             route: "skyway",
+            distance_km: 21,
             trip_leg_riders: [
               { group_id: "g1", trip_leg_id: "l1", passenger_id: "p1" },
               { group_id: "g1", trip_leg_id: "l1", passenger_id: "p2" },
@@ -238,6 +280,7 @@ describe("trip mapper", () => {
             trip_id: "t1",
             leg: "evening",
             route: "slex",
+            distance_km: 25,
             trip_leg_riders: [
               { group_id: "g1", trip_leg_id: "l2", passenger_id: "p1" },
             ],

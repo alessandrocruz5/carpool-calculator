@@ -145,6 +145,34 @@ describe("updateSession /admin gate", () => {
     );
   });
 
+  it("does not redirect to /onboarding when user has an active group cookie", async () => {
+    // Regression: without group_id scoping the member query, maybeSingle()
+    // failed for multi-group users (multiple rows), making memberExists=false.
+    // Middleware redirected / → /onboarding; onboarding saw memberships and
+    // redirected back to /, creating an infinite loop.
+    setSupa({ auth: { userId: "u1", member: { role: "driver" } } });
+    const res = await updateSession(
+      makeRequest("/", { "carpool-group": "g1" }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location") ?? "").not.toContain("onboarding");
+  });
+
+  it("redirects / to /onboarding when user has zero group memberships", async () => {
+    setSupa({
+      auth: { userId: "u1" },
+      tables: {
+        members: [
+          { data: null, error: null },
+          { data: null, error: null },
+        ],
+      },
+    });
+    const res = await updateSession(makeRequest("/"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/onboarding");
+  });
+
   it("does not gate non-admin routes on driver role", async () => {
     setSupa({
       auth: { userId: "u1" },

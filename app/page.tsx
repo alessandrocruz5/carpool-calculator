@@ -12,11 +12,11 @@ import { useFillups } from "@/lib/store/fillups";
 import { useCars } from "@/lib/store/cars";
 import { useMembers } from "@/lib/store/members";
 import { useGroups } from "@/lib/store/groups";
-import { createClient } from "@/lib/supabase/client";
+import { useProfile } from "@/lib/store/profile";
 import { useToast } from "@/components/Toast";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
 import { DriverSelect } from "@/components/DriverSelect";
-import { rollingMileage } from "@/lib/mileage";
+import { rollingMileage, resolveEffectiveMileage } from "@/lib/mileage";
 import { calcDay } from "@/lib/calc";
 import { daysSince } from "@/lib/week";
 
@@ -33,21 +33,29 @@ export default function TodayPage() {
   const { trips, upsert } = useTrips();
   const { members } = useMembers();
   const activeGroupId = useGroups((s) => s.activeGroupId);
+  const userId = useProfile((s) => s.profile?.userId ?? null);
   const toast = useToast();
   const isDriver = useIsDriver();
 
   const existing = trips.find((t) => t.date === today);
   const [morning, setMorning] = useState<LegState>(
-    existing?.morning ?? { route: "skyway", passengerIds: [] }
+    existing?.morning ?? {
+      route: "skyway",
+      passengerIds: [],
+      distanceKm: settings.roundTripKm / 2,
+    }
   );
   const [evening, setEvening] = useState<LegState>(
-    existing?.evening ?? { route: "skyway", passengerIds: [] }
+    existing?.evening ?? {
+      route: "skyway",
+      passengerIds: [],
+      distanceKm: settings.roundTripKm / 2,
+    }
   );
   const [carId, setCarId] = useState<string>(existing?.carId ?? "");
   const [driverUserId, setDriverUserId] = useState<string | null>(
     existing?.driverUserId ?? null
   );
-  const [userId, setUserId] = useState<string | null>(null);
 
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
@@ -62,15 +70,6 @@ export default function TodayPage() {
     // Reload state only when navigating to a different date.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today]);
-
-  useEffect(() => {
-    (async () => {
-      const { data } = await createClient().auth.getClaims();
-      setUserId(
-        (data?.claims as { sub?: string } | undefined)?.sub ?? null
-      );
-    })();
-  }, []);
 
   // Default the car picker to the trip's saved car, else the only car.
   useEffect(() => {
@@ -94,15 +93,22 @@ export default function TodayPage() {
   }, [members, existing, userId, driverUserId]);
 
   const selectedCar = cars.find((c) => c.id === carId);
-  // A chosen car resolves the trip's efficiency: its rated value first, then
-  // its measured rolling mileage, then the group setting / overall measured.
+  // A chosen car contributes its efficiency, but an enabled group-level override
+  // always beats even the car's own rated value.
   const carMeasured = carId ? rollingMileage(fillups, 5, carId) : null;
   const carEfficiency =
     selectedCar?.fuelEfficiencyKml || carMeasured || null;
   const measuredMileage = rollingMileage(fillups);
-  const effectiveMileage =
-    carEfficiency || settings.mileageKmPerL || measuredMileage || 10.5;
+  const effectiveMileage = resolveEffectiveMileage({
+    carEfficiency,
+    override: settings.mileageKmPerL,
+    overrideEnabled: settings.mileageOverrideEnabled,
+    rollingAvg: measuredMileage,
+  });
   const liveSettings = { ...settings, mileageKmPerL: effectiveMileage };
+  // Use the car's max_passengers from the DB; fall back to undefined (no cap)
+  // so the passenger roster size becomes the practical limit instead of 3.
+  const maxPassengers = selectedCar?.maxPassengers ?? undefined;
 
   const activePassengers = passengers.filter((p) => p.active);
   const stale = gasPriceUpdatedAt ? daysSince(gasPriceUpdatedAt) > 7 : true;
@@ -111,13 +117,17 @@ export default function TodayPage() {
     {
       date: today,
       gasPricePhpPerL: gasPrice,
-      morning: { route: morning.route, passengerIds: morning.passengerIds },
-      evening: { route: evening.route, passengerIds: evening.passengerIds },
+      morning: { route: morning.route, passengerIds: morning.passengerIds, distanceKm: morning.distanceKm },
+      evening: { route: evening.route, passengerIds: evening.passengerIds, distanceKm: evening.distanceKm },
     },
     liveSettings
   );
 
   async function save() {
+    if (!(morning.distanceKm > 0) || !(evening.distanceKm > 0)) {
+      toast.show({ message: "Enter a distance (km) for both legs.", variant: "info" });
+      return;
+    }
     try {
       const pair =
         driverUserId && carId
@@ -132,10 +142,14 @@ export default function TodayPage() {
         evening,
         ...pair,
       });
-      toast.show({ message: existing ? "Trip updated." : "Trip saved." });
+      toast.show({
+        message: existing ? "Trip updated." : "Trip saved.",
+        variant: "success",
+      });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       toast.show({
+        variant: "error",
         message: /forbidden|403/i.test(msg)
           ? "Couldn't save — only the driver can log trips."
           : "Couldn't save trip. Check your connection and try again.",
@@ -147,7 +161,7 @@ export default function TodayPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="sticky top-0 z-20 -mx-4 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/75">
         <div>
           <h1 className="text-xl font-semibold">{dayjs(today).format("ddd, MMM D")}</h1>
           {isPastEdit && (
@@ -236,7 +250,9 @@ export default function TodayPage() {
 
         {driverUserId && driverUserId !== userId && (
           <p className="text-sm text-slate-600">
-            Car: chosen by {driverUserId}
+            Car: chosen by {
+              members.find((m) => m.userId === driverUserId)?.displayName ?? driverUserId
+            }
           </p>
         )}
       </section>
@@ -249,6 +265,7 @@ export default function TodayPage() {
         gasPrice={gasPrice}
         settings={liveSettings}
         readOnly={!isDriver}
+        maxPassengers={maxPassengers}
       />
       <LegCard
         leg="evening"
@@ -258,6 +275,7 @@ export default function TodayPage() {
         gasPrice={gasPrice}
         settings={liveSettings}
         readOnly={!isDriver}
+        maxPassengers={maxPassengers}
       />
 
       <section className="bg-white rounded-xl border border-slate-200 p-4">
