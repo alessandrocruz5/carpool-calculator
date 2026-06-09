@@ -46,7 +46,7 @@ export default function GlobalError({
                   </p>
                 )}
                 <button
-                  onClick={reset}
+                  onClick={() => window.location.reload()}
                   className="bg-brand-600 text-white text-sm font-medium rounded-lg px-4 py-2"
                 >
                   Try again
