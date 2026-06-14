@@ -24,6 +24,12 @@ export interface LegInput {
   route: Route;
   passengerCount: number;
   distanceKm: number;
+  /**
+   * Model A per-rider detour distance, keyed by passenger id. Each rider's extra
+   * km is converted to gas at the leg gas price and charged 100% to that rider on
+   * top of the unchanged base split. Omit (or use 0) for riders with no detour.
+   */
+  extraKmByRider?: Record<string, number>;
 }
 
 export interface LegBreakdown {
@@ -37,6 +43,11 @@ export interface LegBreakdown {
   total: number;
   driverShare: number;
   passengerEach: number;
+  /**
+   * Per-rider detour gas (Model A), charged 100% to that rider on top of
+   * `passengerEach`. Empty when no detours are supplied — base split is unchanged.
+   */
+  detourByRider: Record<string, number>;
 }
 
 export const DEFAULT_SETTINGS: CalcSettings = {
@@ -81,6 +92,17 @@ export function calcLeg(
   const passengerEach =
     input.passengerCount > 0 ? (total - driverShare) / input.passengerCount : 0;
 
+  // Model A: each rider's detour km is charged 100% to that rider, on top of the
+  // base split above. Base fields (total/driverShare/passengerEach) are unchanged.
+  const detourByRider: Record<string, number> = {};
+  if (input.extraKmByRider) {
+    for (const [id, km] of Object.entries(input.extraKmByRider)) {
+      if (km > 0) {
+        detourByRider[id] = round2((km / settings.mileageKmPerL) * gasPricePhpPerL);
+      }
+    }
+  }
+
   return {
     leg: input.leg,
     route: input.route,
@@ -92,14 +114,15 @@ export function calcLeg(
     total: round2(total),
     driverShare: round2(driverShare),
     passengerEach: round2(passengerEach),
+    detourByRider,
   };
 }
 
 export interface DayInput {
   date: string;
   gasPricePhpPerL: number;
-  morning: { route: Route; passengerIds: string[]; distanceKm: number };
-  evening: { route: Route; passengerIds: string[]; distanceKm: number };
+  morning: { route: Route; passengerIds: string[]; distanceKm: number; extraKmByRider?: Record<string, number> };
+  evening: { route: Route; passengerIds: string[]; distanceKm: number; extraKmByRider?: Record<string, number> };
 }
 
 export interface DayBreakdown {
@@ -112,22 +135,22 @@ export interface DayBreakdown {
 
 export function calcDay(input: DayInput, settings: CalcSettings): DayBreakdown {
   const morning = calcLeg(
-    { leg: "morning", route: input.morning.route, passengerCount: input.morning.passengerIds.length, distanceKm: input.morning.distanceKm },
+    { leg: "morning", route: input.morning.route, passengerCount: input.morning.passengerIds.length, distanceKm: input.morning.distanceKm, extraKmByRider: input.morning.extraKmByRider },
     input.gasPricePhpPerL,
     settings
   );
   const evening = calcLeg(
-    { leg: "evening", route: input.evening.route, passengerCount: input.evening.passengerIds.length, distanceKm: input.evening.distanceKm },
+    { leg: "evening", route: input.evening.route, passengerCount: input.evening.passengerIds.length, distanceKm: input.evening.distanceKm, extraKmByRider: input.evening.extraKmByRider },
     input.gasPricePhpPerL,
     settings
   );
 
   const perPassenger: Record<string, number> = {};
   for (const id of input.morning.passengerIds) {
-    perPassenger[id] = (perPassenger[id] ?? 0) + morning.passengerEach;
+    perPassenger[id] = (perPassenger[id] ?? 0) + morning.passengerEach + (morning.detourByRider[id] ?? 0);
   }
   for (const id of input.evening.passengerIds) {
-    perPassenger[id] = (perPassenger[id] ?? 0) + evening.passengerEach;
+    perPassenger[id] = (perPassenger[id] ?? 0) + evening.passengerEach + (evening.detourByRider[id] ?? 0);
   }
   for (const id of Object.keys(perPassenger)) {
     perPassenger[id] = round2(perPassenger[id]);

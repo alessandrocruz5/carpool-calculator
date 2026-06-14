@@ -30,4 +30,6 @@ playwright/.cache/
 .env.sentry-build-plugin
 
 # Claude
-.claude/
+.claude/agents
+.claude/commands
+.claude/CLAUDE.md

@@ -270,8 +270,8 @@ describe("trip mapper", () => {
             route: "skyway",
             distance_km: 21,
             trip_leg_riders: [
-              { group_id: "g1", trip_leg_id: "l1", passenger_id: "p1" },
-              { group_id: "g1", trip_leg_id: "l1", passenger_id: "p2" },
+              { group_id: "g1", trip_leg_id: "l1", passenger_id: "p1", extra_distance_km: 0 },
+              { group_id: "g1", trip_leg_id: "l1", passenger_id: "p2", extra_distance_km: 0 },
             ],
           },
           {
@@ -282,7 +282,7 @@ describe("trip mapper", () => {
             route: "slex",
             distance_km: 25,
             trip_leg_riders: [
-              { group_id: "g1", trip_leg_id: "l2", passenger_id: "p1" },
+              { group_id: "g1", trip_leg_id: "l2", passenger_id: "p1", extra_distance_km: 0 },
             ],
           },
         ],

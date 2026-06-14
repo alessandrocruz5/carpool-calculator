@@ -180,6 +180,21 @@ export interface DbTripWithLegs extends DbTrip {
   trip_legs: (DbTripLeg & { trip_leg_riders: DbTripLegRider[] })[];
 }
 
+// Model A per-rider detour. Build a passenger_id → extra-km map from the leg's
+// riders, keeping only positive values so legacy trips (all 0) stay clean and
+// produce identical numbers downstream.
+function extraKmByRider(
+  riders: DbTripLegRider[] | undefined
+): Record<string, number> | undefined {
+  if (!riders) return undefined;
+  const out: Record<string, number> = {};
+  for (const x of riders) {
+    const km = Number(x.extra_distance_km ?? 0);
+    if (km > 0) out[x.passenger_id] = km;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export function fromDbTrip(r: DbTripWithLegs, gasPrice: number): StoredTrip {
   const morning = r.trip_legs.find((l) => l.leg === "morning");
   const evening = r.trip_legs.find((l) => l.leg === "evening");
@@ -194,11 +209,13 @@ export function fromDbTrip(r: DbTripWithLegs, gasPrice: number): StoredTrip {
       route: morning?.route ?? "skyway",
       passengerIds: morning?.trip_leg_riders.map((x) => x.passenger_id) ?? [],
       distanceKm: Number(morning?.distance_km ?? 21),
+      extraKmByRider: extraKmByRider(morning?.trip_leg_riders),
     },
     evening: {
       route: evening?.route ?? "skyway",
       passengerIds: evening?.trip_leg_riders.map((x) => x.passenger_id) ?? [],
       distanceKm: Number(evening?.distance_km ?? 21),
+      extraKmByRider: extraKmByRider(evening?.trip_leg_riders),
     },
     notes: r.notes ?? undefined,
   };
