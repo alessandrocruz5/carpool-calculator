@@ -11,8 +11,8 @@ export interface StoredTrip {
   parkingFee: number;
   carId?: string | null;
   driverUserId?: string | null;
-  morning: { route: Route; passengerIds: string[]; distanceKm: number };
-  evening: { route: Route; passengerIds: string[]; distanceKm: number };
+  morning: { route: Route; passengerIds: string[]; distanceKm: number; extraKmByRider?: Record<string, number> };
+  evening: { route: Route; passengerIds: string[]; distanceKm: number; extraKmByRider?: Record<string, number> };
   notes?: string;
 }
 
