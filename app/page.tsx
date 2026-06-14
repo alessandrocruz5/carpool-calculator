@@ -117,8 +117,8 @@ export default function TodayPage() {
     {
       date: today,
       gasPricePhpPerL: gasPrice,
-      morning: { route: morning.route, passengerIds: morning.passengerIds, distanceKm: morning.distanceKm },
-      evening: { route: evening.route, passengerIds: evening.passengerIds, distanceKm: evening.distanceKm },
+      morning: { route: morning.route, passengerIds: morning.passengerIds, distanceKm: morning.distanceKm, extraKmByRider: morning.extraKmByRider },
+      evening: { route: evening.route, passengerIds: evening.passengerIds, distanceKm: evening.distanceKm, extraKmByRider: evening.extraKmByRider },
     },
     liveSettings
   );
@@ -258,6 +258,7 @@ export default function TodayPage() {
       </section>
 
       <LegCard
+        key={`morning-${today}`}
         leg="morning"
         state={morning}
         onChange={setMorning}
@@ -268,6 +269,7 @@ export default function TodayPage() {
         maxPassengers={maxPassengers}
       />
       <LegCard
+        key={`evening-${today}`}
         leg="evening"
         state={evening}
         onChange={setEvening}
