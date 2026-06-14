@@ -33,6 +33,3 @@ playwright/.cache/
 .claude/agents
 .claude/commands
 .claude/CLAUDE.md
-
-# Ledger
-./TASKS.md
