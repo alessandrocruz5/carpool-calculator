@@ -1,7 +1,7 @@
 # Carpool Calculator — Sprints
 Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded from changelog)
 
-## Sprint 1 — Per-passenger distance splitting (Model A)   (planned 2026-06-12)
+## Sprint 1 — Per-passenger distance splitting (Model A)   (planned 2026-06-12 · released v1.6.0 2026-06-14)
 Epic: SABAY-1 · base branch: `develop` · target version: v1.6.0
 
 Model A: shared base (base-km gas + toll + parking) keeps the driver-favored ratio split;
@@ -11,7 +11,7 @@ have 0 extra km and produce identical numbers (no backfill).
 - [x] SABAY-2 — Migration: per-rider extra distance · Added · files: supabase/migrations/<new>.sql, lib/supabase/types.ts · depends: — · high-stakes (migration) (merged 2026-06-14) — added `trip_leg_riders.extra_distance_km numeric(6,2) not null default 0 check (>= 0)` + `DbTripLegRider.extra_distance_km`. Downstream: SABAY-4 can now persist/read the column.
 - [x] SABAY-3 — Calc core: Model A per-rider extra · Added/Changed · files: lib/calc.ts, lib/calc.test.ts · depends: — (merged 2026-06-14) — `calcLeg`/`calcDay` take optional per-rider `extraKmByRider`; `LegBreakdown.detourByRider` exposes per-rider detour gas added on top of the unchanged base split (additive, legacy numbers identical). Downstream: SABAY-4 threads `extraKmByRider` per leg into `calcDay` and reads/writes via `trip_leg_riders.extra_distance_km`.
 - [x] SABAY-4 — Data layer: persist + read + payment calc · Added/Changed · files: lib/supabase/mappers.ts, lib/store/trips.ts, app/api/trips/route.ts · depends: SABAY-2, SABAY-3 · high-stakes (money split) (merged 2026-06-14) — `StoredTrip` legs gained optional `extraKmByRider`; `fromDbTrip` reads `trip_leg_riders.extra_distance_km` into per-leg maps (positive-only, legacy trips unchanged); trips route selects + validates (`>= 0`) + persists per-rider extras and threads them into `calcDay` so `trip_payments` reflect detours. Downstream: SABAY-5 UI reads/writes `morning.extraKmByRider` / `evening.extraKmByRider` on `StoredTrip`.
-- [ ] SABAY-5 — UI: tabbed leg card (Simple / Detours) · Added · files: components/LegCard.tsx, app/page.tsx, components/PassengerChips.tsx · depends: SABAY-4
+- [x] SABAY-5 — UI: tabbed leg card (Simple / Detours) · Added · files: components/LegCard.tsx, app/page.tsx, components/PassengerChips.tsx · depends: SABAY-4 (merged 2026-06-14) — `LegState` gained optional `extraKmByRider`; LegCard has a Simple/Detours toggle (active tab derived from any extra > 0 on load), Detours mode shows per-passenger extra-km inputs with live per-rider shares, prunes detours when riders are deselected and clears them on switch to Simple; `app/page.tsx` threads `extraKmByRider` into `calcDay` and keys LegCards by date. `PassengerChips.tsx` unchanged. No DB/endpoint changes.
 
 ## Hotfixes
 _none_
