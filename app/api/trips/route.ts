@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 const TRIP_SELECT =
   "id, date, parking_fee_php, notes, car_id, driver_user_id, gas_price_id, " +
-  "trip_legs(leg, route, distance_km, trip_leg_riders(passenger_id))";
+  "trip_legs(leg, route, distance_km, trip_leg_riders(passenger_id, extra_distance_km))";
 
 export async function GET() {
   const supabase = await createClient();
@@ -62,6 +62,18 @@ export async function POST(req: Request) {
   if (!(body.morning.distanceKm > 0) || !(body.evening.distanceKm > 0)) {
     return NextResponse.json(
       { error: "distance_km must be positive for both legs" },
+      { status: 400 }
+    );
+  }
+
+  // Model A per-rider detour distance must be non-negative (NaN rejected too).
+  const extraKms = [
+    ...Object.values(body.morning.extraKmByRider ?? {}),
+    ...Object.values(body.evening.extraKmByRider ?? {}),
+  ];
+  if (extraKms.some((km) => !(km >= 0))) {
+    return NextResponse.json(
+      { error: "extra_distance_km must be >= 0" },
       { status: 400 }
     );
   }
@@ -182,11 +194,13 @@ export async function POST(req: Request) {
       group_id: groupId,
       trip_leg_id: morningLeg!.id,
       passenger_id: pid,
+      extra_distance_km: body.morning.extraKmByRider?.[pid] ?? 0,
     })),
     ...body.evening.passengerIds.map((pid) => ({
       group_id: groupId,
       trip_leg_id: eveningLeg!.id,
       passenger_id: pid,
+      extra_distance_km: body.evening.extraKmByRider?.[pid] ?? 0,
     })),
   ];
   if (riders.length > 0) {
