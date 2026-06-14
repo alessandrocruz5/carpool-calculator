@@ -111,6 +111,7 @@ export interface DbTripLegRider {
   group_id: string;
   trip_leg_id: string;
   passenger_id: string;
+  extra_distance_km: number;
 }
 
 export interface DbTripPayment {
