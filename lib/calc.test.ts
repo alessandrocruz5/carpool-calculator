@@ -110,6 +110,89 @@ describe("mixed-leg ridership", () => {
   });
 });
 
+describe("Model A — per-rider detour distance", () => {
+  const gas = 90;
+
+  it("no extra km → identical to base split (backward compatible)", () => {
+    const base = calcLeg(
+      { leg: "morning", route: "skyway", passengerCount: 2, distanceKm: 21 },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    const withEmpty = calcLeg(
+      { leg: "morning", route: "skyway", passengerCount: 2, distanceKm: 21, extraKmByRider: {} },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    expect(withEmpty.total).toBe(base.total);
+    expect(withEmpty.driverShare).toBe(base.driverShare);
+    expect(withEmpty.passengerEach).toBe(base.passengerEach);
+    expect(withEmpty.detourByRider).toEqual({});
+  });
+
+  it("detour gas = (extraKm / mileage) * gasPrice, charged 100% to that rider", () => {
+    const r = calcLeg(
+      { leg: "morning", route: "skyway", passengerCount: 2, distanceKm: 21, extraKmByRider: { A: 5 } },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    // detour: (5/10.5)*90
+    expect(r.detourByRider.A).toBe(round2((5 / 10.5) * 90));
+    expect(r.detourByRider.B).toBeUndefined();
+    // base split is unchanged by the detour
+    const base = calcLeg(
+      { leg: "morning", route: "skyway", passengerCount: 2, distanceKm: 21 },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    expect(r.total).toBe(base.total);
+    expect(r.driverShare).toBe(base.driverShare);
+    expect(r.passengerEach).toBe(base.passengerEach);
+  });
+
+  it("zero / negative extra km are ignored", () => {
+    const r = calcLeg(
+      { leg: "evening", route: "slex", passengerCount: 2, distanceKm: 21, extraKmByRider: { A: 0, B: -3 } },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    expect(r.detourByRider).toEqual({});
+  });
+
+  it("calcDay adds detour on top of the base share for that rider only", () => {
+    const d = calcDay(
+      {
+        date: "2026-06-14",
+        gasPricePhpPerL: gas,
+        morning: { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21, extraKmByRider: { A: 6 } },
+        evening: { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+      },
+      DEFAULT_SETTINGS
+    );
+    const detour = round2((6 / 10.5) * gas);
+    // B has no detour → baseline two-passenger both-leg number
+    expect(d.perPassenger.B).toBe(291.75);
+    // A pays the same base plus their morning detour
+    expect(d.perPassenger.A).toBe(round2(291.75 + detour));
+    // driver is unaffected by detours
+    expect(d.driverTotal).toBe(194.5);
+  });
+
+  it("calcDay with no detour maps matches legacy result exactly", () => {
+    const d = calcDay(
+      {
+        date: "2026-06-14",
+        gasPricePhpPerL: gas,
+        morning: { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+        evening: { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+      },
+      DEFAULT_SETTINGS
+    );
+    expect(d.perPassenger.A).toBe(466.8);
+    expect(d.driverTotal).toBe(311.2);
+  });
+});
+
 describe("toll route options", () => {
   it("slex route uses slex toll", () => {
     const r = calcLeg(
