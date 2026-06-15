@@ -3,11 +3,28 @@ import { useState } from "react";
 import dayjs from "dayjs";
 import { useSettings } from "@/lib/store/settings";
 import { PHP } from "@/components/PHP";
+import { useToast } from "@/components/Toast";
 import { daysSince, isTuesday } from "@/lib/week";
 
 export default function GasPage() {
   const { gasPrice, gasPriceUpdatedAt, setGasPrice } = useSettings();
+  const toast = useToast();
   const [draft, setDraft] = useState(gasPrice.toString());
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    const res = await setGasPrice(parseFloat(draft) || 0);
+    setSaving(false);
+    toast.show(
+      res.ok
+        ? { message: "Gas price saved.", variant: "success" }
+        : {
+            message: "Couldn't save gas price. Please try again.",
+            variant: "error",
+          }
+    );
+  }
 
   const updated = gasPriceUpdatedAt ? dayjs(gasPriceUpdatedAt) : null;
   const age = gasPriceUpdatedAt ? daysSince(gasPriceUpdatedAt) : null;
@@ -49,10 +66,11 @@ export default function GasPage() {
           />
         </label>
         <button
-          onClick={() => setGasPrice(parseFloat(draft) || 0)}
-          className="w-full bg-brand-600 text-white rounded-lg px-3 py-2 font-medium"
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full bg-brand-600 text-white rounded-lg px-3 py-2 font-medium disabled:opacity-50"
         >
-          Save
+          {saving ? "Saving…" : "Save"}
         </button>
       </section>
     </div>

@@ -61,6 +61,48 @@ describe("settings store", () => {
     });
   });
 
+  it("setSettings returns ok:true on success", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
+    const res = await useSettings.getState().setSettings({ parkingFeePhp: 150 });
+    expect(res).toEqual({ ok: true });
+  });
+
+  it("setSettings returns ok:false and re-hydrates on failure", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ error: "boom" }, { status: 500 }))
+      .mockResolvedValueOnce(jsonResponse(DEFAULT_SETTINGS))
+      .mockResolvedValueOnce(
+        jsonResponse({ gasPrice: 90, gasPriceUpdatedAt: null })
+      );
+    const res = await useSettings.getState().setSettings({ parkingFeePhp: 150 });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("boom");
+    // re-hydrated: settings PATCH + 2 hydrate fetches
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(useSettings.getState().hydrated).toBe(true);
+  });
+
+  it("setGasPrice returns ok:true on success", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ gasPrice: 70, gasPriceUpdatedAt: "2026-05-13T01:00:00Z" })
+    );
+    const res = await useSettings.getState().setGasPrice(70);
+    expect(res).toEqual({ ok: true });
+  });
+
+  it("setGasPrice returns ok:false and re-hydrates on failure", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ error: "nope" }, { status: 500 }))
+      .mockResolvedValueOnce(jsonResponse(DEFAULT_SETTINGS))
+      .mockResolvedValueOnce(
+        jsonResponse({ gasPrice: 90, gasPriceUpdatedAt: null })
+      );
+    const res = await useSettings.getState().setGasPrice(70);
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("nope");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("setGasPrice POSTs and updates state from server echo", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ gasPrice: 70, gasPriceUpdatedAt: "2026-05-13T01:00:00Z" })
