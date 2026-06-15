@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import type { MemberRole } from "@/lib/supabase/types";
+import { useToast } from "@/components/Toast";
 
 const ROLES: MemberRole[] = ["driver", "passenger", "both"];
 
@@ -12,15 +13,13 @@ interface MemberRow {
   isSelf: boolean;
 }
 
-type Msg = { kind: "ok" | "err"; text: string } | null;
-
 export function MembersAdmin() {
+  const toast = useToast();
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<MemberRole>("passenger");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<Msg>(null);
 
   const load = useCallback(async () => {
     try {
@@ -39,13 +38,13 @@ export function MembersAdmin() {
   }, [load]);
 
   async function invite() {
+    const invited = email.trim();
     setBusy(true);
-    setMsg(null);
     try {
       const res = await fetch("/api/members", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), role }),
+        body: JSON.stringify({ email: invited, role }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as
@@ -53,16 +52,16 @@ export function MembersAdmin() {
           | null;
         throw new Error(body?.error ?? "failed to invite");
       }
-      setMsg({
-        kind: "ok",
-        text: `Invited ${email.trim()} as ${role}. They join once they sign in.`,
+      toast.show({
+        message: `Invited ${invited} as ${role}. They join once they sign in.`,
+        variant: "success",
       });
       setEmail("");
       await load();
     } catch (err) {
-      setMsg({
-        kind: "err",
-        text: err instanceof Error ? err.message : "failed to invite",
+      toast.show({
+        message: err instanceof Error ? err.message : "failed to invite",
+        variant: "error",
       });
     } finally {
       setBusy(false);
@@ -71,7 +70,6 @@ export function MembersAdmin() {
 
   async function changeRole(userId: string, nextRole: MemberRole) {
     setBusy(true);
-    setMsg(null);
     try {
       const res = await fetch("/api/members", {
         method: "PATCH",
@@ -84,11 +82,12 @@ export function MembersAdmin() {
           | null;
         throw new Error(body?.error ?? "failed to change role");
       }
+      toast.show({ message: `Role updated to ${nextRole}.`, variant: "success" });
       await load();
     } catch (err) {
-      setMsg({
-        kind: "err",
-        text: err instanceof Error ? err.message : "failed to change role",
+      toast.show({
+        message: err instanceof Error ? err.message : "failed to change role",
+        variant: "error",
       });
       await load();
     } finally {
@@ -98,7 +97,6 @@ export function MembersAdmin() {
 
   async function removeMember(userId: string) {
     setBusy(true);
-    setMsg(null);
     try {
       const res = await fetch(
         `/api/members?userId=${encodeURIComponent(userId)}`,
@@ -110,11 +108,12 @@ export function MembersAdmin() {
           | null;
         throw new Error(body?.error ?? "failed to remove member");
       }
+      toast.show({ message: "Member removed.", variant: "success" });
       await load();
     } catch (err) {
-      setMsg({
-        kind: "err",
-        text: err instanceof Error ? err.message : "failed to remove member",
+      toast.show({
+        message: err instanceof Error ? err.message : "failed to remove member",
+        variant: "error",
       });
     } finally {
       setBusy(false);
@@ -160,16 +159,6 @@ export function MembersAdmin() {
           </button>
         </div>
       </section>
-
-      {msg && (
-        <p
-          className={`text-sm ${
-            msg.kind === "ok" ? "text-green-700" : "text-red-600"
-          }`}
-        >
-          {msg.text}
-        </p>
-      )}
 
       <section className="bg-white rounded-xl border border-slate-200 p-4">
         <h2 className="font-semibold mb-3">Current members</h2>

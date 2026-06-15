@@ -98,7 +98,7 @@ export default function LogPage() {
   const mostRecent = sorted[0];
   const weekHasTrips = days.some((d) => trips.some((t) => t.date === d));
 
-  function copyYesterday() {
+  async function copyYesterday() {
     if (!mostRecent) return;
     const today = dayjs().format("YYYY-MM-DD");
     const newTrip: StoredTrip = {
@@ -110,15 +110,34 @@ export default function LogPage() {
       date: today,
       gasPrice,
     };
-    upsert(newTrip);
-    toast.show({ message: `Copied ${dayjs(mostRecent.date).format("MMM D")} → today` });
+    try {
+      await upsert(newTrip);
+      toast.show({
+        message: `Copied ${dayjs(mostRecent.date).format("MMM D")} → today`,
+        variant: "success",
+      });
+    } catch {
+      toast.show({
+        message: "Couldn't copy trip. Please try again.",
+        variant: "error",
+      });
+    }
   }
 
   async function handleDelete(t: StoredTrip) {
     const snapshot = t;
-    await remove(t.id);
+    try {
+      await remove(t.id);
+    } catch {
+      toast.show({
+        message: "Couldn't delete trip. Please try again.",
+        variant: "error",
+      });
+      return;
+    }
     toast.show({
       message: `Deleted trip for ${dayjs(snapshot.date).format("MMM D")}`,
+      variant: "success",
       action: {
         label: "Undo",
         onClick: () => {
