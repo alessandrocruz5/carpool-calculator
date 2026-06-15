@@ -3,15 +3,15 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { rollingMileage, type Fillup } from "@/lib/mileage";
 import { resilientFetch } from "@/lib/outbox";
-import { useSettings } from "@/lib/store/settings";
+import { useSettings, type SaveResult } from "@/lib/store/settings";
 import { useCars } from "@/lib/store/cars";
 
 interface FillupsStore {
   fillups: Fillup[];
   hydrated: boolean;
   hydrate: () => Promise<void>;
-  add: (f: Omit<Fillup, "id">) => Promise<void>;
-  remove: (id: string) => Promise<void>;
+  add: (f: Omit<Fillup, "id">) => Promise<SaveResult>;
+  remove: (id: string) => Promise<SaveResult>;
 }
 
 export const useFillups = create<FillupsStore>()(
@@ -63,9 +63,11 @@ export const useFillups = create<FillupsStore>()(
             body: JSON.stringify({ ...f, id }),
           });
           if (!res.ok) throw new Error(await res.text());
+          return { ok: true };
         } catch (err) {
           console.error("fillups.add failed", err);
           await get().hydrate();
+          return { ok: false, error: errorMessage(err) };
         }
       },
       remove: async (id) => {
@@ -76,12 +78,18 @@ export const useFillups = create<FillupsStore>()(
             method: "DELETE",
           });
           if (!res.ok) throw new Error(await res.text());
+          return { ok: true };
         } catch (err) {
           console.error("fillups.remove failed", err);
           await get().hydrate();
+          return { ok: false, error: errorMessage(err) };
         }
       },
     }),
     { name: "carpool-fillups", partialize: (s) => ({ fillups: s.fillups }) }
   )
 );
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err ?? "");
+}

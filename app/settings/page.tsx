@@ -81,16 +81,27 @@ export default function SettingsPage() {
     setNewName("");
     try {
       await add(name);
+      toast.show({ message: `Added ${name}.`, variant: "success" });
     } catch (err) {
-      toast.show({ message: describeError(err, "Couldn't add coworker.") });
+      toast.show({
+        message: describeError(err, "Couldn't add coworker."),
+        variant: "error",
+      });
     }
   }
 
   async function handleToggle(p: Passenger) {
     try {
       await toggleActive(p.id);
+      toast.show({
+        message: p.active ? `Disabled ${p.name}.` : `Enabled ${p.name}.`,
+        variant: "success",
+      });
     } catch (err) {
-      toast.show({ message: describeError(err, `Couldn't update ${p.name}.`) });
+      toast.show({
+        message: describeError(err, `Couldn't update ${p.name}.`),
+        variant: "error",
+      });
     }
   }
 
@@ -98,21 +109,23 @@ export default function SettingsPage() {
     if (!window.confirm(`Remove ${p.name}? This can't be undone.`)) return;
     try {
       await remove(p.id);
+      toast.show({ message: `Removed ${p.name}.`, variant: "success" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       toast.show({
         message: /foreign key|23503/i.test(msg)
           ? "Can't remove — this coworker has logged rides. Disable them instead."
           : describeError(err, "Couldn't remove coworker."),
+        variant: "error",
       });
     }
   }
 
   const selectedCarId = fillupCarId || cars[0]?.id || "";
 
-  function submitFillup() {
+  async function submitFillup() {
     if (!liters || !total || !odo || !selectedCarId) return;
-    addFillup({
+    const res = await addFillup({
       carId: selectedCarId,
       date: fillupDate,
       liters: parseFloat(liters),
@@ -122,6 +135,26 @@ export default function SettingsPage() {
     setLiters("");
     setTotal("");
     setOdo("");
+    toast.show(
+      res.ok
+        ? { message: "Fill-up logged.", variant: "success" }
+        : {
+            message: describeError(res.error, "Couldn't log fill-up."),
+            variant: "error",
+          }
+    );
+  }
+
+  async function handleRemoveFillup(id: string) {
+    const res = await removeFillup(id);
+    toast.show(
+      res.ok
+        ? { message: "Fill-up removed.", variant: "success" }
+        : {
+            message: describeError(res.error, "Couldn't remove fill-up."),
+            variant: "error",
+          }
+    );
   }
 
   return (
@@ -373,7 +406,7 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-3">
                   <PHP value={f.totalPhp} />
                   <button
-                    onClick={() => removeFillup(f.id)}
+                    onClick={() => handleRemoveFillup(f.id)}
                     className="text-xs text-red-600 underline"
                   >
                     Remove

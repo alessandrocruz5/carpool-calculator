@@ -7,6 +7,7 @@ import { useCars } from "@/lib/store/cars";
 import { useFillups } from "@/lib/store/fillups";
 import { rollingMileage } from "@/lib/mileage";
 import { PHP } from "@/components/PHP";
+import { useToast } from "@/components/Toast";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export default function CarFillupsPage() {
 
   const { cars } = useCars();
   const { fillups, add: addFillup, remove: removeFillup } = useFillups();
+  const toast = useToast();
 
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
@@ -49,16 +51,39 @@ export default function CarFillupsPage() {
   const measured = rollingMileage(carFillups, 5, car.id);
   const sorted = [...carFillups].sort((a, b) => b.odometerKm - a.odometerKm);
 
-  function submitFillup() {
+  async function submitFillup() {
     const l = parseFloat(liters);
     const t = parseFloat(total);
     const o = parseFloat(odo);
     if (!Number.isFinite(l) || !Number.isFinite(t) || !Number.isFinite(o))
       return;
-    addFillup({ carId: car!.id, date, liters: l, totalPhp: t, odometerKm: o });
+    const res = await addFillup({
+      carId: car!.id,
+      date,
+      liters: l,
+      totalPhp: t,
+      odometerKm: o,
+    });
     setLiters("");
     setTotal("");
     setOdo("");
+    toast.show(
+      res.ok
+        ? { message: "Fill-up logged.", variant: "success" }
+        : { message: "Couldn't log fill-up. Please try again.", variant: "error" }
+    );
+  }
+
+  async function handleRemoveFillup(id: string) {
+    const res = await removeFillup(id);
+    toast.show(
+      res.ok
+        ? { message: "Fill-up removed.", variant: "success" }
+        : {
+            message: "Couldn't remove fill-up. Please try again.",
+            variant: "error",
+          }
+    );
   }
 
   return (
@@ -136,7 +161,7 @@ export default function CarFillupsPage() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => removeFillup(f.id)}
+                  onClick={() => handleRemoveFillup(f.id)}
                   className="text-xs text-red-600 underline"
                 >
                   Remove

@@ -5,7 +5,9 @@ import { useCars, type Car } from "@/lib/store/cars";
 import { useFillups } from "@/lib/store/fillups";
 import { rollingMileage } from "@/lib/mileage";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useToast } from "@/components/Toast";
 import { Car as CarIcon } from "lucide-react";
+import type { SaveResult } from "@/lib/store/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +36,7 @@ function intOrNull(v: string): number | null {
 export default function CarsPage() {
   const { cars, add, update, remove } = useCars();
   const { fillups } = useFillups();
+  const toast = useToast();
 
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
@@ -49,18 +52,25 @@ export default function CarsPage() {
   const maxPaxValid = isPositiveIntegerInput(maxPax);
   const canAdd = name.trim().length > 0 && kmlValid && tankValid && maxPaxValid;
 
-  function addCar() {
+  async function addCar() {
     if (!canAdd) return;
-    add({
-      name: name.trim(),
+    const carName = name.trim();
+    const input = {
+      name: carName,
       fuelEfficiencyKml: numOrNull(kml),
       tankSizeLiters: numOrNull(tank),
       maxPassengers: intOrNull(maxPax),
-    });
+    };
     setName("");
     setKml("");
     setTank("");
     setMaxPax("");
+    const res = await add(input);
+    toast.show(
+      res.ok
+        ? { message: `Added ${carName}.`, variant: "success" }
+        : { message: "Couldn't add car. Please try again.", variant: "error" }
+    );
   }
 
   if (!hydrated) return null;
@@ -170,17 +180,17 @@ function CarCard({
   measured: number | null;
   onUpdate: (
     patch: Partial<Pick<Car, "name" | "fuelEfficiencyKml" | "tankSizeLiters" | "maxPassengers">>
-  ) => void;
+  ) => Promise<SaveResult>;
   onRemove: () => Promise<
     { ok: true } | { ok: false; status: number; tripCount?: number }
   >;
 }) {
+  const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(car.name);
   const [kml, setKml] = useState(car.fuelEfficiencyKml?.toString() ?? "");
   const [tank, setTank] = useState(car.tankSizeLiters?.toString() ?? "");
   const [maxPax, setMaxPax] = useState(car.maxPassengers?.toString() ?? "");
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const kmlValid = isPositiveNumberInput(kml);
   const tankValid = isPositiveNumberInput(tank);
@@ -191,28 +201,32 @@ function CarCard({
     if (!window.confirm("Delete this car?")) return;
     const result = await onRemove();
     if (result.ok) {
-      setDeleteError(null);
+      toast.show({ message: `Deleted ${car.name}.`, variant: "success" });
       return;
     }
-    if (result.status === 409) {
-      const n = result.tripCount ?? 0;
-      setDeleteError(
-        `Can't delete — used by ${n} trip(s). Remove it from those trips first.`
-      );
-    } else {
-      setDeleteError("Couldn't delete this car. Please try again.");
-    }
+    toast.show({
+      message:
+        result.status === 409
+          ? `Can't delete — used by ${result.tripCount ?? 0} trip(s). Remove it from those trips first.`
+          : "Couldn't delete this car. Please try again.",
+      variant: "error",
+    });
   }
 
-  function saveEdit() {
+  async function saveEdit() {
     if (!canSave) return;
-    onUpdate({
+    setEditing(false);
+    const res = await onUpdate({
       name: name.trim() || car.name,
       fuelEfficiencyKml: numOrNull(kml),
       tankSizeLiters: numOrNull(tank),
       maxPassengers: intOrNull(maxPax),
     });
-    setEditing(false);
+    toast.show(
+      res.ok
+        ? { message: "Car updated.", variant: "success" }
+        : { message: "Couldn't update car. Please try again.", variant: "error" }
+    );
   }
 
   return (
@@ -325,8 +339,6 @@ function CarCard({
           </div>
         </div>
       )}
-
-      {deleteError && <p className="text-xs text-red-600">{deleteError}</p>}
     </section>
   );
 }

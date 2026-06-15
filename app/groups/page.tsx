@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { MemberRole } from "@/lib/supabase/types";
 import { markOnboardingPending } from "@/components/OnboardingTour";
+import { useToast } from "@/components/Toast";
 
 export const dynamic = "force-dynamic";
 
@@ -14,18 +15,16 @@ interface GroupItem {
   isActive: boolean;
 }
 
-type Msg = { kind: "ok" | "err"; text: string } | null;
-
 function isDriver(role: MemberRole) {
   return role === "driver" || role === "both";
 }
 
 export default function GroupsPage() {
+  const toast = useToast();
   const [groups, setGroups] = useState<GroupItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<Msg>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
 
@@ -59,7 +58,6 @@ export default function GroupsPage() {
     const name = newName.trim();
     if (!name) return;
     setBusy(true);
-    setMsg(null);
     try {
       const res = await fetch("/api/groups", {
         method: "POST",
@@ -75,12 +73,12 @@ export default function GroupsPage() {
       });
       setNewName("");
       markOnboardingPending();
-      // Send the driver straight to Members so they can invite their carpool.
+      // Redirect to Members is the success feedback; no toast needed here.
       window.location.assign("/admin/members");
     } catch (err) {
-      setMsg({
-        kind: "err",
-        text: err instanceof Error ? err.message : "failed to create group",
+      toast.show({
+        message: err instanceof Error ? err.message : "failed to create group",
+        variant: "error",
       });
       setBusy(false);
     }
@@ -88,7 +86,6 @@ export default function GroupsPage() {
 
   async function switchGroup(id: string) {
     setBusy(true);
-    setMsg(null);
     try {
       const res = await fetch("/api/groups/switch", {
         method: "POST",
@@ -96,11 +93,12 @@ export default function GroupsPage() {
         body: JSON.stringify({ groupId: id }),
       });
       if (!res.ok) throw new Error(await res.text());
+      // Redirect to the dashboard is the success feedback; no toast needed here.
       window.location.assign("/");
     } catch (err) {
-      setMsg({
-        kind: "err",
-        text: err instanceof Error ? err.message : "failed to switch group",
+      toast.show({
+        message: err instanceof Error ? err.message : "failed to switch group",
+        variant: "error",
       });
       setBusy(false);
     }
@@ -110,7 +108,6 @@ export default function GroupsPage() {
     const name = editName.trim();
     if (!name) return;
     setBusy(true);
-    setMsg(null);
     try {
       const res = await fetch("/api/groups", {
         method: "PATCH",
@@ -119,11 +116,12 @@ export default function GroupsPage() {
       });
       if (!res.ok) throw new Error(await res.text());
       setEditingId(null);
+      toast.show({ message: `Renamed to "${name}".`, variant: "success" });
       await load();
     } catch (err) {
-      setMsg({
-        kind: "err",
-        text: err instanceof Error ? err.message : "failed to rename group",
+      toast.show({
+        message: err instanceof Error ? err.message : "failed to rename group",
+        variant: "error",
       });
     } finally {
       setBusy(false);
@@ -134,17 +132,17 @@ export default function GroupsPage() {
     if (!window.confirm(`Delete group "${name}"? This cannot be undone.`))
       return;
     setBusy(true);
-    setMsg(null);
     try {
       const res = await fetch(`/api/groups?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error(await res.text());
+      toast.show({ message: `Deleted "${name}".`, variant: "success" });
       await load();
     } catch (err) {
-      setMsg({
-        kind: "err",
-        text: err instanceof Error ? err.message : "failed to delete group",
+      toast.show({
+        message: err instanceof Error ? err.message : "failed to delete group",
+        variant: "error",
       });
     } finally {
       setBusy(false);
@@ -279,15 +277,6 @@ export default function GroupsPage() {
               </li>
             ))}
           </ul>
-        )}
-        {msg && (
-          <p
-            className={`mt-3 text-sm ${
-              msg.kind === "ok" ? "text-green-700" : "text-red-600"
-            }`}
-          >
-            {msg.text}
-          </p>
         )}
       </section>
     </div>
