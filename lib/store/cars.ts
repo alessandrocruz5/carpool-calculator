@@ -2,6 +2,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Car } from "@/lib/supabase/mappers";
+import type { SaveResult } from "@/lib/store/settings";
 
 export type { Car };
 
@@ -16,11 +17,11 @@ interface CarsStore {
   cars: Car[];
   hydrated: boolean;
   hydrate: () => Promise<void>;
-  add: (input: CarInput) => Promise<void>;
+  add: (input: CarInput) => Promise<SaveResult>;
   update: (
     id: string,
     patch: Partial<Pick<Car, "name" | "fuelEfficiencyKml" | "tankSizeLiters" | "maxPassengers">>
-  ) => Promise<void>;
+  ) => Promise<SaveResult>;
   remove: (id: string) => Promise<{ ok: true } | { ok: false; status: number; tripCount?: number }>;
 }
 
@@ -61,9 +62,11 @@ export const useCars = create<CarsStore>()(
             body: JSON.stringify({ id, ...input, name: optimistic.name }),
           });
           if (!res.ok) throw new Error(await res.text());
+          return { ok: true };
         } catch (err) {
           console.error("cars.add failed", err);
           await get().hydrate();
+          return { ok: false, error: errorMessage(err) };
         }
       },
       update: async (id, patch) => {
@@ -77,9 +80,11 @@ export const useCars = create<CarsStore>()(
             body: JSON.stringify({ id, ...patch }),
           });
           if (!res.ok) throw new Error(await res.text());
+          return { ok: true };
         } catch (err) {
           console.error("cars.update failed", err);
           await get().hydrate();
+          return { ok: false, error: errorMessage(err) };
         }
       },
       remove: async (id) => {
@@ -109,3 +114,7 @@ export const useCars = create<CarsStore>()(
     { name: "carpool-cars", partialize: (s) => ({ cars: s.cars }) }
   )
 );
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err ?? "");
+}
