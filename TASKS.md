@@ -1,6 +1,19 @@
 # Carpool Calculator — Sprints
 Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded from changelog)
 
+## Sprint 2 — QoL & rebrand (toasts, purple theme, tour)   (planned 2026-06-15)
+Epic: SABAY-6 · base branch: `main` · target version: v1.7.0
+
+UI-layer QoL sprint: stylized toast feedback on all CRUD, blue→purple rebrand, richer app tour.
+No migrations or money-flow changes — standard green-CI merges.
+Decisions: success toast on explicit saves (gas button, mileage commit) + inline "Saved ✓" for
+auto-saving sliders; #8200ff drives the brand scale with #814DB3 / #80619E as distinct accent tokens.
+
+- [ ] SABAY-7 — Brand rebrand: blue → #8200ff + accents · Changed · files: tailwind.config.ts, app/globals.css, app/layout.tsx, app/manifest.ts · depends: —
+- [ ] SABAY-8 — Settings / gas / mileage save feedback · Fixed/Changed · files: lib/store/settings.ts, app/gas/page.tsx, app/settings/page.tsx, lib/store/settings.test.ts · depends: SABAY-7
+- [ ] SABAY-9 — CRUD toast sweep (remaining resources) · Added · files: app/page.tsx, app/cars/page.tsx, app/cars/[carId]/page.tsx, app/admin/members/MembersAdmin.tsx, app/groups/page.tsx, app/log/page.tsx, roster/fillups UI · depends: SABAY-8
+- [ ] SABAY-10 — App tour expansion · Changed · files: components/OnboardingTour.tsx, components/nav/BottomNav.tsx, components/LegCard.tsx, app/payments/page.tsx, app/cars/page.tsx · depends: SABAY-7
+
 ## Sprint 1 — Per-passenger distance splitting (Model A)   (planned 2026-06-12 · released v1.6.0 2026-06-14)
 Epic: SABAY-1 · base branch: `develop` · target version: v1.6.0
 
