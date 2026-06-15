@@ -13,9 +13,39 @@ type Step = {
 
 const STEPS: Step[] = [
   {
+    target: "nav-trip",
+    title: "Build today's trip",
+    body: "This is your home base — pick riders and the app splits each leg's cost.",
+  },
+  {
+    target: "tour-detours",
+    title: "Charge detours per rider",
+    body: "Switch a leg to Detours to add each passenger's extra distance on top of the shared split.",
+  },
+  {
     target: "nav-log",
     title: "Log your trips here",
     body: "Tap Log each day to record who rode along.",
+  },
+  {
+    target: "nav-payments",
+    title: "Settle up here",
+    body: "See who owes what and mark payments paid once you're squared away.",
+  },
+  {
+    target: "tour-cars",
+    title: "Manage your cars",
+    body: "Add each car with its seats and mileage so costs use the right vehicle.",
+  },
+  {
+    target: "nav-gas",
+    title: "Track fill-ups",
+    body: "Log fuel stops so the app knows your real km/L.",
+  },
+  {
+    target: "nav-gas",
+    title: "Update gas weekly",
+    body: "Open Gas and set the current fuel price each week so splits stay accurate.",
   },
   {
     target: "nav-settings",
@@ -26,11 +56,6 @@ const STEPS: Step[] = [
     target: "nav-members",
     title: "Invite your carpool",
     body: "Open the account menu (top-right) and tap Members to add drivers and passengers.",
-  },
-  {
-    target: "nav-gas",
-    title: "Track fill-ups",
-    body: "Log fuel stops so the app knows your real km/L.",
   },
 ];
 
