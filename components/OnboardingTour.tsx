@@ -1,5 +1,7 @@
 "use client";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAccess } from "@/lib/auth/useAccess";
 
 const DONE_KEY = "cc:onboarding:done";
 const PENDING_KEY = "cc:onboarding:pending";
@@ -9,35 +11,89 @@ type Step = {
   target: string;
   title: string;
   body: string;
+  /**
+   * Route that renders this step's anchor; the tour navigates there before
+   * highlighting. Omit for layout chrome (bottom nav / account menu) that is
+   * present on every route.
+   */
+  route?: string;
+  /** Driver-only surfaces are skipped for passengers, whose nav hides them. */
+  driverOnly?: boolean;
 };
 
-const STEPS: Step[] = [
+const ALL_STEPS: Step[] = [
+  {
+    target: "nav-trip",
+    title: "Build today's trip",
+    body: "This is your home base — pick riders and the app splits each leg's cost.",
+  },
+  {
+    target: "tour-detours",
+    route: "/",
+    title: "Charge detours per rider",
+    body: "Switch a leg to Detours to add each passenger's extra distance on top of the shared split.",
+  },
   {
     target: "nav-log",
     title: "Log your trips here",
     body: "Tap Log each day to record who rode along.",
   },
   {
+    target: "nav-payments",
+    driverOnly: true,
+    title: "Settle up here",
+    body: "See who owes what and mark payments paid once you're squared away.",
+  },
+  {
+    target: "tour-cars",
+    route: "/cars",
+    driverOnly: true,
+    title: "Manage your cars",
+    body: "Add each car with its seats and mileage so costs use the right vehicle.",
+  },
+  {
+    target: "nav-gas",
+    driverOnly: true,
+    title: "Track fill-ups",
+    body: "Log fuel stops so the app knows your real km/L.",
+  },
+  {
+    target: "nav-gas",
+    driverOnly: true,
+    title: "Update gas weekly",
+    body: "Open Gas and set the current fuel price each week so splits stay accurate.",
+  },
+  {
     target: "nav-settings",
+    driverOnly: true,
     title: "Settings live here",
     body: "Tweak split percentages, tolls, and trip defaults.",
   },
   {
     target: "nav-members",
+    driverOnly: true,
     title: "Invite your carpool",
     body: "Open the account menu (top-right) and tap Members to add drivers and passengers.",
-  },
-  {
-    target: "nav-gas",
-    title: "Track fill-ups",
-    body: "Log fuel stops so the app knows your real km/L.",
   },
 ];
 
 export function OnboardingTour() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { isPassenger } = useAccess();
+
+  const steps = useMemo(
+    () => (isPassenger ? ALL_STEPS.filter((s) => !s.driverOnly) : ALL_STEPS),
+    [isPassenger],
+  );
+
   const [active, setActive] = useState(false);
   const [step, setStep] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
+
+  // The step list can shrink once the role resolves to passenger; keep the
+  // cursor in range so we never index past the end.
+  const clampedStep = Math.min(step, steps.length - 1);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -55,26 +111,45 @@ export function OnboardingTour() {
     return () => window.removeEventListener(ONBOARDING_START_EVENT, start);
   }, []);
 
+  // Navigate to the page that renders the current step's anchor before
+  // measuring, so every step resolves to a real on-screen element regardless
+  // of where the tour was launched.
+  useEffect(() => {
+    if (!active) return;
+    const route = steps[clampedStep]?.route;
+    if (route && pathname !== route) router.push(route);
+  }, [active, clampedStep, steps, pathname, router]);
+
   useLayoutEffect(() => {
     if (!active) return;
-    const target = STEPS[step]?.target;
+    const target = steps[clampedStep]?.target;
     if (!target) return;
-    const update = () => {
+    let timer = 0;
+    let tries = 0;
+    const measure = () => {
       const el = document.querySelector<HTMLElement>(`[data-tour="${target}"]`);
-      setRect(el ? el.getBoundingClientRect() : null);
+      if (el) {
+        setRect(el.getBoundingClientRect());
+        return;
+      }
+      setRect(null);
+      // The anchor may still be mounting after a route change; retry briefly.
+      if (tries++ < 40) timer = window.setTimeout(measure, 100);
     };
-    update();
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
+    measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
     return () => {
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
+      window.clearTimeout(timer);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
     };
-  }, [active, step]);
+  }, [active, clampedStep, steps]);
 
   if (!active) return null;
-  const current = STEPS[step];
-  const isLast = step === STEPS.length - 1;
+  const current = steps[clampedStep];
+  if (!current) return null;
+  const isLast = clampedStep === steps.length - 1;
 
   function finish() {
     try {
@@ -127,7 +202,7 @@ export function OnboardingTour() {
       >
         <div>
           <div className="text-xs text-slate-500">
-            Step {step + 1} of {STEPS.length}
+            Step {clampedStep + 1} of {steps.length}
           </div>
           <h3 className="font-semibold text-sm mt-0.5">{current.title}</h3>
           <p className="text-sm text-slate-600 mt-1">{current.body}</p>

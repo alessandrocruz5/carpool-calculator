@@ -79,7 +79,10 @@ export default function CarsPage() {
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Cars</h1>
 
-      <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+      <section
+        data-tour="tour-cars"
+        className="bg-white rounded-xl border border-slate-200 p-4 space-y-3"
+      >
         <h2 className="font-semibold">Add a car</h2>
         <input
           ref={nameInputRef}

@@ -88,7 +88,10 @@ export function LegCard({
         <RouteToggle value={state.route} onChange={(r) => onChange({ ...state, route: r })} readOnly={readOnly} />
       </div>
 
-      <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm">
+      <div
+        data-tour="tour-detours"
+        className="inline-flex rounded-lg border border-slate-300 overflow-hidden text-sm"
+      >
         {(["simple", "detours"] as Tab[]).map((t) => (
           <button
             key={t}
