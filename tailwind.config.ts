@@ -6,10 +6,19 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: "#eff6ff",
-          500: "#3b82f6",
-          600: "#2563eb",
-          700: "#1d4ed8",
+          50: "#f6f0ff",
+          100: "#eaddff",
+          200: "#d6bbff",
+          300: "#ba8cff",
+          400: "#9d52ff",
+          500: "#8c24ff",
+          600: "#8200ff",
+          700: "#6e00d6",
+          800: "#5800a8",
+          900: "#470085",
+          // Distinct brand accents (see Sprint 2 plan): violet-gray pair.
+          secondary: "#814DB3",
+          accent: "#80619E",
         },
         background: "var(--background)",
         foreground: "var(--foreground)",
