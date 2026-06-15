@@ -9,7 +9,7 @@ No migrations or money-flow changes — standard green-CI merges.
 Decisions: success toast on explicit saves (gas button, mileage commit) + inline "Saved ✓" for
 auto-saving sliders; #8200ff drives the brand scale with #814DB3 / #80619E as distinct accent tokens.
 
-- [ ] SABAY-7 — Brand rebrand: blue → #8200ff + accents · Changed · files: tailwind.config.ts, app/globals.css, app/layout.tsx, app/manifest.ts · depends: —
+- [x] SABAY-7 — Brand rebrand: blue → #8200ff + accents · Changed · files: tailwind.config.ts, app/layout.tsx, app/manifest.ts · depends: — (merged 2026-06-15) — `brand` Tailwind scale is now a full purple ramp 50–900 (600 = #8200ff); previously-undefined 100/200/300/400/800/900 shades now render (latent colorless bug fixed); added `brand-secondary` (#814DB3) / `brand-accent` (#80619E) tokens; PWA `theme_color` purple in layout + manifest. `globals.css` needed no edit (chrome/buttons/links use `brand-*`, not the neutral `--primary` var). Downstream: SABAY-8/9/10 build on the purple `brand-*` palette + new accent tokens.
 - [ ] SABAY-8 — Settings / gas / mileage save feedback · Fixed/Changed · files: lib/store/settings.ts, app/gas/page.tsx, app/settings/page.tsx, lib/store/settings.test.ts · depends: SABAY-7
 - [ ] SABAY-9 — CRUD toast sweep (remaining resources) · Added · files: app/page.tsx, app/cars/page.tsx, app/cars/[carId]/page.tsx, app/admin/members/MembersAdmin.tsx, app/groups/page.tsx, app/log/page.tsx, roster/fillups UI · depends: SABAY-8
 - [ ] SABAY-10 — App tour expansion · Changed · files: components/OnboardingTour.tsx, components/nav/BottomNav.tsx, components/LegCard.tsx, app/payments/page.tsx, app/cars/page.tsx · depends: SABAY-7

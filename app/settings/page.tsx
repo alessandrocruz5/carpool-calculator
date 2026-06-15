@@ -1,9 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Car as CarIcon, ChevronRight } from "lucide-react";
 import dayjs from "dayjs";
-import { useSettings } from "@/lib/store/settings";
+import { useSettings, type SaveResult } from "@/lib/store/settings";
 import { useRoster, type Passenger } from "@/lib/store/roster";
 import { useCars } from "@/lib/store/cars";
 import { useFillups } from "@/lib/store/fillups";
@@ -21,6 +21,7 @@ export default function SettingsPage() {
   const { fillups, add: addFillup, remove: removeFillup } = useFillups();
   const toast = useToast();
   const [newName, setNewName] = useState("");
+  const [mileageDraft, setMileageDraft] = useState("");
 
   const [fillupDate, setFillupDate] = useState(dayjs().format("YYYY-MM-DD"));
   const [fillupCarId, setFillupCarId] = useState("");
@@ -52,6 +53,27 @@ export default function SettingsPage() {
     rolling && override ? Math.abs(override - rolling) / rolling : null;
   const overrideOff =
     overrideInEffect && divergencePct != null && divergencePct > 0.15;
+
+  // Keep the draft in sync with the stored override (e.g. after hydration or a
+  // committed save); the value only changes here on blur, so this never clobbers
+  // mid-edit typing.
+  useEffect(() => {
+    setMileageDraft(override ? String(override) : "");
+  }, [override]);
+
+  async function commitMileage() {
+    const next = parseFloat(mileageDraft) || 0;
+    if (next === override) return;
+    const res = await setSettings({ mileageKmPerL: next });
+    toast.show(
+      res.ok
+        ? { message: "Mileage override saved.", variant: "success" }
+        : {
+            message: describeError(res.error, "Couldn't save mileage override."),
+            variant: "error",
+          }
+    );
+  }
 
   async function handleAdd() {
     const name = newName.trim();
@@ -226,10 +248,9 @@ export default function SettingsPage() {
               type="number"
               step="0.01"
               placeholder="km/L"
-              value={settings.mileageKmPerL || ""}
-              onChange={(e) =>
-                setSettings({ mileageKmPerL: parseFloat(e.target.value) || 0 })
-              }
+              value={mileageDraft}
+              onChange={(e) => setMileageDraft(e.target.value)}
+              onBlur={commitMileage}
               className="w-24 border border-slate-300 rounded px-2 py-0.5 text-right"
             />
             <Switch
@@ -456,25 +477,46 @@ function Field({
 }: {
   label: string;
   value: number;
-  onChange: (n: number) => void;
+  onChange: (n: number) => Promise<SaveResult>;
   integer?: boolean;
 }) {
+  const [saved, setSaved] = useState(false);
+  const savedTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => () => clearTimeout(savedTimer.current), []);
+
+  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const n =
+      (integer ? parseInt(e.target.value, 10) : parseFloat(e.target.value)) || 0;
+    const res = await onChange(n);
+    if (!res.ok) return;
+    // Non-toast confirmation for these auto-saving inputs; transient so rapid
+    // edits don't pile up.
+    setSaved(true);
+    clearTimeout(savedTimer.current);
+    savedTimer.current = setTimeout(() => setSaved(false), 1500);
+  }
+
   return (
     <label className="flex items-center justify-between text-sm">
       <span className="text-slate-600">{label}</span>
-      <input
-        type="number"
-        value={value}
-        step={integer ? "1" : "0.01"}
-        onChange={(e) =>
-          onChange(
-            (integer
-              ? parseInt(e.target.value, 10)
-              : parseFloat(e.target.value)) || 0
-          )
-        }
-        className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-right"
-      />
+      <span className="flex items-center gap-2">
+        <span
+          aria-live="polite"
+          className={`text-xs text-emerald-600 transition-opacity ${
+            saved ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          Saved ✓
+        </span>
+        <input
+          type="number"
+          value={value}
+          step={integer ? "1" : "0.01"}
+          onChange={handleChange}
+          className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-right"
+        />
+      </span>
     </label>
   );
 }

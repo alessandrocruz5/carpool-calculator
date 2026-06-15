@@ -3,14 +3,17 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { DEFAULT_SETTINGS, type CalcSettings } from "@/lib/calc";
 
+/** Result of a save mutation the UI can branch on for toast/inline feedback. */
+export type SaveResult = { ok: true } | { ok: false; error: string };
+
 interface SettingsStore {
   settings: CalcSettings;
   gasPrice: number;
   gasPriceUpdatedAt: string | null;
   hydrated: boolean;
   hydrate: () => Promise<void>;
-  setSettings: (s: Partial<CalcSettings>) => Promise<void>;
-  setGasPrice: (price: number) => Promise<void>;
+  setSettings: (s: Partial<CalcSettings>) => Promise<SaveResult>;
+  setGasPrice: (price: number) => Promise<SaveResult>;
 }
 
 export const useSettings = create<SettingsStore>()(
@@ -52,9 +55,11 @@ export const useSettings = create<SettingsStore>()(
             body: JSON.stringify(s),
           });
           if (!res.ok) throw new Error(await res.text());
+          return { ok: true };
         } catch (err) {
           console.error("settings.setSettings failed", err);
           await get().hydrate();
+          return { ok: false, error: errorMessage(err) };
         }
       },
       setGasPrice: async (price) => {
@@ -72,9 +77,11 @@ export const useSettings = create<SettingsStore>()(
             gasPriceUpdatedAt: string;
           };
           set({ gasPrice: g.gasPrice, gasPriceUpdatedAt: g.gasPriceUpdatedAt });
+          return { ok: true };
         } catch (err) {
           console.error("settings.setGasPrice failed", err);
           await get().hydrate();
+          return { ok: false, error: errorMessage(err) };
         }
       },
     }),
@@ -88,3 +95,7 @@ export const useSettings = create<SettingsStore>()(
     }
   )
 );
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err ?? "");
+}
