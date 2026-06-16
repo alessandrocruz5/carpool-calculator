@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.7.0 — 2026-06-15
+
+Quality-of-life polish & rebrand
+
+- Every create, edit, and delete now confirms with a success or error toast — across roster, cars, fill-ups, members, groups, and trips — so saves never fail silently.
+- Settings, gas-price, and mileage saves give explicit feedback, including a transient "Saved ✓" on auto-saving trip-default and split fields.
+- Refreshed brand look: the app palette moved from blue to purple, including the installable app's theme colour.
+- The onboarding tour grew from 4 to 9 steps, now covering all the main navigation plus Detours, Cars, and the weekly gas-price routine. The tour walks you to each screen as it goes and skips driver-only steps for passengers.
+
+## 1.6.0 — 2026-06-14
+
+Per-passenger distance splitting
+
+- New Detours mode on each trip leg: when a rider's route adds extra distance, that rider's detour fuel is charged entirely to them, on top of the usual driver-favoured split of the shared base cost.
+- Per-passenger extra-kilometre inputs with a live, per-rider breakdown; the Detours tab opens automatically for trips that already have extra distance.
+- Day totals and payment splits now account for each rider's detour fuel.
+- Fully backward-compatible: existing trips have no extra distance and produce identical numbers.
+
 ## 1.5.0 — 2026-06-04
 
 Mileage override system overhaul
