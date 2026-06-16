@@ -13,6 +13,7 @@ import { useCars } from "@/lib/store/cars";
 import { useMembers } from "@/lib/store/members";
 import { useGroups } from "@/lib/store/groups";
 import { useProfile } from "@/lib/store/profile";
+import { NamePrompt } from "@/components/NamePrompt";
 import { useToast } from "@/components/Toast";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
 import { DriverSelect } from "@/components/DriverSelect";
@@ -161,6 +162,7 @@ export default function TodayPage() {
 
   return (
     <div className="space-y-4">
+      <NamePrompt />
       <div className="sticky top-0 z-20 -mx-4 flex items-center justify-between border-b border-slate-200 bg-white/90 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/75">
         <div>
           <h1 className="text-xl font-semibold">{dayjs(today).format("ddd, MMM D")}</h1>

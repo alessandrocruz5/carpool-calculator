@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { NotificationsToggle } from "@/components/push/NotificationsToggle";
+import { useProfile } from "@/lib/store/profile";
 import { useToast } from "@/components/Toast";
 
 export default function AccountForm() {
@@ -53,6 +54,7 @@ export default function AccountForm() {
   return (
     <div className="max-w-sm mx-auto space-y-4">
       <h1 className="text-xl font-semibold">Account</h1>
+      <NameSection />
       <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <h2 className="font-semibold">Password</h2>
         <p className="text-sm text-slate-600">
@@ -100,6 +102,79 @@ export default function AccountForm() {
       <ExportDataSection />
       <DeleteAccountSection currentEmail={currentEmail} />
     </div>
+  );
+}
+
+function NameSection() {
+  const profile = useProfile((s) => s.profile);
+  const hydrated = useProfile((s) => s.hydrated);
+  const update = useProfile((s) => s.update);
+  const toast = useToast();
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [seeded, setSeeded] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Seed the inputs from the profile once it has hydrated.
+  useEffect(() => {
+    if (seeded || !hydrated || !profile) return;
+    setFirstName(profile.firstName ?? "");
+    setLastName(profile.lastName ?? "");
+    setSeeded(true);
+  }, [seeded, hydrated, profile]);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const first = firstName.trim();
+    const last = lastName.trim();
+    if (!first) {
+      toast.show({ message: "Enter your first name.", variant: "info" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await update({ firstName: first, lastName: last });
+      toast.show({ message: "Name saved.", variant: "success" });
+    } catch {
+      toast.show({ message: "Couldn't save your name.", variant: "error" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+      <h2 className="font-semibold">Your name</h2>
+      <p className="text-sm text-slate-600">
+        Shown to the rest of your carpool instead of your email.
+      </p>
+      <form onSubmit={onSubmit} className="space-y-3">
+        <input
+          type="text"
+          autoComplete="given-name"
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          placeholder="First name"
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+        />
+        <input
+          type="text"
+          autoComplete="family-name"
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
+          placeholder="Last name"
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={saving || !hydrated}
+          className="w-full bg-brand-600 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-60"
+        >
+          {saving ? "Saving..." : "Save name"}
+        </button>
+      </form>
+    </section>
   );
 }
 
