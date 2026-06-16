@@ -6,6 +6,7 @@ import type { DbMember } from "@/lib/supabase/types";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { getActiveGroupId, requireActiveGroupId } from "@/lib/group";
 import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
+import { log } from "@/lib/log";
 
 export const dynamic = "force-dynamic";
 
@@ -117,20 +118,24 @@ export async function POST(req: Request) {
     .maybeSingle();
   if (invite) {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
+    // The pending membership is already durable (member_invites row) and will
+    // be claimed on next sign-in regardless, so a failed/missing invite email
+    // degrades cleanly rather than failing the request — matching the project's
+    // "optional integrations degrade cleanly" convention and avoiding a second
+    // email on driver retry. A concurrent sign-up can race us into "already
+    // registered", which is benign and isn't logged.
     try {
       const admin = createAdminClient();
       const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
         email,
         { redirectTo: `${siteUrl}/auth/confirm` }
       );
-      // A concurrent sign-up can race us into "already registered"; the pending
-      // membership stands and is claimed on next sign-in, so don't fail.
       if (inviteErr && !/already.*registered/i.test(inviteErr.message)) {
-        return NextResponse.json({ error: inviteErr.message }, { status: 500 });
+        log.warn("member invite email failed to send", { groupId });
       }
-    } catch {
-      // Admin client not configured (no service-role key) — the invite row
-      // still exists, so degrade cleanly instead of failing the request.
+    } catch (e) {
+      // Admin client not configured (no service-role key) or threw.
+      log.warn("member invite email skipped", { groupId, err: e });
     }
   }
   return NextResponse.json({ ok: true });

@@ -235,6 +235,25 @@ describe("POST /api/members", () => {
     expect(res.status).toBe(200);
     expect(inviteCalls).toHaveLength(1);
   });
+
+  it("degrades to ok when the invite email fails to send", async () => {
+    // The pending membership is already durable, so a transient send failure
+    // must not fail the request (it would otherwise prompt a retry that emails
+    // twice). The membership is still claimed on next sign-in.
+    inviteError.current = { message: "SMTP connection refused" };
+    setSupa({
+      rpcs: { link_member_by_email: [{ data: null, error: null }] },
+      tables: { member_invites: [{ data: { email: "down@b.com" }, error: null }] },
+    });
+    const res = await POST(
+      new Request("http://t/api/members", {
+        method: "POST",
+        body: JSON.stringify({ email: "down@b.com", role: "passenger" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(inviteCalls).toHaveLength(1);
+  });
 });
 
 describe("PATCH /api/members", () => {
