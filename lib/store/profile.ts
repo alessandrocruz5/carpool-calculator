@@ -5,6 +5,8 @@ import { persist } from "zustand/middleware";
 export interface Profile {
   userId: string;
   displayName: string | null;
+  firstName: string | null;
+  lastName: string | null;
   avatarUrl: string | null;
 }
 
@@ -14,6 +16,8 @@ interface ProfileStore {
   hydrate: () => Promise<void>;
   update: (patch: {
     displayName?: string;
+    firstName?: string;
+    lastName?: string;
     avatarUrl?: string;
   }) => Promise<void>;
 }
@@ -35,21 +39,23 @@ export const useProfile = create<ProfileStore>()(
         }
       },
       update: async (patch) => {
-        set((s) =>
-          s.profile
-            ? {
-                profile: {
-                  ...s.profile,
-                  ...(patch.displayName !== undefined
-                    ? { displayName: patch.displayName }
-                    : {}),
-                  ...(patch.avatarUrl !== undefined
-                    ? { avatarUrl: patch.avatarUrl }
-                    : {}),
-                },
-              }
-            : s
-        );
+        set((s) => {
+          if (!s.profile) return s;
+          const next: Profile = { ...s.profile };
+          if (patch.displayName !== undefined) next.displayName = patch.displayName;
+          if (patch.firstName !== undefined) next.firstName = patch.firstName || null;
+          if (patch.lastName !== undefined) next.lastName = patch.lastName || null;
+          if (patch.avatarUrl !== undefined) next.avatarUrl = patch.avatarUrl;
+          // Mirror the server: compose display_name from first/last on write so
+          // existing display_name consumers stay in sync optimistically.
+          if (patch.firstName !== undefined || patch.lastName !== undefined) {
+            const composed = [next.firstName, next.lastName]
+              .filter((x): x is string => !!x)
+              .join(" ");
+            next.displayName = composed || null;
+          }
+          return { profile: next };
+        });
         try {
           const res = await fetch("/api/profile", {
             method: "PATCH",
