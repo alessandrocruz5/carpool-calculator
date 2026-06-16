@@ -30,5 +30,9 @@ export default async function MembersAdminPage() {
     );
   }
 
-  return <MembersAdmin />;
+  return (
+    <div data-tour="tour-members">
+      <MembersAdmin />
+    </div>
+  );
 }

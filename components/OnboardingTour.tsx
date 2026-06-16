@@ -64,10 +64,18 @@ const ALL_STEPS: Step[] = [
     body: "Tweak split percentages, tolls, car mileage, and other trip defaults.",
   },
   {
-    target: "nav-members",
+    target: "tour-groups",
+    route: "/groups",
+    driverOnly: true,
+    title: "Manage your groups",
+    body: "Create or switch between carpools here — each group keeps its own trips, roster, and settings.",
+  },
+  {
+    target: "tour-members",
+    route: "/admin/members",
     driverOnly: true,
     title: "Invite your carpool",
-    body: "Open the account menu (top-right) and tap Members to add drivers and passengers.",
+    body: "Add drivers and passengers to this group by email so everyone shares the same trips.",
   },
 ];
 
