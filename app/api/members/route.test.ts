@@ -11,6 +11,8 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 const adminEmails: { current: Record<string, string | null> } = { current: {} };
+const inviteCalls: { email: string; options?: unknown }[] = [];
+const inviteError: { current: { message: string } | null } = { current: null };
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: vi.fn(() => ({
     auth: {
@@ -19,6 +21,10 @@ vi.mock("@/lib/supabase/admin", () => ({
           data: { user: { email: adminEmails.current[id] ?? null } },
           error: null,
         })),
+        inviteUserByEmail: vi.fn(async (email: string, options?: unknown) => {
+          inviteCalls.push({ email, options });
+          return { data: { user: null }, error: inviteError.current };
+        }),
       },
     },
   })),
@@ -67,6 +73,8 @@ beforeEach(() => {
   supaState.current = null;
   groupState.id = "g1";
   adminEmails.current = {};
+  inviteCalls.length = 0;
+  inviteError.current = null;
 });
 
 describe("GET /api/members", () => {
@@ -166,6 +174,86 @@ describe("POST /api/members", () => {
       args: { p_group_id: "g1", p_email: "a@b.com", p_role: "both" },
     });
   });
+
+  it("emails a brand-new address and keeps the pending membership", async () => {
+    // link_member_by_email created a member_invites row (no auth user yet) →
+    // we should send the Supabase invite email to the confirm redirect while
+    // the pending membership (the RPC call) still stands.
+    const supa = setSupa({
+      rpcs: { link_member_by_email: [{ data: null, error: null }] },
+      tables: { member_invites: [{ data: { email: "new@b.com" }, error: null }] },
+    });
+    const res = await POST(
+      new Request("http://t/api/members", {
+        method: "POST",
+        body: JSON.stringify({ email: " new@b.com ", role: "passenger" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(supa.rpcCalls()[0]).toMatchObject({
+      name: "link_member_by_email",
+      args: { p_email: "new@b.com", p_role: "passenger" },
+    });
+    expect(inviteCalls).toHaveLength(1);
+    expect(inviteCalls[0].email).toBe("new@b.com");
+    expect((inviteCalls[0].options as { redirectTo: string }).redirectTo).toMatch(
+      /\/auth\/confirm$/
+    );
+  });
+
+  it("does not email when the address already has an account", async () => {
+    // No member_invites row means link_member_by_email took the existing-user
+    // branch (added straight to members) — behavior must be unchanged.
+    setSupa({
+      rpcs: { link_member_by_email: [{ data: null, error: null }] },
+      tables: { member_invites: [{ data: null, error: null }] },
+    });
+    const res = await POST(
+      new Request("http://t/api/members", {
+        method: "POST",
+        body: JSON.stringify({ email: "exists@b.com", role: "both" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(inviteCalls).toHaveLength(0);
+  });
+
+  it("still succeeds when a racing sign-up makes the invite say 'already registered'", async () => {
+    inviteError.current = {
+      message: "A user with this email address has already been registered",
+    };
+    setSupa({
+      rpcs: { link_member_by_email: [{ data: null, error: null }] },
+      tables: { member_invites: [{ data: { email: "race@b.com" }, error: null }] },
+    });
+    const res = await POST(
+      new Request("http://t/api/members", {
+        method: "POST",
+        body: JSON.stringify({ email: "race@b.com", role: "passenger" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(inviteCalls).toHaveLength(1);
+  });
+
+  it("degrades to ok when the invite email fails to send", async () => {
+    // The pending membership is already durable, so a transient send failure
+    // must not fail the request (it would otherwise prompt a retry that emails
+    // twice). The membership is still claimed on next sign-in.
+    inviteError.current = { message: "SMTP connection refused" };
+    setSupa({
+      rpcs: { link_member_by_email: [{ data: null, error: null }] },
+      tables: { member_invites: [{ data: { email: "down@b.com" }, error: null }] },
+    });
+    const res = await POST(
+      new Request("http://t/api/members", {
+        method: "POST",
+        body: JSON.stringify({ email: "down@b.com", role: "passenger" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(inviteCalls).toHaveLength(1);
+  });
 });
 
 describe("PATCH /api/members", () => {
@@ -186,6 +274,83 @@ describe("PATCH /api/members", () => {
     );
     expect(res.status).toBe(200);
     expect((await res.json()).role).toBe("both");
+  });
+
+  function passengerInsertName(supa: ReturnType<typeof setSupa>) {
+    const insert = supa
+      .callsFor("passengers")
+      .flat()
+      .find((c) => c.method === "insert");
+    return (insert?.args[0] as { name?: string } | undefined)?.name;
+  }
+
+  it("auto-creates the passenger with the composed display name", async () => {
+    const supa = setSupa({
+      tables: {
+        members: [
+          { data: { role: "driver" }, error: null },
+          { data: { ...row, role: "both", passenger_id: null }, error: null },
+        ],
+        profiles: [{ data: { display_name: "Bob Smith" }, error: null }],
+        passengers: [{ data: { id: "p1" }, error: null }],
+      },
+    });
+    const res = await PATCH(
+      new Request("http://t/api/members", {
+        method: "PATCH",
+        body: JSON.stringify({ userId: "u2", role: "both" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(passengerInsertName(supa)).toBe("Bob Smith");
+  });
+
+  it("falls back to the email local-part (never a raw id) when no name", async () => {
+    adminEmails.current = { u2: "bob@corp.com" };
+    const supa = setSupa({
+      tables: {
+        members: [
+          { data: { role: "driver" }, error: null },
+          { data: { ...row, role: "both", passenger_id: null }, error: null },
+        ],
+        profiles: [{ data: { display_name: null }, error: null }],
+        passengers: [{ data: { id: "p1" }, error: null }],
+      },
+    });
+    const res = await PATCH(
+      new Request("http://t/api/members", {
+        method: "PATCH",
+        body: JSON.stringify({ userId: "u2", role: "both" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(passengerInsertName(supa)).toBe("bob");
+  });
+
+  it("falls back to a short id (not a raw UUID) when no name and no email", async () => {
+    // No admin email queued for u2, and the profile has no name → the label
+    // must degrade to the short id, never the full UUID.
+    const supa = setSupa({
+      tables: {
+        members: [
+          { data: { role: "driver" }, error: null },
+          {
+            data: { ...row, user_id: "abcdef12-3456", role: "both", passenger_id: null },
+            error: null,
+          },
+        ],
+        profiles: [{ data: { display_name: null }, error: null }],
+        passengers: [{ data: { id: "p1" }, error: null }],
+      },
+    });
+    const res = await PATCH(
+      new Request("http://t/api/members", {
+        method: "PATCH",
+        body: JSON.stringify({ userId: "abcdef12-3456", role: "both" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(passengerInsertName(supa)).toBe("abcdef12");
   });
 });
 
