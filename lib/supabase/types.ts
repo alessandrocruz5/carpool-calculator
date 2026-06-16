@@ -10,6 +10,8 @@ export interface DbGroup {
 export interface DbProfile {
   user_id: string;
   display_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   avatar_url: string | null;
   created_at: string;
   updated_at: string;

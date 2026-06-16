@@ -36,9 +36,15 @@ export function toDbGroupInsert(
 
 export function toDbProfilePatch(
   p: Partial<Omit<Profile, "userId">>
-): Partial<Pick<DbProfile, "display_name" | "avatar_url">> {
-  const out: Partial<Pick<DbProfile, "display_name" | "avatar_url">> = {};
+): Partial<
+  Pick<DbProfile, "display_name" | "first_name" | "last_name" | "avatar_url">
+> {
+  const out: Partial<
+    Pick<DbProfile, "display_name" | "first_name" | "last_name" | "avatar_url">
+  > = {};
   if (p.displayName !== undefined) out.display_name = p.displayName;
+  if (p.firstName !== undefined) out.first_name = p.firstName;
+  if (p.lastName !== undefined) out.last_name = p.lastName;
   if (p.avatarUrl !== undefined) out.avatar_url = p.avatarUrl;
   return out;
 }
@@ -121,6 +127,8 @@ export function fromDbProfile(r: DbProfile): Profile {
   return {
     userId: r.user_id,
     displayName: r.display_name,
+    firstName: r.first_name ?? null,
+    lastName: r.last_name ?? null,
     avatarUrl: r.avatar_url,
   };
 }

@@ -175,18 +175,49 @@ describe("profile mappers", () => {
     expect(
       fromDbProfile({
         user_id: "u1",
-        display_name: "Ana",
+        display_name: "Ana Cruz",
+        first_name: "Ana",
+        last_name: "Cruz",
         avatar_url: null,
         created_at: "x",
         updated_at: "x",
       })
-    ).toEqual({ userId: "u1", displayName: "Ana", avatarUrl: null });
+    ).toEqual({
+      userId: "u1",
+      displayName: "Ana Cruz",
+      firstName: "Ana",
+      lastName: "Cruz",
+      avatarUrl: null,
+    });
+  });
+
+  it("defaults missing first/last names to null", () => {
+    expect(
+      fromDbProfile({
+        user_id: "u1",
+        display_name: "Ana",
+        first_name: null,
+        last_name: null,
+        avatar_url: null,
+        created_at: "x",
+        updated_at: "x",
+      })
+    ).toEqual({
+      userId: "u1",
+      displayName: "Ana",
+      firstName: null,
+      lastName: null,
+      avatarUrl: null,
+    });
   });
 
   it("converts partial patches, dropping unset fields", () => {
     expect(toDbProfilePatch({ displayName: "Ana" })).toEqual({
       display_name: "Ana",
     });
+    expect(
+      toDbProfilePatch({ firstName: "Ana", lastName: "Cruz" })
+    ).toEqual({ first_name: "Ana", last_name: "Cruz" });
     expect(toDbProfilePatch({ avatarUrl: null })).toEqual({ avatar_url: null });
     expect(toDbProfilePatch({})).toEqual({});
   });

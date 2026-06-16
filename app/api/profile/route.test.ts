@@ -18,7 +18,9 @@ function setSupa(opts: Parameters<typeof makeSupabase>[0]) {
 
 const row = {
   user_id: "u1",
-  display_name: "Ana",
+  display_name: "Ana Cruz",
+  first_name: "Ana",
+  last_name: "Cruz",
   avatar_url: null,
   created_at: "x",
   updated_at: "x",
@@ -34,11 +36,13 @@ describe("GET /api/profile", () => {
     expect((await GET()).status).toBe(401);
   });
 
-  it("returns the mapped own profile", async () => {
+  it("returns the mapped own profile with first/last names", async () => {
     setSupa({ tables: { profiles: [{ data: row, error: null }] } });
     expect(await (await GET()).json()).toEqual({
       userId: "u1",
-      displayName: "Ana",
+      displayName: "Ana Cruz",
+      firstName: "Ana",
+      lastName: "Cruz",
       avatarUrl: null,
     });
   });
@@ -81,5 +85,29 @@ describe("PATCH /api/profile", () => {
     expect((update!.args[0] as { display_name: string }).display_name).toBe(
       "New"
     );
+  });
+
+  it("persists first/last and a composed display_name", async () => {
+    const supa = setSupa({
+      tables: { profiles: [{ data: row, error: null }] },
+    });
+    const res = await PATCH(
+      new Request("http://t/api/profile", {
+        method: "PATCH",
+        body: JSON.stringify({ firstName: " Ana ", lastName: " Cruz " }),
+      })
+    );
+    expect(res.status).toBe(200);
+    const update = supa
+      .callsFor("profiles")[0]
+      .find((c) => c.method === "update");
+    const args = update!.args[0] as {
+      first_name: string;
+      last_name: string;
+      display_name: string;
+    };
+    expect(args.first_name).toBe("Ana");
+    expect(args.last_name).toBe("Cruz");
+    expect(args.display_name).toBe("Ana Cruz");
   });
 });
