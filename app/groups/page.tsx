@@ -166,7 +166,10 @@ export default function GroupsPage() {
         </div>
       )}
 
-      <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+      <section
+        data-tour="tour-groups"
+        className="bg-white rounded-xl border border-slate-200 p-4 space-y-3"
+      >
         <h2 className="font-semibold">Create a group</h2>
         <div className="flex gap-2">
           <input
