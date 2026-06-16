@@ -132,9 +132,23 @@ export async function PATCH(req: Request) {
       .select("display_name")
       .eq("user_id", body.userId)
       .maybeSingle();
-    const name =
+    // Prefer the account name, then the email local-part, then a short id —
+    // matching link_member_by_email so a roster label never degrades to a raw
+    // UUID when an email is known.
+    let name =
       (profileRow as { display_name?: string | null } | null)?.display_name?.trim() ||
-      body.userId.slice(0, 8);
+      "";
+    if (!name) {
+      let email: string | null = null;
+      try {
+        const admin = createAdminClient();
+        const { data: lookup } = await admin.auth.admin.getUserById(body.userId);
+        email = lookup?.user?.email ?? null;
+      } catch {
+        // admin client not configured — fall through to the short id.
+      }
+      name = email ? email.split("@")[0] : body.userId.slice(0, 8);
+    }
     const { data: passenger, error: pErr } = await supabase
       .from("passengers")
       .insert({ group_id: groupId, name, active: true })
