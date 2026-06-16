@@ -1,6 +1,26 @@
 # Carpool Calculator — Sprints
 Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded from changelog)
 
+## Sprint 3 — App tour, profile identity & invites   (planned 2026-06-16)
+Epic: SABAY-11 · base branch: `main` · target version: v1.8.0
+
+Two themes folded into one sprint. (a) Tour correctness + reach: drop the dead fill-ups step and
+fold mileage into Settings copy, add a Groups/Members step, give passengers a dedicated tour, and
+allow bidirectional (Back) navigation — all in components/OnboardingTour.tsx (serial, shared file).
+(b) Profile identity + invites: add first/last name to profiles (display_name composed "First Last"
+for backward-compat), capture it on the Account page + a one-time first-run prompt, make the
+member/driver dropdown + roster use account names (backfill linked passengers), and actually email
+group invitations via Supabase admin.inviteUserByEmail. Units 4 & 6 add migrations + Unit 7 touches
+auth/admin → code-guardian gate. No money flow.
+
+- [ ] SABAY-12 — Fix tour content + add Back navigation · Fixed · files: components/OnboardingTour.tsx · depends: —
+- [ ] SABAY-13 — Groups & Members tour step · Added · files: components/OnboardingTour.tsx, app/groups/page.tsx, app/admin/members/page.tsx · depends: SABAY-12
+- [ ] SABAY-14 — Dedicated passenger tour · Added · files: components/OnboardingTour.tsx · depends: SABAY-12, SABAY-13
+- [ ] SABAY-15 — Profile first/last name: schema + API · Added · files: supabase/migrations/<new>_profile_names.sql, lib/supabase/types.ts, lib/supabase/mappers.ts, lib/store/profile.ts, app/api/profile/route.ts · depends: — · high-stakes (migration)
+- [ ] SABAY-16 — Name on Account page + first-run prompt · Added · files: app/account/AccountForm.tsx, components/NamePrompt.tsx, app/page.tsx · depends: SABAY-15
+- [ ] SABAY-17 — Roster & dropdowns use account names + backfill · Changed · files: supabase/migrations/<new>_backfill_linked_passenger_names.sql, app/api/members/route.ts, app/settings/page.tsx, components/PassengerChips.tsx · depends: SABAY-15 · high-stakes (migration)
+- [ ] SABAY-18 — Email group invitations · Fixed · files: app/api/members/route.ts, lib/supabase/admin.ts, app/api/members/route.test.ts · depends: SABAY-17 · high-stakes (auth/email)
+
 ## Sprint 2 — QoL & rebrand (toasts, purple theme, tour)   (planned 2026-06-15 · released v1.7.0 2026-06-15)
 Epic: SABAY-6 · base branch: `main` · target version: v1.7.0
 

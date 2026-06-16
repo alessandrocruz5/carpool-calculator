@@ -54,12 +54,6 @@ const ALL_STEPS: Step[] = [
   {
     target: "nav-gas",
     driverOnly: true,
-    title: "Track fill-ups",
-    body: "Log fuel stops so the app knows your real km/L.",
-  },
-  {
-    target: "nav-gas",
-    driverOnly: true,
     title: "Update gas weekly",
     body: "Open Gas and set the current fuel price each week so splits stay accurate.",
   },
@@ -67,7 +61,7 @@ const ALL_STEPS: Step[] = [
     target: "nav-settings",
     driverOnly: true,
     title: "Settings live here",
-    body: "Tweak split percentages, tolls, and trip defaults.",
+    body: "Tweak split percentages, tolls, car mileage, and other trip defaults.",
   },
   {
     target: "nav-members",
@@ -163,6 +157,15 @@ export function OnboardingTour() {
     else setStep((s) => s + 1);
   }
 
+  const isFirst = clampedStep === 0;
+
+  function back() {
+    if (isFirst) return;
+    // Decrementing re-runs the navigate + measure effects, so the prior step's
+    // anchor is re-routed to and re-measured just like a forward move.
+    setStep(() => clampedStep - 1);
+  }
+
   const tooltipStyle: React.CSSProperties = (() => {
     if (!rect) return { top: "50%", left: "50%", transform: "translate(-50%, -50%)" };
     const width = 280;
@@ -214,12 +217,22 @@ export function OnboardingTour() {
           >
             Skip
           </button>
-          <button
-            onClick={next}
-            className="bg-brand-600 text-white text-sm rounded-lg px-3 py-1.5"
-          >
-            {isLast ? "Done" : "Next"}
-          </button>
+          <div className="flex items-center gap-2">
+            {!isFirst && (
+              <button
+                onClick={back}
+                className="text-slate-600 text-sm rounded-lg border border-slate-200 px-3 py-1.5"
+              >
+                Back
+              </button>
+            )}
+            <button
+              onClick={next}
+              className="bg-brand-600 text-white text-sm rounded-lg px-3 py-1.5"
+            >
+              {isLast ? "Done" : "Next"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
