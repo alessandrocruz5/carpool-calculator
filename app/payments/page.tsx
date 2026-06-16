@@ -60,7 +60,7 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div data-tour="tour-payments" className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Payments</h1>
         <Link
           href="/log"

@@ -17,11 +17,9 @@ type Step = {
    * present on every route.
    */
   route?: string;
-  /** Driver-only surfaces are skipped for passengers, whose nav hides them. */
-  driverOnly?: boolean;
 };
 
-const ALL_STEPS: Step[] = [
+const DRIVER_STEPS: Step[] = [
   {
     target: "nav-trip",
     title: "Build today's trip",
@@ -40,42 +38,70 @@ const ALL_STEPS: Step[] = [
   },
   {
     target: "nav-payments",
-    driverOnly: true,
     title: "Settle up here",
     body: "See who owes what and mark payments paid once you're squared away.",
   },
   {
     target: "tour-cars",
     route: "/cars",
-    driverOnly: true,
     title: "Manage your cars",
     body: "Add each car with its seats and mileage so costs use the right vehicle.",
   },
   {
     target: "nav-gas",
-    driverOnly: true,
     title: "Update gas weekly",
     body: "Open Gas and set the current fuel price each week so splits stay accurate.",
   },
   {
     target: "nav-settings",
-    driverOnly: true,
     title: "Settings live here",
     body: "Tweak split percentages, tolls, car mileage, and other trip defaults.",
   },
   {
     target: "tour-groups",
     route: "/groups",
-    driverOnly: true,
     title: "Manage your groups",
     body: "Create or switch between carpools here — each group keeps its own trips, roster, and settings.",
   },
   {
     target: "tour-members",
     route: "/admin/members",
-    driverOnly: true,
     title: "Invite your carpool",
     body: "Add drivers and passengers to this group by email so everyone shares the same trips.",
+  },
+];
+
+// Passengers see a trimmed nav (Trip + Log) and read-only screens, so they get
+// their own walkthrough — every step here highlights a surface a passenger can
+// actually reach. No driver-only routes (cars / gas / settings / members).
+const PASSENGER_STEPS: Step[] = [
+  {
+    target: "nav-trip",
+    title: "See today's trip",
+    body: "Your home base — check who's riding each day and what your share of each leg costs.",
+  },
+  {
+    target: "tour-detours",
+    route: "/",
+    title: "Detours affect your share",
+    body: "When a leg is on Detours, any extra distance for your stop is added to your share on top of the shared split.",
+  },
+  {
+    target: "nav-log",
+    title: "Review your trips",
+    body: "Tap Log to see every trip you've ridden and your running balance.",
+  },
+  {
+    target: "tour-payments",
+    route: "/payments",
+    title: "Track what you owe",
+    body: "See your unpaid balance here. Your driver marks each ride paid once you've settled up — tap a charge to flag a problem.",
+  },
+  {
+    target: "tour-groups",
+    route: "/groups",
+    title: "Switch carpools",
+    body: "Each group keeps its own trips and roster. Switch between the carpools you belong to here.",
   },
 ];
 
@@ -85,7 +111,7 @@ export function OnboardingTour() {
   const { isPassenger } = useAccess();
 
   const steps = useMemo(
-    () => (isPassenger ? ALL_STEPS.filter((s) => !s.driverOnly) : ALL_STEPS),
+    () => (isPassenger ? PASSENGER_STEPS : DRIVER_STEPS),
     [isPassenger],
   );
 
@@ -93,8 +119,8 @@ export function OnboardingTour() {
   const [step, setStep] = useState(0);
   const [rect, setRect] = useState<DOMRect | null>(null);
 
-  // The step list can shrink once the role resolves to passenger; keep the
-  // cursor in range so we never index past the end.
+  // The step list swaps to the shorter passenger walkthrough once the role
+  // resolves; keep the cursor in range so we never index past the end.
   const clampedStep = Math.min(step, steps.length - 1);
 
   useEffect(() => {
