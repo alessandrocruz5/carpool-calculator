@@ -101,6 +101,38 @@ export async function POST(req: Request) {
     p_role: body.role,
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // link_member_by_email writes a member_invites row only when no auth user
+  // exists yet for this email (existing accounts are added straight to
+  // members). When that pending invite was created, send Supabase's invite
+  // email so the new user can confirm and claim the membership on first
+  // sign-in. This MUST run after the RPC: admin.inviteUserByEmail creates the
+  // auth user immediately, which would otherwise flip the RPC into the
+  // existing-user branch and skip the member_invites -> claim flow.
+  const { data: invite } = await supabase
+    .from("member_invites")
+    .select("email")
+    .eq("group_id", groupId)
+    .eq("email", email)
+    .maybeSingle();
+  if (invite) {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
+    try {
+      const admin = createAdminClient();
+      const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
+        email,
+        { redirectTo: `${siteUrl}/auth/confirm` }
+      );
+      // A concurrent sign-up can race us into "already registered"; the pending
+      // membership stands and is claimed on next sign-in, so don't fail.
+      if (inviteErr && !/already.*registered/i.test(inviteErr.message)) {
+        return NextResponse.json({ error: inviteErr.message }, { status: 500 });
+      }
+    } catch {
+      // Admin client not configured (no service-role key) — the invite row
+      // still exists, so degrade cleanly instead of failing the request.
+    }
+  }
   return NextResponse.json({ ok: true });
 }
 
