@@ -187,6 +187,83 @@ describe("PATCH /api/members", () => {
     expect(res.status).toBe(200);
     expect((await res.json()).role).toBe("both");
   });
+
+  function passengerInsertName(supa: ReturnType<typeof setSupa>) {
+    const insert = supa
+      .callsFor("passengers")
+      .flat()
+      .find((c) => c.method === "insert");
+    return (insert?.args[0] as { name?: string } | undefined)?.name;
+  }
+
+  it("auto-creates the passenger with the composed display name", async () => {
+    const supa = setSupa({
+      tables: {
+        members: [
+          { data: { role: "driver" }, error: null },
+          { data: { ...row, role: "both", passenger_id: null }, error: null },
+        ],
+        profiles: [{ data: { display_name: "Bob Smith" }, error: null }],
+        passengers: [{ data: { id: "p1" }, error: null }],
+      },
+    });
+    const res = await PATCH(
+      new Request("http://t/api/members", {
+        method: "PATCH",
+        body: JSON.stringify({ userId: "u2", role: "both" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(passengerInsertName(supa)).toBe("Bob Smith");
+  });
+
+  it("falls back to the email local-part (never a raw id) when no name", async () => {
+    adminEmails.current = { u2: "bob@corp.com" };
+    const supa = setSupa({
+      tables: {
+        members: [
+          { data: { role: "driver" }, error: null },
+          { data: { ...row, role: "both", passenger_id: null }, error: null },
+        ],
+        profiles: [{ data: { display_name: null }, error: null }],
+        passengers: [{ data: { id: "p1" }, error: null }],
+      },
+    });
+    const res = await PATCH(
+      new Request("http://t/api/members", {
+        method: "PATCH",
+        body: JSON.stringify({ userId: "u2", role: "both" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(passengerInsertName(supa)).toBe("bob");
+  });
+
+  it("falls back to a short id (not a raw UUID) when no name and no email", async () => {
+    // No admin email queued for u2, and the profile has no name → the label
+    // must degrade to the short id, never the full UUID.
+    const supa = setSupa({
+      tables: {
+        members: [
+          { data: { role: "driver" }, error: null },
+          {
+            data: { ...row, user_id: "abcdef12-3456", role: "both", passenger_id: null },
+            error: null,
+          },
+        ],
+        profiles: [{ data: { display_name: null }, error: null }],
+        passengers: [{ data: { id: "p1" }, error: null }],
+      },
+    });
+    const res = await PATCH(
+      new Request("http://t/api/members", {
+        method: "PATCH",
+        body: JSON.stringify({ userId: "abcdef12-3456", role: "both" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(passengerInsertName(supa)).toBe("abcdef12");
+  });
 });
 
 describe("DELETE /api/members", () => {
