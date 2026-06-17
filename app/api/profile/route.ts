@@ -30,7 +30,10 @@ export async function PATCH(req: Request) {
     lastName?: string;
     avatarUrl?: string;
   };
-  const patch: Partial<DbProfile> = { updated_at: new Date().toISOString() };
+  const patch: Partial<DbProfile> = {
+    user_id: auth.userId,
+    updated_at: new Date().toISOString(),
+  };
   if (body.displayName !== undefined)
     patch.display_name = body.displayName.trim();
   if (body.firstName !== undefined)
@@ -47,10 +50,12 @@ export async function PATCH(req: Request) {
       .join(" ");
     patch.display_name = composed || null;
   }
+  // Upsert on user_id so a signed-in user with no profile row yet (e.g. the
+  // trigger-created row never landed) self-heals instead of 500ing on a no-op
+  // UPDATE. The `profiles_insert_own` RLS policy (SABAY-20) guards the INSERT path.
   const { data, error } = await supabase
     .from("profiles")
-    .update(patch)
-    .eq("user_id", auth.userId)
+    .upsert(patch, { onConflict: "user_id" })
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

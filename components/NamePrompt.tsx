@@ -6,9 +6,11 @@ import { useToast } from "@/components/Toast";
 const DISMISSED_KEY = "cc:name-prompt:dismissed";
 
 // One-time prompt shown after sign-in when the signed-in user has no name on
-// their profile yet. Once saved or dismissed it never re-appears (localStorage
-// flag), even if the user skips entering a name. Writes via the profile store
-// (SABAY-15 `/api/profile`).
+// their profile yet. The real gate is the persisted name: once it's actually in
+// the DB, `hasName` is true and the prompt stops re-appearing on every device.
+// The localStorage flag only suppresses a same-browser re-prompt when the user
+// explicitly skips ("Not now"). A failed save marks nothing and re-prompts next
+// time. Writes via the profile store (SABAY-15 `/api/profile`).
 export function NamePrompt() {
   const profile = useProfile((s) => s.profile);
   const hydrated = useProfile((s) => s.hydrated);
@@ -42,7 +44,8 @@ export function NamePrompt() {
     setBusy(true);
     try {
       await update({ firstName: first, lastName: last });
-      localStorage.setItem(DISMISSED_KEY, "1");
+      // Only on a real success: the name is now persisted, so `hasName` keeps the
+      // prompt closed across devices — no localStorage flag needed here.
       setOpen(false);
       toast.show({ message: "Name saved.", variant: "success" });
     } catch {
