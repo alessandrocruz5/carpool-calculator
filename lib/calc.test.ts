@@ -267,6 +267,9 @@ describe("calcDay legs[] (N ordered legs)", () => {
       DEFAULT_SETTINGS
     );
     expect(viaLegs).toEqual(legacy);
+    // Absolute anchor so the legs[] path can't drift in lock-step with legacy:
+    // B rides only the morning leg (2p skyway 21km + parking) → (180+164+90)*0.75/2.
+    expect(viaLegs.perPassenger.B).toBe(162.75);
   });
 
   it("1 leg → parking on the only (first) leg; perPassenger is that leg's share", () => {
