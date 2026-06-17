@@ -1,7 +1,7 @@
 # Carpool Calculator — Sprints
 Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded from changelog)
 
-## Sprint 3 — App tour, profile identity & invites   (planned 2026-06-16)
+## Sprint 3 — App tour, profile identity & invites   (planned 2026-06-16 · released v1.8.0 2026-06-18)
 Epic: SABAY-11 · base branch: `main` · target version: v1.8.0
 
 Two themes folded into one sprint. (a) Tour correctness + reach: drop the dead fill-ups step and
@@ -48,7 +48,7 @@ have 0 extra km and produce identical numbers (no backfill).
 
 ## Hotfixes
 
-### SABAY-19 — Profile first/last name not persisting (re-prompts every login)   (planned 2026-06-17)
+### SABAY-19 — Profile first/last name not persisting (re-prompts every login)   (planned 2026-06-17 · released v1.8.0 2026-06-18)
 Bug: name appears to save but is gone next session/device and the prompt re-fires. Root cause:
 `lib/store/profile.ts` `update()` swallows PATCH failures (re-hydrates, never rethrows), so NamePrompt
 + AccountForm always report success even when the server write failed — masking the real failure
@@ -56,4 +56,4 @@ Bug: name appears to save but is gone next session/device and the prompt re-fire
 `.update().single()` with no self-heal). Cross-group persistence already works (profiles keyed by
 `user_id`, no `group_id`, not group-scoped) — **no code needed for that**. Ships as a PATCH bump.
 - [x] SABAY-20 — Re-assert profile name columns + INSERT policy · Added · files: supabase/migrations/20260617120000_profile_names_resilience.sql · depends: — · high-stakes (migration/RLS → code-guardian) (merged 2026-06-17, PR #155) — idempotent migration re-asserts `profiles.first_name`/`last_name` (`add column if not exists`, safety net in case SABAY-15 never reached prod) + new self-only `profiles_insert_own` RLS policy (`for insert ... with check (user_id = (select auth.uid()))`, drop-then-create so re-runnable). Existing rows untouched. Migration applied to prod DB. Downstream: **SABAY-21** consumes this — convert `/api/profile` PATCH to an upsert (the new INSERT policy guards a path that doesn't exist until SABAY-21) and self-heal a missing trigger-created profile row.
-- [ ] SABAY-21 — Durable profile name save + honest errors · Fixed · files: app/api/profile/route.ts, lib/store/profile.ts, components/NamePrompt.tsx · depends: SABAY-20
+- [x] SABAY-21 — Durable profile name save + honest errors · Fixed · files: app/api/profile/route.ts, lib/store/profile.ts, components/NamePrompt.tsx, app/api/profile/route.test.ts · depends: SABAY-20 (merged 2026-06-18, PR #156) — `/api/profile` PATCH now **upserts on `user_id`** (`onConflict: "user_id"`, payload carries `user_id`) so a signed-in user with a missing profile row self-heals via INSERT (guarded by SABAY-20's `profiles_insert_own`) instead of 500ing on a no-op UPDATE; `profile.update()` re-hydrates **then rethrows** on failure (store convention) so callers surface honest errors instead of a false success; `NamePrompt` treats the persisted DB name (`hasName`) as the real gate (re-prompts across devices until the name actually lands), localStorage flag now only suppresses an explicit "Not now", and a failed save marks nothing. `AccountForm` unchanged — its catch starts working once `update()` throws. Route test updated to assert the upsert (incl. `user_id`). Closes the SABAY-19 hotfix. No new tables/columns/endpoints.

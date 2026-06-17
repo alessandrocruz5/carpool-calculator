@@ -4,6 +4,41 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 semantic versioning.
 
+## [1.8.0] — 2026-06-18
+
+Sprint 3 — app tour, profile identity & invites, plus the SABAY-19 profile-name
+persistence hotfix folded in. Tour correctness and reach, real first/last names on
+profiles wired through the roster and invitations, and a durable name save.
+
+### Added
+- First/last name on profiles: `profiles.first_name`/`last_name` columns with
+  `display_name` composed "First Last" for backward-compat; `useProfile` store +
+  `/api/profile` accept `firstName`/`lastName` (SABAY-15).
+- Name capture UI: an Account-page name form plus a one-time first-run name prompt
+  shown when the signed-in profile has no name yet (SABAY-16).
+- Onboarding tour gained a Groups/Members step (SABAY-13) and a dedicated
+  passenger tour (`PASSENGER_STEPS`/`DRIVER_STEPS` switched on `isPassenger`,
+  SABAY-14).
+
+### Changed
+- Roster and member/driver dropdowns now show account names; a backfill migration
+  refreshes linked passengers' names from `profiles.display_name` (unlinked
+  free-text passengers untouched), and the members auto-create fallback resolves
+  name → email local-part → short id, never a raw UUID (SABAY-17).
+- Onboarding tour copy corrected and bidirectional Back navigation added (SABAY-12).
+
+### Fixed
+- Group invitations are now actually emailed: `/api/members` POST sends Supabase's
+  invite email (`admin.inviteUserByEmail`) for brand-new invitees, sequenced after
+  the link RPC; existing-account invites unchanged, email-send failures degrade
+  cleanly (SABAY-18).
+- Profile name now saves durably and reports honestly: `/api/profile` upserts on
+  `user_id` so a missing profile row self-heals instead of 500ing, an idempotent
+  migration re-asserts the name columns + adds a self-only `profiles_insert_own`
+  RLS policy, `profile.update()` rethrows on failure, and the name prompt re-asks
+  across devices until the name actually lands in the DB (SABAY-19 / SABAY-20 /
+  SABAY-21).
+
 ## [1.7.0] — 2026-06-15
 
 Sprint 2 — QoL & rebrand. Stylized toast feedback across all CRUD, a blue→purple
