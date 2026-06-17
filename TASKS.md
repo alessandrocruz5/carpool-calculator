@@ -1,6 +1,22 @@
 # Carpool Calculator — Sprints
 Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded from changelog)
 
+## Sprint 4 — Variable trip legs (N ordered legs)   (planned 2026-06-18)
+Epic: SABAY-22 · base branch: `develop` · target version: v1.9.0
+
+Generalize the Trip page from a fixed two-leg (morning/evening) model to an ordered list of N legs
+with a +/− control, defaulting to 2 and allowing a minimum of 1. Each leg follows the same per-leg
+cost split and sums into the day total; parking applies to the **first** leg only. Shipped as an
+expand→contract sequence (migration → calc → data layer → UI) so each PR stays independently green
+under strict TS + CI typecheck. Every unit flows into `trip_payments` → units 23–25 carry a
+code-guardian gate. Leg labels become "Leg N" (deliberate UX shift per Design B). No money backfill —
+legacy 2-leg trips compute identically.
+
+- [ ] SABAY-23 — Migration: ordered N-leg storage on trip_legs · Added · files: supabase/migrations/<new>_trip_legs_ordered.sql, lib/supabase/types.ts · depends: — · high-stakes (migration → code-guardian)
+- [ ] SABAY-24 — Calc core: N ordered legs, parking on first leg · Changed · files: lib/calc.ts, lib/calc.test.ts · depends: — · high-stakes (money → code-guardian)
+- [ ] SABAY-25 — Data layer: persist + read + payments for N legs · Changed · files: lib/supabase/mappers.ts (+test), lib/store/trips.ts (+test), app/api/trips/route.ts (+test), supabase/migrations/<new>_trip_legs_position_enforce.sql, lib/supabase/types.ts · depends: SABAY-23, SABAY-24 · high-stakes (money + migration → code-guardian)
+- [ ] SABAY-26 — UI: leg-count control + read surfaces + cleanup · Added · files: app/page.tsx, components/LegCard.tsx, app/log/page.tsx, lib/sheets.ts, lib/store/trips.ts, lib/calc.ts, lib/supabase/mappers.ts (+ tests for legacy-mirror removal) · depends: SABAY-25
+
 ## Sprint 3 — App tour, profile identity & invites   (planned 2026-06-16 · released v1.8.0 2026-06-18)
 Epic: SABAY-11 · base branch: `main` · target version: v1.8.0
 
