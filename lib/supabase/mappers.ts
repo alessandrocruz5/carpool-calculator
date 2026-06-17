@@ -203,8 +203,10 @@ function extraKmByRider(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-// Ordering key for a leg: prefer the explicit `position`, falling back to the
-// legacy enum so trips read consistently even before the enforce migration ran.
+// Ordering key for a leg: prefer the explicit `position`. The fallback to the
+// legacy enum is deliberate defensive depth — `position` is non-null in the
+// enforced schema, but rows reaching this mapper via untyped DB casts (the GET
+// route casts `as unknown as DbTripWithLegs`) or older fixtures may omit it.
 function legOrder(l: DbTripLeg): number {
   if (l.position != null) return l.position;
   if (l.leg === "morning") return 0;
