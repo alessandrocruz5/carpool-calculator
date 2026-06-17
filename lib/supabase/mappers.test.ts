@@ -298,6 +298,7 @@ describe("trip mapper", () => {
             group_id: "g1",
             trip_id: "t1",
             leg: "morning",
+            position: 0,
             route: "skyway",
             distance_km: 21,
             trip_leg_riders: [
@@ -310,6 +311,7 @@ describe("trip mapper", () => {
             group_id: "g1",
             trip_id: "t1",
             leg: "evening",
+            position: 1,
             route: "slex",
             distance_km: 25,
             trip_leg_riders: [
@@ -326,5 +328,67 @@ describe("trip mapper", () => {
     expect(t.evening.passengerIds).toEqual(["p1"]);
     expect(t.gasPrice).toBe(65.5);
     expect(t.parkingFee).toBe(90);
+  });
+
+  it("reads N legs into an ordered legs[] (by position), regardless of row order", () => {
+    const t = fromDbTrip(
+      {
+        id: "t1",
+        group_id: "g1",
+        car_id: null,
+        driver_user_id: null,
+        date: "2026-05-13",
+        gas_price_id: "g1",
+        parking_fee_php: 90,
+        notes: null,
+        created_at: "x",
+        // Intentionally out of order to prove the mapper sorts by position.
+        trip_legs: [
+          {
+            id: "l3",
+            group_id: "g1",
+            trip_id: "t1",
+            leg: null,
+            position: 2,
+            route: "slex",
+            distance_km: 12,
+            trip_leg_riders: [
+              { group_id: "g1", trip_leg_id: "l3", passenger_id: "p3", extra_distance_km: 0 },
+            ],
+          },
+          {
+            id: "l1",
+            group_id: "g1",
+            trip_id: "t1",
+            leg: "morning",
+            position: 0,
+            route: "skyway",
+            distance_km: 21,
+            trip_leg_riders: [
+              { group_id: "g1", trip_leg_id: "l1", passenger_id: "p1", extra_distance_km: 0 },
+            ],
+          },
+          {
+            id: "l2",
+            group_id: "g1",
+            trip_id: "t1",
+            leg: "evening",
+            position: 1,
+            route: "slex",
+            distance_km: 25,
+            trip_leg_riders: [
+              { group_id: "g1", trip_leg_id: "l2", passenger_id: "p2", extra_distance_km: 0 },
+            ],
+          },
+        ],
+      },
+      65.5
+    );
+    expect(t.legs).toHaveLength(3);
+    expect(t.legs!.map((l) => l.distanceKm)).toEqual([21, 25, 12]);
+    expect(t.legs!.map((l) => l.passengerIds)).toEqual([["p1"], ["p2"], ["p3"]]);
+    // Legacy mirror still tracks legs[0]/legs[1].
+    expect(t.morning.route).toBe("skyway");
+    expect(t.evening.distanceKm).toBe(25);
   });
 });
