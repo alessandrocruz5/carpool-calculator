@@ -4,6 +4,14 @@ import { persist } from "zustand/middleware";
 import type { Route } from "@/lib/calc";
 import { resilientFetch } from "@/lib/outbox";
 
+/** One ordered leg of a day's trip. Mirrors calc's `DayLegInput`. */
+export interface LegState {
+  route: Route;
+  passengerIds: string[];
+  distanceKm: number;
+  extraKmByRider?: Record<string, number>;
+}
+
 export interface StoredTrip {
   id: string;
   date: string;
@@ -11,8 +19,8 @@ export interface StoredTrip {
   parkingFee: number;
   carId?: string | null;
   driverUserId?: string | null;
-  morning: { route: Route; passengerIds: string[]; distanceKm: number; extraKmByRider?: Record<string, number> };
-  evening: { route: Route; passengerIds: string[]; distanceKm: number; extraKmByRider?: Record<string, number> };
+  /** Authoritative ordered legs (min 1), parking on the first leg only. */
+  legs: LegState[];
   notes?: string;
 }
 

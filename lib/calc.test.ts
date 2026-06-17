@@ -49,8 +49,10 @@ describe("calcDay both-leg full ride matches user hand calc", () => {
       {
         date: "2026-05-11",
         gasPricePhpPerL: gas,
-        morning: { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
-        evening: { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+        legs: [
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+        ],
       },
       DEFAULT_SETTINGS
     );
@@ -63,8 +65,10 @@ describe("calcDay both-leg full ride matches user hand calc", () => {
       {
         date: "2026-05-11",
         gasPricePhpPerL: gas,
-        morning: { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
-        evening: { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+        ],
       },
       DEFAULT_SETTINGS
     );
@@ -78,8 +82,10 @@ describe("calcDay both-leg full ride matches user hand calc", () => {
       {
         date: "2026-05-11",
         gasPricePhpPerL: gas,
-        morning: { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
-        evening: { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
+        ],
       },
       DEFAULT_SETTINGS
     );
@@ -94,19 +100,21 @@ describe("mixed-leg ridership", () => {
       {
         date: "2026-05-11",
         gasPricePhpPerL: 90,
-        morning: { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
-        evening: { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+        ],
       },
       DEFAULT_SETTINGS
     );
-    // C rode only morning → pays just morning passengerEach
-    // A and B rode both → morning + evening
+    // C rode only the first leg → pays just that leg's passengerEach
+    // A and B rode both legs
     expect(d.perPassenger.C).toBeLessThan(d.perPassenger.A);
     expect(d.perPassenger.A).toBe(d.perPassenger.B);
-    // morning leg with 3 passengers uses 19/81 split
-    // evening leg with 2 passengers uses 25/75 split
-    expect(d.morning.passengerCount).toBe(3);
-    expect(d.evening.passengerCount).toBe(2);
+    // first leg with 3 passengers uses 19/81 split
+    // second leg with 2 passengers uses 25/75 split
+    expect(d.legs[0].passengerCount).toBe(3);
+    expect(d.legs[1].passengerCount).toBe(2);
   });
 });
 
@@ -164,8 +172,10 @@ describe("Model A — per-rider detour distance", () => {
       {
         date: "2026-06-14",
         gasPricePhpPerL: gas,
-        morning: { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21, extraKmByRider: { A: 6 } },
-        evening: { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21, extraKmByRider: { A: 6 } },
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+        ],
       },
       DEFAULT_SETTINGS
     );
@@ -178,13 +188,15 @@ describe("Model A — per-rider detour distance", () => {
     expect(d.driverTotal).toBe(194.5);
   });
 
-  it("calcDay with no detour maps matches legacy result exactly", () => {
+  it("calcDay with no detour maps matches base result exactly", () => {
     const d = calcDay(
       {
         date: "2026-06-14",
         gasPricePhpPerL: gas,
-        morning: { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
-        evening: { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+        legs: [
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+        ],
       },
       DEFAULT_SETTINGS
     );
@@ -204,21 +216,175 @@ describe("toll route options", () => {
   });
 });
 
+describe("calcLeg explicit applyParking flag", () => {
+  const gas = 90;
+
+  it("default (omitted) preserves legacy leg==='morning' behavior", () => {
+    const morning = calcLeg(
+      { leg: "morning", route: "skyway", passengerCount: 1, distanceKm: 21 },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    const evening = calcLeg(
+      { leg: "evening", route: "skyway", passengerCount: 1, distanceKm: 21 },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    expect(morning.parkingCost).toBe(DEFAULT_SETTINGS.parkingFeePhp);
+    expect(evening.parkingCost).toBe(0);
+  });
+
+  it("applyParking overrides the name-based default", () => {
+    // evening leg forced to charge parking
+    const eveningWithParking = calcLeg(
+      { leg: "evening", route: "skyway", passengerCount: 1, distanceKm: 21 },
+      gas,
+      DEFAULT_SETTINGS,
+      true
+    );
+    // morning leg forced to skip parking
+    const morningNoParking = calcLeg(
+      { leg: "morning", route: "skyway", passengerCount: 1, distanceKm: 21 },
+      gas,
+      DEFAULT_SETTINGS,
+      false
+    );
+    expect(eveningWithParking.parkingCost).toBe(DEFAULT_SETTINGS.parkingFeePhp);
+    expect(morningNoParking.parkingCost).toBe(0);
+  });
+
+  it("unnamed leg (leg: null) charges no parking by default", () => {
+    const r = calcLeg(
+      { leg: null, route: "skyway", passengerCount: 1, distanceKm: 21 },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    expect(r.parkingCost).toBe(0);
+  });
+});
+
+describe("calcDay legs[] (N ordered legs)", () => {
+  const gas = 90;
+
+  it("2-leg legs[] matches the hand-calc anchor", () => {
+    const viaLegs = calcDay(
+      {
+        date: "2026-06-18",
+        gasPricePhpPerL: gas,
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21, extraKmByRider: { A: 5 } },
+          { route: "slex", passengerIds: ["A"], distanceKm: 25 },
+        ],
+      },
+      DEFAULT_SETTINGS
+    );
+    // B rides only the first leg (2p skyway 21km + parking) → (180+164+90)*0.75/2.
+    expect(viaLegs.perPassenger.B).toBe(162.75);
+  });
+
+  it("1 leg → parking on the only (first) leg; perPassenger is that leg's share", () => {
+    const d = calcDay(
+      {
+        date: "2026-06-18",
+        gasPricePhpPerL: gas,
+        legs: [{ route: "skyway", passengerIds: ["A"], distanceKm: 21 }],
+      },
+      DEFAULT_SETTINGS
+    );
+    // single leg with parking, 1p skyway: total 180+164+90 = 434 → 40/60
+    expect(d.legs).toHaveLength(1);
+    expect(d.legs[0].parkingCost).toBe(DEFAULT_SETTINGS.parkingFeePhp);
+    expect(d.legs[0].total).toBe(434);
+    expect(d.perPassenger.A).toBe(round2(434 * 0.6));
+    expect(d.driverTotal).toBe(round2(434 * 0.4));
+  });
+
+  it("3 legs → parking only on the first; perPassenger and driverTotal sum all legs", () => {
+    const d = calcDay(
+      {
+        date: "2026-06-18",
+        gasPricePhpPerL: gas,
+        legs: [
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+        ],
+      },
+      DEFAULT_SETTINGS
+    );
+    expect(d.legs).toHaveLength(3);
+    // parking on first leg only
+    expect(d.legs[0].parkingCost).toBe(DEFAULT_SETTINGS.parkingFeePhp);
+    expect(d.legs[1].parkingCost).toBe(0);
+    expect(d.legs[2].parkingCost).toBe(0);
+    // third leg has no morning/evening name
+    expect(d.legs[2].leg).toBeNull();
+    // first leg total 434 (40/60); legs 2 & 3 total 344 each (40/60)
+    const firstPass = round2(434 * 0.6); // 260.4
+    const otherPass = round2(344 * 0.6); // 206.4
+    expect(d.perPassenger.A).toBe(round2(firstPass + otherPass + otherPass));
+    const firstDriver = round2(434 * 0.4);
+    const otherDriver = round2(344 * 0.4);
+    expect(d.driverTotal).toBe(round2(firstDriver + otherDriver + otherDriver));
+  });
+
+  it("sums detours across all legs for the affected rider only", () => {
+    const d = calcDay(
+      {
+        date: "2026-06-18",
+        gasPricePhpPerL: gas,
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21, extraKmByRider: { A: 4 } },
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21, extraKmByRider: { A: 6 } },
+        ],
+      },
+      DEFAULT_SETTINGS
+    );
+    const detour = round2((4 / 10.5) * gas) + round2((6 / 10.5) * gas);
+    // A and B share the same base across all three legs; A also carries both detours.
+    expect(round2(d.perPassenger.A - d.perPassenger.B)).toBe(detour);
+  });
+
+  it("mixed ridership across N legs: absent rider pays only their legs", () => {
+    const d = calcDay(
+      {
+        date: "2026-06-18",
+        gasPricePhpPerL: gas,
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+        ],
+      },
+      DEFAULT_SETTINGS
+    );
+    // A rode all 3, B rode 2, C rode 1 → A pays most, C least.
+    expect(d.perPassenger.A).toBeGreaterThan(d.perPassenger.B);
+    expect(d.perPassenger.B).toBeGreaterThan(d.perPassenger.C);
+    expect(d.legs[0].passengerCount).toBe(3);
+    expect(d.legs[1].passengerCount).toBe(2);
+    expect(d.legs[2].passengerCount).toBe(1);
+  });
+});
+
 describe("per-leg distance", () => {
   it("asymmetric legs produce different gas costs", () => {
     const d = calcDay(
       {
         date: "2026-06-01",
         gasPricePhpPerL: 90,
-        morning: { route: "skyway", passengerIds: ["A"], distanceKm: 17 },
-        evening: { route: "skyway", passengerIds: ["A"], distanceKm: 25 },
+        legs: [
+          { route: "skyway", passengerIds: ["A"], distanceKm: 17 },
+          { route: "skyway", passengerIds: ["A"], distanceKm: 25 },
+        ],
       },
       DEFAULT_SETTINGS
     );
-    expect(d.morning.gasCost).not.toBe(d.evening.gasCost);
-    // morning gas: (17/10.5)*90; evening gas: (25/10.5)*90 → evening higher
-    expect(d.morning.gasCost).toBe(round2((17 / 10.5) * 90));
-    expect(d.evening.gasCost).toBe(round2((25 / 10.5) * 90));
-    expect(d.evening.gasCost).toBeGreaterThan(d.morning.gasCost);
+    expect(d.legs[0].gasCost).not.toBe(d.legs[1].gasCost);
+    // leg 1 gas: (17/10.5)*90; leg 2 gas: (25/10.5)*90 → leg 2 higher
+    expect(d.legs[0].gasCost).toBe(round2((17 / 10.5) * 90));
+    expect(d.legs[1].gasCost).toBe(round2((25 / 10.5) * 90));
+    expect(d.legs[1].gasCost).toBeGreaterThan(d.legs[0].gasCost);
   });
 });

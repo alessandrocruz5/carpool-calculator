@@ -4,6 +4,35 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 semantic versioning.
 
+## [1.9.0] — 2026-06-18
+
+Sprint 4 — variable trip legs. The Trip page generalizes from a fixed
+morning/evening pair to an ordered list of N legs (default 2, minimum 1), with the
+same per-leg cost split summing into the day total and parking applied to the first
+leg only. Shipped as an expand→contract sequence (migration → calc → data layer →
+UI). No money backfill — legacy two-leg trips compute identically.
+
+### Added
+- Ordered N-leg storage: `trip_legs.position` (forward-only migration backfills
+  morning→0/evening→1, drops the `unique(trip_id, leg)` constraint, widens `leg`
+  nullable; a follow-up migration enforces `position` NOT NULL + ordered
+  uniqueness) (SABAY-23 / SABAY-25).
+- Trip page leg-count control: a +/− stepper renders `legs[]` (default 2, min 1); a
+  new leg defaults to skyway / no riders / half the round-trip distance. Each leg is
+  independently configurable and the total + per-passenger amounts update live and
+  persist. `LegCard` now takes a "Leg N" label + explicit parking flag, and the Log
+  view and Google Sheets export iterate all legs (SABAY-26).
+
+### Changed
+- Calc core computes N ordered legs with parking on the first leg only; `calcDay`
+  takes an ordered `legs[]` and `calcLeg` accepts an explicit `applyParking` flag
+  (SABAY-24).
+- Data layer persists, reads, and prices N legs end-to-end: the mapper returns
+  ordered `legs[]`, the trips store/route round-trip them, and `trip_payments` are
+  computed per leg (SABAY-25). The day-level morning/evening mirror was removed
+  across calc, the trips store, the mapper, and the read surfaces; the DB-level
+  leg-naming enum (`trip_legs.leg`) is retained for the first two legs (SABAY-26).
+
 ## [1.8.0] — 2026-06-18
 
 Sprint 3 — app tour, profile identity & invites, plus the SABAY-19 profile-name

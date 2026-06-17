@@ -203,9 +203,31 @@ function extraKmByRider(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+// Ordering key for a leg: prefer the explicit `position`. The fallback to the
+// legacy enum is deliberate defensive depth — `position` is non-null in the
+// enforced schema, but rows reaching this mapper via untyped DB casts (the GET
+// route casts `as unknown as DbTripWithLegs`) or older fixtures may omit it.
+function legOrder(l: DbTripLeg): number {
+  if (l.position != null) return l.position;
+  if (l.leg === "morning") return 0;
+  if (l.leg === "evening") return 1;
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function toLegState(l: DbTripLeg & { trip_leg_riders: DbTripLegRider[] }) {
+  return {
+    route: l.route,
+    passengerIds: l.trip_leg_riders.map((x) => x.passenger_id),
+    distanceKm: Number(l.distance_km),
+    extraKmByRider: extraKmByRider(l.trip_leg_riders),
+  };
+}
+
 export function fromDbTrip(r: DbTripWithLegs, gasPrice: number): StoredTrip {
-  const morning = r.trip_legs.find((l) => l.leg === "morning");
-  const evening = r.trip_legs.find((l) => l.leg === "evening");
+  // Authoritative ordered legs (N legs, ascending position).
+  const ordered = [...r.trip_legs].sort((a, b) => legOrder(a) - legOrder(b));
+  const legs = ordered.map(toLegState);
+
   return {
     id: r.id,
     date: r.date,
@@ -213,18 +235,7 @@ export function fromDbTrip(r: DbTripWithLegs, gasPrice: number): StoredTrip {
     parkingFee: Number(r.parking_fee_php),
     carId: r.car_id,
     driverUserId: r.driver_user_id,
-    morning: {
-      route: morning?.route ?? "skyway",
-      passengerIds: morning?.trip_leg_riders.map((x) => x.passenger_id) ?? [],
-      distanceKm: Number(morning?.distance_km ?? 21),
-      extraKmByRider: extraKmByRider(morning?.trip_leg_riders),
-    },
-    evening: {
-      route: evening?.route ?? "skyway",
-      passengerIds: evening?.trip_leg_riders.map((x) => x.passenger_id) ?? [],
-      distanceKm: Number(evening?.distance_km ?? 21),
-      extraKmByRider: extraKmByRider(evening?.trip_leg_riders),
-    },
+    legs,
     notes: r.notes ?? undefined,
   };
 }
