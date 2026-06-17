@@ -322,10 +322,10 @@ describe("trip mapper", () => {
       },
       65.5
     );
-    expect(t.morning.route).toBe("skyway");
-    expect(t.morning.passengerIds).toEqual(["p1", "p2"]);
-    expect(t.evening.route).toBe("slex");
-    expect(t.evening.passengerIds).toEqual(["p1"]);
+    expect(t.legs[0].route).toBe("skyway");
+    expect(t.legs[0].passengerIds).toEqual(["p1", "p2"]);
+    expect(t.legs[1].route).toBe("slex");
+    expect(t.legs[1].passengerIds).toEqual(["p1"]);
     expect(t.gasPrice).toBe(65.5);
     expect(t.parkingFee).toBe(90);
   });
@@ -385,10 +385,9 @@ describe("trip mapper", () => {
       65.5
     );
     expect(t.legs).toHaveLength(3);
-    expect(t.legs!.map((l) => l.distanceKm)).toEqual([21, 25, 12]);
-    expect(t.legs!.map((l) => l.passengerIds)).toEqual([["p1"], ["p2"], ["p3"]]);
-    // Legacy mirror still tracks legs[0]/legs[1].
-    expect(t.morning.route).toBe("skyway");
-    expect(t.evening.distanceKm).toBe(25);
+    expect(t.legs.map((l) => l.distanceKm)).toEqual([21, 25, 12]);
+    expect(t.legs.map((l) => l.passengerIds)).toEqual([["p1"], ["p2"], ["p3"]]);
+    expect(t.legs[0].route).toBe("skyway");
+    expect(t.legs[1].distanceKm).toBe(25);
   });
 });

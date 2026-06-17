@@ -228,10 +228,6 @@ export function fromDbTrip(r: DbTripWithLegs, gasPrice: number): StoredTrip {
   const ordered = [...r.trip_legs].sort((a, b) => legOrder(a) - legOrder(b));
   const legs = ordered.map(toLegState);
 
-  // Legacy mirror: keep the morning/evening surfaces deriving by leg name so
-  // existing two-leg readers are byte-identical to before this unit.
-  const morning = r.trip_legs.find((l) => l.leg === "morning");
-  const evening = r.trip_legs.find((l) => l.leg === "evening");
   return {
     id: r.id,
     date: r.date,
@@ -240,18 +236,6 @@ export function fromDbTrip(r: DbTripWithLegs, gasPrice: number): StoredTrip {
     carId: r.car_id,
     driverUserId: r.driver_user_id,
     legs,
-    morning: {
-      route: morning?.route ?? "skyway",
-      passengerIds: morning?.trip_leg_riders.map((x) => x.passenger_id) ?? [],
-      distanceKm: Number(morning?.distance_km ?? 21),
-      extraKmByRider: extraKmByRider(morning?.trip_leg_riders),
-    },
-    evening: {
-      route: evening?.route ?? "skyway",
-      passengerIds: evening?.trip_leg_riders.map((x) => x.passenger_id) ?? [],
-      distanceKm: Number(evening?.distance_km ?? 21),
-      extraKmByRider: extraKmByRider(evening?.trip_leg_riders),
-    },
     notes: r.notes ?? undefined,
   };
 }

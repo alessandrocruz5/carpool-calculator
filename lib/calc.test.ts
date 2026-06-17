@@ -49,8 +49,10 @@ describe("calcDay both-leg full ride matches user hand calc", () => {
       {
         date: "2026-05-11",
         gasPricePhpPerL: gas,
-        morning: { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
-        evening: { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+        legs: [
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+        ],
       },
       DEFAULT_SETTINGS
     );
@@ -63,8 +65,10 @@ describe("calcDay both-leg full ride matches user hand calc", () => {
       {
         date: "2026-05-11",
         gasPricePhpPerL: gas,
-        morning: { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
-        evening: { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+        ],
       },
       DEFAULT_SETTINGS
     );
@@ -78,8 +82,10 @@ describe("calcDay both-leg full ride matches user hand calc", () => {
       {
         date: "2026-05-11",
         gasPricePhpPerL: gas,
-        morning: { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
-        evening: { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
+        ],
       },
       DEFAULT_SETTINGS
     );
@@ -94,19 +100,21 @@ describe("mixed-leg ridership", () => {
       {
         date: "2026-05-11",
         gasPricePhpPerL: 90,
-        morning: { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
-        evening: { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+        ],
       },
       DEFAULT_SETTINGS
     );
-    // C rode only morning → pays just morning passengerEach
-    // A and B rode both → morning + evening
+    // C rode only the first leg → pays just that leg's passengerEach
+    // A and B rode both legs
     expect(d.perPassenger.C).toBeLessThan(d.perPassenger.A);
     expect(d.perPassenger.A).toBe(d.perPassenger.B);
-    // morning leg with 3 passengers uses 19/81 split
-    // evening leg with 2 passengers uses 25/75 split
-    expect(d.morning.passengerCount).toBe(3);
-    expect(d.evening.passengerCount).toBe(2);
+    // first leg with 3 passengers uses 19/81 split
+    // second leg with 2 passengers uses 25/75 split
+    expect(d.legs[0].passengerCount).toBe(3);
+    expect(d.legs[1].passengerCount).toBe(2);
   });
 });
 
@@ -164,8 +172,10 @@ describe("Model A — per-rider detour distance", () => {
       {
         date: "2026-06-14",
         gasPricePhpPerL: gas,
-        morning: { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21, extraKmByRider: { A: 6 } },
-        evening: { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21, extraKmByRider: { A: 6 } },
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21 },
+        ],
       },
       DEFAULT_SETTINGS
     );
@@ -178,13 +188,15 @@ describe("Model A — per-rider detour distance", () => {
     expect(d.driverTotal).toBe(194.5);
   });
 
-  it("calcDay with no detour maps matches legacy result exactly", () => {
+  it("calcDay with no detour maps matches base result exactly", () => {
     const d = calcDay(
       {
         date: "2026-06-14",
         gasPricePhpPerL: gas,
-        morning: { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
-        evening: { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+        legs: [
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21 },
+        ],
       },
       DEFAULT_SETTINGS
     );
@@ -254,21 +266,19 @@ describe("calcLeg explicit applyParking flag", () => {
 describe("calcDay legs[] (N ordered legs)", () => {
   const gas = 90;
 
-  it("2-leg legs[] is byte-identical to the legacy {morning,evening} shape", () => {
-    const base = {
-      date: "2026-06-18",
-      gasPricePhpPerL: gas,
-      morning: { route: "skyway" as const, passengerIds: ["A", "B"], distanceKm: 21, extraKmByRider: { A: 5 } },
-      evening: { route: "slex" as const, passengerIds: ["A"], distanceKm: 25 },
-    };
-    const legacy = calcDay(base, DEFAULT_SETTINGS);
+  it("2-leg legs[] matches the hand-calc anchor", () => {
     const viaLegs = calcDay(
-      { date: base.date, gasPricePhpPerL: base.gasPricePhpPerL, legs: [base.morning, base.evening] },
+      {
+        date: "2026-06-18",
+        gasPricePhpPerL: gas,
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 21, extraKmByRider: { A: 5 } },
+          { route: "slex", passengerIds: ["A"], distanceKm: 25 },
+        ],
+      },
       DEFAULT_SETTINGS
     );
-    expect(viaLegs).toEqual(legacy);
-    // Absolute anchor so the legs[] path can't drift in lock-step with legacy:
-    // B rides only the morning leg (2p skyway 21km + parking) → (180+164+90)*0.75/2.
+    // B rides only the first leg (2p skyway 21km + parking) → (180+164+90)*0.75/2.
     expect(viaLegs.perPassenger.B).toBe(162.75);
   });
 
@@ -287,7 +297,6 @@ describe("calcDay legs[] (N ordered legs)", () => {
     expect(d.legs[0].total).toBe(434);
     expect(d.perPassenger.A).toBe(round2(434 * 0.6));
     expect(d.driverTotal).toBe(round2(434 * 0.4));
-    expect(d.morning).toBe(d.legs[0]);
   });
 
   it("3 legs → parking only on the first; perPassenger and driverTotal sum all legs", () => {
@@ -317,9 +326,6 @@ describe("calcDay legs[] (N ordered legs)", () => {
     const firstDriver = round2(434 * 0.4);
     const otherDriver = round2(344 * 0.4);
     expect(d.driverTotal).toBe(round2(firstDriver + otherDriver + otherDriver));
-    // mirror exposes the first two legs
-    expect(d.morning).toBe(d.legs[0]);
-    expect(d.evening).toBe(d.legs[1]);
   });
 
   it("sums detours across all legs for the affected rider only", () => {
@@ -368,15 +374,17 @@ describe("per-leg distance", () => {
       {
         date: "2026-06-01",
         gasPricePhpPerL: 90,
-        morning: { route: "skyway", passengerIds: ["A"], distanceKm: 17 },
-        evening: { route: "skyway", passengerIds: ["A"], distanceKm: 25 },
+        legs: [
+          { route: "skyway", passengerIds: ["A"], distanceKm: 17 },
+          { route: "skyway", passengerIds: ["A"], distanceKm: 25 },
+        ],
       },
       DEFAULT_SETTINGS
     );
-    expect(d.morning.gasCost).not.toBe(d.evening.gasCost);
-    // morning gas: (17/10.5)*90; evening gas: (25/10.5)*90 → evening higher
-    expect(d.morning.gasCost).toBe(round2((17 / 10.5) * 90));
-    expect(d.evening.gasCost).toBe(round2((25 / 10.5) * 90));
-    expect(d.evening.gasCost).toBeGreaterThan(d.morning.gasCost);
+    expect(d.legs[0].gasCost).not.toBe(d.legs[1].gasCost);
+    // leg 1 gas: (17/10.5)*90; leg 2 gas: (25/10.5)*90 → leg 2 higher
+    expect(d.legs[0].gasCost).toBe(round2((17 / 10.5) * 90));
+    expect(d.legs[1].gasCost).toBe(round2((25 / 10.5) * 90));
+    expect(d.legs[1].gasCost).toBeGreaterThan(d.legs[0].gasCost);
   });
 });

@@ -21,8 +21,10 @@ const trip: StoredTrip = {
   date: "2026-05-13",
   gasPrice: 65,
   parkingFee: 90,
-  morning: { route: "skyway", passengerIds: ["p1"], distanceKm: 21 },
-  evening: { route: "slex", passengerIds: ["p1"], distanceKm: 21 },
+  legs: [
+    { route: "skyway", passengerIds: ["p1"], distanceKm: 21 },
+    { route: "slex", passengerIds: ["p1"], distanceKm: 21 },
+  ],
 };
 
 beforeEach(() => {

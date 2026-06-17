@@ -16,8 +16,7 @@ interface Body {
     date: string;
     gasPrice: number;
     parkingFee: number;
-    morning: { route: Route; passengerIds: string[]; distanceKm: number };
-    evening: { route: Route; passengerIds: string[]; distanceKm: number };
+    legs: { route: Route; passengerIds: string[]; distanceKm: number }[];
   }>;
   passengers: { id: string; name: string }[];
   settings: CalcSettings;
@@ -63,12 +62,13 @@ export async function POST(req: Request) {
 
     const rows: ExportRow[] = [];
     for (const t of body.trips) {
-      for (const legName of ["morning", "evening"] as const) {
-        const leg = t[legName];
+      // Parking applies to the first leg only, matching calcDay.
+      t.legs.forEach((leg, i) => {
         const breakdown = calcLeg(
-          { leg: legName, route: leg.route, passengerCount: leg.passengerIds.length, distanceKm: leg.distanceKm },
+          { leg: null, route: leg.route, passengerCount: leg.passengerIds.length, distanceKm: leg.distanceKm },
           t.gasPrice,
-          body.settings
+          body.settings,
+          i === 0
         );
         const passenger_shares: Record<string, number> = {};
         for (const id of leg.passengerIds) {
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
         }
         rows.push({
           date: t.date,
-          leg: legName,
+          leg: `Leg ${i + 1}`,
           route: leg.route,
           driver_share: breakdown.driverShare,
           gas_price: t.gasPrice,
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
           toll: breakdown.tollCost,
           passenger_shares,
         });
-      }
+      });
     }
 
     const tab = dayjs(body.weekStart).format("YYYY-MM");
