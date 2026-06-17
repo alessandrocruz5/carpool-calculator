@@ -39,19 +39,14 @@ export default function TodayPage() {
   const isDriver = useIsDriver();
 
   const existing = trips.find((t) => t.date === today);
-  const [morning, setMorning] = useState<LegState>(
-    existing?.morning ?? {
-      route: "skyway",
-      passengerIds: [],
-      distanceKm: settings.roundTripKm / 2,
-    }
-  );
-  const [evening, setEvening] = useState<LegState>(
-    existing?.evening ?? {
-      route: "skyway",
-      passengerIds: [],
-      distanceKm: settings.roundTripKm / 2,
-    }
+  // A fresh leg defaults to skyway, no riders, half the round-trip distance.
+  const newLeg = (): LegState => ({
+    route: "skyway",
+    passengerIds: [],
+    distanceKm: settings.roundTripKm / 2,
+  });
+  const [legs, setLegs] = useState<LegState[]>(
+    existing?.legs ?? [newLeg(), newLeg()]
   );
   const [carId, setCarId] = useState<string>(existing?.carId ?? "");
   const [driverUserId, setDriverUserId] = useState<string | null>(
@@ -64,8 +59,7 @@ export default function TodayPage() {
   useEffect(() => {
     const t = trips.find((x) => x.date === today);
     if (!t) return;
-    setMorning(t.morning);
-    setEvening(t.evening);
+    setLegs(t.legs);
     setCarId(t.carId ?? "");
     setDriverUserId(t.driverUserId ?? null);
     // Reload state only when navigating to a different date.
@@ -118,15 +112,21 @@ export default function TodayPage() {
     {
       date: today,
       gasPricePhpPerL: gasPrice,
-      morning: { route: morning.route, passengerIds: morning.passengerIds, distanceKm: morning.distanceKm, extraKmByRider: morning.extraKmByRider },
-      evening: { route: evening.route, passengerIds: evening.passengerIds, distanceKm: evening.distanceKm, extraKmByRider: evening.extraKmByRider },
+      legs,
     },
     liveSettings
   );
 
+  // Update a single leg in place; add appends a default leg; remove drops the
+  // last (kept at a minimum of 1).
+  const updateLeg = (i: number, next: LegState) =>
+    setLegs((prev) => prev.map((leg, idx) => (idx === i ? next : leg)));
+  const addLeg = () => setLegs((prev) => [...prev, newLeg()]);
+  const removeLeg = () => setLegs((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
+
   async function save() {
-    if (!(morning.distanceKm > 0) || !(evening.distanceKm > 0)) {
-      toast.show({ message: "Enter a distance (km) for both legs.", variant: "info" });
+    if (legs.some((leg) => !(leg.distanceKm > 0))) {
+      toast.show({ message: "Enter a distance (km) for every leg.", variant: "info" });
       return;
     }
     try {
@@ -139,8 +139,7 @@ export default function TodayPage() {
         date: today,
         gasPrice,
         parkingFee: settings.parkingFeePhp,
-        morning,
-        evening,
+        legs,
         ...pair,
       });
       toast.show({
@@ -259,28 +258,45 @@ export default function TodayPage() {
         )}
       </section>
 
-      <LegCard
-        key={`morning-${today}`}
-        leg="morning"
-        state={morning}
-        onChange={setMorning}
-        passengers={activePassengers}
-        gasPrice={gasPrice}
-        settings={liveSettings}
-        readOnly={!isDriver}
-        maxPassengers={maxPassengers}
-      />
-      <LegCard
-        key={`evening-${today}`}
-        leg="evening"
-        state={evening}
-        onChange={setEvening}
-        passengers={activePassengers}
-        gasPrice={gasPrice}
-        settings={liveSettings}
-        readOnly={!isDriver}
-        maxPassengers={maxPassengers}
-      />
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">Legs ({legs.length})</h2>
+        {isDriver && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={removeLeg}
+              disabled={legs.length <= 1}
+              aria-label="Remove leg"
+              className="h-8 w-8 rounded-lg border border-slate-300 bg-white text-lg leading-none text-slate-700 disabled:opacity-40"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={addLeg}
+              aria-label="Add leg"
+              className="h-8 w-8 rounded-lg border border-slate-300 bg-white text-lg leading-none text-slate-700"
+            >
+              +
+            </button>
+          </div>
+        )}
+      </div>
+
+      {legs.map((leg, i) => (
+        <LegCard
+          key={`leg-${i}-${today}`}
+          label={`Leg ${i + 1}`}
+          applyParking={i === 0}
+          state={leg}
+          onChange={(next) => updateLeg(i, next)}
+          passengers={activePassengers}
+          gasPrice={gasPrice}
+          settings={liveSettings}
+          readOnly={!isDriver}
+          maxPassengers={maxPassengers}
+        />
+      ))}
 
       <section className="bg-white rounded-xl border border-slate-200 p-4">
         <h2 className="font-semibold mb-2">Day total</h2>

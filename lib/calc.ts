@@ -137,45 +137,24 @@ export interface DayLegInput {
   extraKmByRider?: Record<string, number>;
 }
 
-/**
- * `calcDay` accepts either the legacy fixed two-leg shape (`morning`/`evening`)
- * or an ordered N-leg array (`legs`). Both compute identically for the same
- * legs; the legacy shape is sugar for `legs: [morning, evening]`.
- */
-export type DayInput = DayInputLegacy | DayInputLegs;
-
-interface DayInputBase {
+/** A day's ordered legs (minimum 1). Parking applies to the first leg only. */
+export interface DayInput {
   date: string;
   gasPricePhpPerL: number;
-}
-
-export interface DayInputLegacy extends DayInputBase {
-  morning: DayLegInput;
-  evening: DayLegInput;
-}
-
-export interface DayInputLegs extends DayInputBase {
   /** Ordered legs, minimum 1. Parking applies to the first leg only. */
   legs: DayLegInput[];
 }
 
 export interface DayBreakdown {
   date: string;
-  /** Every leg in order. Authoritative; `morning`/`evening` mirror legs[0]/[1]. */
+  /** Every leg in order (authoritative). */
   legs: LegBreakdown[];
-  /**
-   * Legacy mirror of `legs[0]`/`legs[1]`, kept so existing 2-leg readers are
-   * unchanged. On a 1-leg `legs` input `evening` is absent at runtime — read
-   * `legs` for N-leg work. (Mirror is removed in a later unit.)
-   */
-  morning: LegBreakdown;
-  evening: LegBreakdown;
   driverTotal: number;
   perPassenger: Record<string, number>;
 }
 
 export function calcDay(input: DayInput, settings: CalcSettings): DayBreakdown {
-  const dayLegs: DayLegInput[] = "legs" in input ? input.legs : [input.morning, input.evening];
+  const dayLegs: DayLegInput[] = input.legs;
 
   const legs: LegBreakdown[] = dayLegs.map((leg, i) =>
     calcLeg(
@@ -207,8 +186,6 @@ export function calcDay(input: DayInput, settings: CalcSettings): DayBreakdown {
   return {
     date: input.date,
     legs,
-    morning: legs[0],
-    evening: legs[1],
     driverTotal: round2(legs.reduce((sum, b) => sum + b.driverShare, 0)),
     perPassenger,
   };

@@ -15,7 +15,8 @@ function getJwt() {
 
 export interface ExportRow {
   date: string;
-  leg: "morning" | "evening";
+  /** Leg label, e.g. "Leg 1". */
+  leg: string;
   route: string;
   driver_share: number;
   gas_price: number;

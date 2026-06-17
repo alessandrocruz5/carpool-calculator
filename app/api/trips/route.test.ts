@@ -19,8 +19,10 @@ const baseTrip = {
   date: "2026-05-13",
   gasPrice: 65.5,
   parkingFee: 90,
-  morning: { route: "skyway" as const, passengerIds: ["p1"], distanceKm: 21 },
-  evening: { route: "slex" as const, passengerIds: ["p1"], distanceKm: 21 },
+  legs: [
+    { route: "skyway" as const, passengerIds: ["p1"], distanceKm: 21 },
+    { route: "slex" as const, passengerIds: ["p1"], distanceKm: 21 },
+  ],
   notes: null,
 };
 
@@ -88,7 +90,7 @@ describe("GET /api/trips", () => {
     expect(res.status).toBe(200);
     expect(body).toHaveLength(1);
     expect(body[0].gasPrice).toBe(65.5);
-    expect(body[0].morning.passengerIds).toEqual(["p1"]);
+    expect(body[0].legs[0].passengerIds).toEqual(["p1"]);
   });
 
   it("surfaces auth-scoped empty results (RLS hides rows)", async () => {

@@ -19,18 +19,8 @@ export interface StoredTrip {
   parkingFee: number;
   carId?: string | null;
   driverUserId?: string | null;
-  /**
-   * Authoritative ordered legs (min 1), parking on the first leg only. Populated
-   * by `fromDbTrip` on read. Optional on write: until SABAY-26 the UI still sends
-   * `morning`/`evening`, and the API derives `legs` from them when absent.
-   */
-  legs?: LegState[];
-  /**
-   * Legacy mirror of `legs[0]`/`legs[1]`, kept so existing two-leg read surfaces
-   * compile. Removed in a later unit once all readers move to `legs`.
-   */
-  morning: LegState;
-  evening: LegState;
+  /** Authoritative ordered legs (min 1), parking on the first leg only. */
+  legs: LegState[];
   notes?: string;
 }
 

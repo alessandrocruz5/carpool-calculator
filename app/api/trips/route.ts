@@ -59,9 +59,9 @@ export async function POST(req: Request) {
   const groupId = group.groupId;
   const body = (await req.json()) as StoredTrip;
 
-  // Authoritative ordered legs. The UI still sends morning/evening until SABAY-26,
-  // so derive the leg list from them when `legs` is absent (legacy two-leg shape).
-  const inputLegs: LegState[] = body.legs ?? [body.morning, body.evening];
+  // Authoritative ordered legs. `?? []` guards against a stale client that omits
+  // them entirely — the length check below rejects that with a 400.
+  const inputLegs: LegState[] = body.legs ?? [];
 
   if (inputLegs.length === 0) {
     return NextResponse.json(

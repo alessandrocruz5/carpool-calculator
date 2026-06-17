@@ -65,8 +65,7 @@ export default function LogPage() {
           {
             date: t!.date,
             gasPricePhpPerL: t!.gasPrice,
-            morning: t!.morning,
-            evening: t!.evening,
+            legs: t!.legs,
           },
           liveSettings
         )
@@ -392,8 +391,7 @@ export default function LogPage() {
                 {
                   date: t.date,
                   gasPricePhpPerL: t.gasPrice,
-                  morning: t.morning,
-                  evening: t.evening,
+                  legs: t.legs,
                 },
                 liveSettings
               );
@@ -407,7 +405,9 @@ export default function LogPage() {
                     <div>
                       <div className="font-medium">{dayjs(t.date).format("ddd, MMM D")}</div>
                       <div className="text-xs text-slate-500">
-                        AM {t.morning.passengerIds.length}p · PM {t.evening.passengerIds.length}p
+                        {t.legs
+                          .map((l, i) => `Leg ${i + 1} ${l.passengerIds.length}p`)
+                          .join(" · ")}
                       </div>
                     </div>
                     <PHP value={day.driverTotal + Object.values(day.perPassenger).reduce((a, b) => a + b, 0)} />
@@ -423,7 +423,8 @@ export default function LogPage() {
                         />
                       ))}
                       <div className="text-xs text-slate-500 pt-2">
-                        AM: {t.morning.route} · PM: {t.evening.route} · Gas <PHP value={t.gasPrice} />/L
+                        {t.legs.map((l, i) => `Leg ${i + 1}: ${l.route}`).join(" · ")} · Gas{" "}
+                        <PHP value={t.gasPrice} />/L
                       </div>
                       {isDriver && (
                         <button
