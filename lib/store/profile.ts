@@ -67,7 +67,11 @@ export const useProfile = create<ProfileStore>()(
           set({ profile: data });
         } catch (err) {
           console.error("profile.update failed", err);
+          // Re-hydrate to discard the optimistic write, then rethrow so callers
+          // (NamePrompt, AccountForm) can surface an honest error instead of a
+          // false success — matches the store convention.
           await get().hydrate();
+          throw err;
         }
       },
     }),

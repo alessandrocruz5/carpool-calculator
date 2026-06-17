@@ -79,12 +79,13 @@ describe("PATCH /api/profile", () => {
     );
     expect(res.status).toBe(200);
     expect((await res.json()).displayName).toBe("New");
-    const update = supa
+    const upsert = supa
       .callsFor("profiles")[0]
-      .find((c) => c.method === "update");
-    expect((update!.args[0] as { display_name: string }).display_name).toBe(
-      "New"
-    );
+      .find((c) => c.method === "upsert");
+    const args = upsert!.args[0] as { display_name: string; user_id: string };
+    expect(args.display_name).toBe("New");
+    // upsert carries user_id so a missing row self-heals via INSERT (SABAY-20 policy)
+    expect(args.user_id).toBe("u1");
   });
 
   it("persists first/last and a composed display_name", async () => {
@@ -98,10 +99,10 @@ describe("PATCH /api/profile", () => {
       })
     );
     expect(res.status).toBe(200);
-    const update = supa
+    const upsert = supa
       .callsFor("profiles")[0]
-      .find((c) => c.method === "update");
-    const args = update!.args[0] as {
+      .find((c) => c.method === "upsert");
+    const args = upsert!.args[0] as {
       first_name: string;
       last_name: string;
       display_name: string;
