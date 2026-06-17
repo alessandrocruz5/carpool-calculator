@@ -203,7 +203,31 @@ function extraKmByRider(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+// Ordering key for a leg: prefer the explicit `position`, falling back to the
+// legacy enum so trips read consistently even before the enforce migration ran.
+function legOrder(l: DbTripLeg): number {
+  if (l.position != null) return l.position;
+  if (l.leg === "morning") return 0;
+  if (l.leg === "evening") return 1;
+  return Number.MAX_SAFE_INTEGER;
+}
+
+function toLegState(l: DbTripLeg & { trip_leg_riders: DbTripLegRider[] }) {
+  return {
+    route: l.route,
+    passengerIds: l.trip_leg_riders.map((x) => x.passenger_id),
+    distanceKm: Number(l.distance_km),
+    extraKmByRider: extraKmByRider(l.trip_leg_riders),
+  };
+}
+
 export function fromDbTrip(r: DbTripWithLegs, gasPrice: number): StoredTrip {
+  // Authoritative ordered legs (N legs, ascending position).
+  const ordered = [...r.trip_legs].sort((a, b) => legOrder(a) - legOrder(b));
+  const legs = ordered.map(toLegState);
+
+  // Legacy mirror: keep the morning/evening surfaces deriving by leg name so
+  // existing two-leg readers are byte-identical to before this unit.
   const morning = r.trip_legs.find((l) => l.leg === "morning");
   const evening = r.trip_legs.find((l) => l.leg === "evening");
   return {
@@ -213,6 +237,7 @@ export function fromDbTrip(r: DbTripWithLegs, gasPrice: number): StoredTrip {
     parkingFee: Number(r.parking_fee_php),
     carId: r.car_id,
     driverUserId: r.driver_user_id,
+    legs,
     morning: {
       route: morning?.route ?? "skyway",
       passengerIds: morning?.trip_leg_riders.map((x) => x.passenger_id) ?? [],

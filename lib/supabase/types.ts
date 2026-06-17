@@ -109,9 +109,9 @@ export interface DbTripLeg {
   leg: "morning" | "evening" | null;
   route: "skyway" | "slex";
   distance_km: number;
-  // Ordered leg index (morning→0, evening→1, then 2..N). Optional/nullable until
-  // SABAY-25 backfills + enforces it for every row.
-  position?: number | null;
+  // Ordered leg index (morning→0, evening→1, then 2..N). NOT NULL + unique per
+  // trip since SABAY-25's enforce migration backfilled every row.
+  position: number;
 }
 
 export interface DbTripLegRider {
