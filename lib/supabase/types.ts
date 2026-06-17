@@ -104,9 +104,14 @@ export interface DbTripLeg {
   id: string;
   group_id: string;
   trip_id: string;
-  leg: "morning" | "evening";
+  // Nullable since SABAY-23: legs beyond the legacy morning/evening enum carry
+  // a null `leg` and are ordered by `position` instead.
+  leg: "morning" | "evening" | null;
   route: "skyway" | "slex";
   distance_km: number;
+  // Ordered leg index (morning→0, evening→1, then 2..N). Optional/nullable until
+  // SABAY-25 backfills + enforces it for every row.
+  position?: number | null;
 }
 
 export interface DbTripLegRider {
