@@ -20,7 +20,12 @@ export interface CalcSettings {
 }
 
 export interface LegInput {
-  leg: LegName;
+  /**
+   * Morning/evening for the first two legs; `null` for additional legs (3rd+),
+   * which have no fixed name. Parking no longer depends on this field — pass an
+   * explicit `applyParking` flag to {@link calcLeg} instead.
+   */
+  leg: LegName | null;
   route: Route;
   passengerCount: number;
   distanceKm: number;
@@ -33,7 +38,7 @@ export interface LegInput {
 }
 
 export interface LegBreakdown {
-  leg: LegName;
+  leg: LegName | null;
   route: Route;
   passengerCount: number;
   distanceKm: number;
@@ -79,12 +84,18 @@ export function driverRatio(passengerCount: number, settings: CalcSettings): num
 export function calcLeg(
   input: LegInput,
   gasPricePhpPerL: number,
-  settings: CalcSettings
+  settings: CalcSettings,
+  /**
+   * Whether the parking fee applies to this leg. Defaults to the legacy rule
+   * (`leg === "morning"`) when omitted, so existing 2-leg callers are unchanged.
+   * `calcDay` passes `true` only for the first leg.
+   */
+  applyParking?: boolean
 ): LegBreakdown {
   const distance = input.distanceKm;
   const gasCost = (distance / settings.mileageKmPerL) * gasPricePhpPerL;
   const tollCost = input.route === "skyway" ? settings.tollSkywayPhp : settings.tollSlexPhp;
-  const parkingCost = input.leg === "morning" ? settings.parkingFeePhp : 0;
+  const parkingCost = (applyParking ?? input.leg === "morning") ? settings.parkingFeePhp : 0;
   const total = gasCost + tollCost + parkingCost;
 
   const ratio = driverRatio(input.passengerCount, settings);
@@ -118,15 +129,45 @@ export function calcLeg(
   };
 }
 
-export interface DayInput {
+/** A single day-leg, carrying the riders on it so the day can split per passenger. */
+export interface DayLegInput {
+  route: Route;
+  passengerIds: string[];
+  distanceKm: number;
+  extraKmByRider?: Record<string, number>;
+}
+
+/**
+ * `calcDay` accepts either the legacy fixed two-leg shape (`morning`/`evening`)
+ * or an ordered N-leg array (`legs`). Both compute identically for the same
+ * legs; the legacy shape is sugar for `legs: [morning, evening]`.
+ */
+export type DayInput = DayInputLegacy | DayInputLegs;
+
+interface DayInputBase {
   date: string;
   gasPricePhpPerL: number;
-  morning: { route: Route; passengerIds: string[]; distanceKm: number; extraKmByRider?: Record<string, number> };
-  evening: { route: Route; passengerIds: string[]; distanceKm: number; extraKmByRider?: Record<string, number> };
+}
+
+export interface DayInputLegacy extends DayInputBase {
+  morning: DayLegInput;
+  evening: DayLegInput;
+}
+
+export interface DayInputLegs extends DayInputBase {
+  /** Ordered legs, minimum 1. Parking applies to the first leg only. */
+  legs: DayLegInput[];
 }
 
 export interface DayBreakdown {
   date: string;
+  /** Every leg in order. Authoritative; `morning`/`evening` mirror legs[0]/[1]. */
+  legs: LegBreakdown[];
+  /**
+   * Legacy mirror of `legs[0]`/`legs[1]`, kept so existing 2-leg readers are
+   * unchanged. On a 1-leg `legs` input `evening` is absent at runtime — read
+   * `legs` for N-leg work. (Mirror is removed in a later unit.)
+   */
   morning: LegBreakdown;
   evening: LegBreakdown;
   driverTotal: number;
@@ -134,33 +175,41 @@ export interface DayBreakdown {
 }
 
 export function calcDay(input: DayInput, settings: CalcSettings): DayBreakdown {
-  const morning = calcLeg(
-    { leg: "morning", route: input.morning.route, passengerCount: input.morning.passengerIds.length, distanceKm: input.morning.distanceKm, extraKmByRider: input.morning.extraKmByRider },
-    input.gasPricePhpPerL,
-    settings
-  );
-  const evening = calcLeg(
-    { leg: "evening", route: input.evening.route, passengerCount: input.evening.passengerIds.length, distanceKm: input.evening.distanceKm, extraKmByRider: input.evening.extraKmByRider },
-    input.gasPricePhpPerL,
-    settings
+  const dayLegs: DayLegInput[] = "legs" in input ? input.legs : [input.morning, input.evening];
+
+  const legs: LegBreakdown[] = dayLegs.map((leg, i) =>
+    calcLeg(
+      {
+        // First two legs keep their morning/evening name; later legs are unnamed.
+        leg: i === 0 ? "morning" : i === 1 ? "evening" : null,
+        route: leg.route,
+        passengerCount: leg.passengerIds.length,
+        distanceKm: leg.distanceKm,
+        extraKmByRider: leg.extraKmByRider,
+      },
+      input.gasPricePhpPerL,
+      settings,
+      i === 0 // parking applies to the first leg only
+    )
   );
 
   const perPassenger: Record<string, number> = {};
-  for (const id of input.morning.passengerIds) {
-    perPassenger[id] = (perPassenger[id] ?? 0) + morning.passengerEach + (morning.detourByRider[id] ?? 0);
-  }
-  for (const id of input.evening.passengerIds) {
-    perPassenger[id] = (perPassenger[id] ?? 0) + evening.passengerEach + (evening.detourByRider[id] ?? 0);
-  }
+  dayLegs.forEach((leg, i) => {
+    const b = legs[i];
+    for (const id of leg.passengerIds) {
+      perPassenger[id] = (perPassenger[id] ?? 0) + b.passengerEach + (b.detourByRider[id] ?? 0);
+    }
+  });
   for (const id of Object.keys(perPassenger)) {
     perPassenger[id] = round2(perPassenger[id]);
   }
 
   return {
     date: input.date,
-    morning,
-    evening,
-    driverTotal: round2(morning.driverShare + evening.driverShare),
+    legs,
+    morning: legs[0],
+    evening: legs[1],
+    driverTotal: round2(legs.reduce((sum, b) => sum + b.driverShare, 0)),
     perPassenger,
   };
 }
