@@ -145,8 +145,8 @@ describe("POST /api/trips gas snapshot", () => {
           { data: null, error: null }, // delete
           {
             data: [
-              { id: "lm", leg: "morning" },
-              { id: "le", leg: "evening" },
+              { id: "lm", leg: "morning", position: 0 },
+              { id: "le", leg: "evening", position: 1 },
             ],
             error: null,
           },
@@ -185,8 +185,8 @@ describe("POST /api/trips gas snapshot", () => {
           { data: null, error: null },
           {
             data: [
-              { id: "lm", leg: "morning" },
-              { id: "le", leg: "evening" },
+              { id: "lm", leg: "morning", position: 0 },
+              { id: "le", leg: "evening", position: 1 },
             ],
             error: null,
           },
@@ -228,6 +228,108 @@ describe("POST /api/trips gas snapshot", () => {
   });
 });
 
+describe("POST /api/trips N legs", () => {
+  const threeLegTrip = {
+    ...baseTrip,
+    legs: [
+      { route: "skyway" as const, passengerIds: ["p1", "p2"], distanceKm: 21 },
+      { route: "slex" as const, passengerIds: ["p1"], distanceKm: 25 },
+      { route: "slex" as const, passengerIds: ["p3"], distanceKm: 12 },
+    ],
+  };
+
+  it("persists every leg with its position and attaches riders + payments per leg", async () => {
+    const supa = setSupa({
+      tables: {
+        gas_prices: [{ data: { id: "g-existing" }, error: null }],
+        trips: [{ data: { id: "t1" }, error: null }],
+        trip_legs: [
+          { data: null, error: null }, // delete
+          {
+            data: [
+              { id: "lm", position: 0 },
+              { id: "le", position: 1 },
+              { id: "l3", position: 2 },
+            ],
+            error: null,
+          },
+        ],
+        trip_leg_riders: [{ data: null, error: null }],
+        settings: [driverSettings],
+        trip_payments: [
+          { data: null, error: null }, // delete not-in
+          { data: [], error: null }, // existing
+          { data: null, error: null }, // upsert
+        ],
+      },
+    });
+
+    const res = await POST(
+      new Request("http://t/api/trips", { method: "POST", body: JSON.stringify(threeLegTrip) })
+    );
+    expect(res.status).toBe(200);
+
+    // Three legs inserted, ordered by position, first two named morning/evening.
+    const legInsert = supa
+      .callsFor("trip_legs")
+      .flat()
+      .find((c) => c.method === "insert");
+    expect(legInsert).toBeDefined();
+    const insertedLegs = legInsert!.args[0] as Array<{
+      leg: string | null;
+      position: number;
+      distance_km: number;
+    }>;
+    expect(insertedLegs).toHaveLength(3);
+    expect(insertedLegs.map((l) => l.position)).toEqual([0, 1, 2]);
+    expect(insertedLegs.map((l) => l.leg)).toEqual(["morning", "evening", null]);
+    expect(insertedLegs.map((l) => l.distance_km)).toEqual([21, 25, 12]);
+
+    // Riders attach to the correct leg id (matched by position, not row order).
+    const riderInsert = supa
+      .callsFor("trip_leg_riders")
+      .flat()
+      .find((c) => c.method === "insert");
+    const riders = riderInsert!.args[0] as Array<{ trip_leg_id: string; passenger_id: string }>;
+    expect(riders).toHaveLength(4);
+    expect(riders).toEqual(
+      expect.arrayContaining([
+        { group_id: "g1", trip_leg_id: "lm", passenger_id: "p1", extra_distance_km: 0 },
+        { group_id: "g1", trip_leg_id: "lm", passenger_id: "p2", extra_distance_km: 0 },
+        { group_id: "g1", trip_leg_id: "le", passenger_id: "p1", extra_distance_km: 0 },
+        { group_id: "g1", trip_leg_id: "l3", passenger_id: "p3", extra_distance_km: 0 },
+      ])
+    );
+
+    // Payments reflect every leg: p1 (legs 0+1), p2 (leg 0), p3 (leg 2).
+    const payUpsert = supa
+      .callsFor("trip_payments")
+      .flat()
+      .find((c) => c.method === "upsert");
+    const payments = payUpsert!.args[0] as Array<{ passenger_id: string; amount_php: number }>;
+    expect(payments.map((p) => p.passenger_id).sort()).toEqual(["p1", "p2", "p3"]);
+    // p1 rides two legs, so owes strictly more than p2/p3 who ride one each.
+    const amt = (id: string) => payments.find((p) => p.passenger_id === id)!.amount_php;
+    expect(amt("p1")).toBeGreaterThan(amt("p2"));
+    expect(amt("p1")).toBeGreaterThan(amt("p3"));
+  });
+
+  it("rejects a leg with non-positive distance", async () => {
+    setSupa({});
+    const bad = {
+      ...baseTrip,
+      legs: [
+        { route: "skyway" as const, passengerIds: ["p1"], distanceKm: 21 },
+        { route: "slex" as const, passengerIds: ["p1"], distanceKm: 0 },
+      ],
+    };
+    const res = await POST(
+      new Request("http://t/api/trips", { method: "POST", body: JSON.stringify(bad) })
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("POST /api/trips car + driver attachment", () => {
   const tripWithCar = { ...baseTrip, carId: "car1", driverUserId: "u-driver" };
 
@@ -237,7 +339,7 @@ describe("POST /api/trips car + driver attachment", () => {
       trips: [{ data: { id: "t1" }, error: null }],
       trip_legs: [
         { data: null, error: null },
-        { data: [{ id: "lm", leg: "morning" }, { id: "le", leg: "evening" }], error: null },
+        { data: [{ id: "lm", leg: "morning", position: 0 }, { id: "le", leg: "evening", position: 1 }], error: null },
       ],
       trip_leg_riders: [{ data: null, error: null }],
       settings: [driverSettings],
