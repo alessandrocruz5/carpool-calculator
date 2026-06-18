@@ -86,6 +86,18 @@ export const useTrips = create<TripsStore>()(
         }
       },
     }),
-    { name: "carpool-trips", partialize: (s) => ({ trips: s.trips }) }
+    {
+      name: "carpool-trips",
+      version: 1,
+      migrate: (persisted: unknown) => {
+        const state = persisted as { trips?: unknown[] };
+        // Drop cached trips that predate the legs array (old morning/evening format).
+        const trips = (state.trips ?? []).filter(
+          (t): t is StoredTrip => Array.isArray((t as StoredTrip).legs)
+        );
+        return { trips };
+      },
+      partialize: (s) => ({ trips: s.trips }),
+    }
   )
 );
