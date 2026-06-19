@@ -1,6 +1,30 @@
 # Carpool Calculator — Sprints
 Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded from changelog)
 
+## Sprint 5 — Go-live hardening + payment confirmation   (planned 2026-06-19)
+Epic: SABAY-27 · base branch: `develop` · target version: v2.0.0 (go-live, MAJOR)
+
+Launch-readiness sprint. (a) Invite overhaul: case-insensitive email matching in
+`link_member_by_email`/`claim_member_invite` (the exact-case bug that silently strands mixed-case
+invites), plus Option 2 — passenger rows are created at invite time with an explicit "Pending invite"
+placeholder that self-heals to the profile name on first sign-in (no more email-local-part guessing).
+(b) Security surface: rate-limit sweep on the ~11 unprotected write/expensive routes; remove the
+Sentry example scaffolding. (c) Money correctness: largest-remainder allocation so splits foot exactly.
+(d) Payment-confirmation handshake: passenger marks "I paid" → driver sees "Confirm"; a claim
+unconfirmed within 24h expires and the passenger re-marks; web-push on claim/confirm. Units 1/5/6/7
+carry migration/auth/money → code-guardian gate. Each unit line tags its build config
+(model · thinking · effort) for token optimization.
+
+- [ ] SABAY-28 — Invite overhaul: case-insensitive email + self-healing placeholder · Fixed/Changed · files: supabase/migrations/<new>.sql, app/api/members/route.ts (+test) · depends: — · high-stakes (migration+auth → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high
+- [ ] SABAY-29 — Mandatory name on first run · Changed · files: components/NamePrompt.tsx, app/page.tsx · depends: SABAY-28 · build: Sonnet 4.6 · thinking on (brief) · effort medium
+- [ ] SABAY-30 — Rate-limit sweep on unprotected write/expensive routes · Changed · files: app/api/payments|settings|cars|fillups|gas-prices|passengers|account/delete|account/export|admin/archive-trips|disputes/[id]|groups/switch route.ts (+tests) · depends: — · guardian (auth surface) · build: Sonnet 4.6 · thinking on (brief) · effort medium
+- [ ] SABAY-31 — Remove Sentry example scaffolding · Fixed · files: app/sentry-example-page/, app/api/sentry-example-api/ (delete) · depends: — · build: Haiku 4.5 · thinking off · effort low
+- [ ] SABAY-32 — Penny-accurate split allocation · Fixed · files: lib/calc.ts, lib/calc.test.ts · depends: — · high-stakes (money → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high
+- [ ] SABAY-33 — Payment confirmation: schema + RLS · Added · files: supabase/migrations/<new>.sql, lib/supabase/types.ts · depends: — · high-stakes (migration+money+auth → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high
+- [ ] SABAY-34 — Payment confirmation: API (claim/confirm/24h expiry) · Added · files: app/api/payments/route.ts (+test), lib/store/payments.ts (+test) · depends: SABAY-33 · high-stakes (money+auth → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high
+- [ ] SABAY-35 — Payment confirmation: UI · Added · files: app/payments/page.tsx · depends: SABAY-34 · build: Sonnet 4.6 · thinking on (brief) · effort medium
+- [ ] SABAY-36 — Payment notifications · Added · files: app/api/payments/route.ts, lib/push.ts · depends: SABAY-35 · guardian (notify surface) · build: Sonnet 4.6 · thinking on (brief) · effort medium
+
 ## Sprint 3 — App tour, profile identity & invites   (planned 2026-06-16)
 Epic: SABAY-11 · base branch: `main` · target version: v1.8.0
 
