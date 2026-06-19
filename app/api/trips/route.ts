@@ -6,7 +6,7 @@ import {
   fromDbFillup,
   type DbTripWithLegs,
 } from "@/lib/supabase/mappers";
-import type { StoredTrip } from "@/lib/store/trips";
+import type { StoredTrip, LegState } from "@/lib/store/trips";
 import type { DbGasPrice, DbSettings, DbFillup } from "@/lib/supabase/types";
 import { calcDay, DEFAULT_SETTINGS } from "@/lib/calc";
 import { rollingMileage, resolveEffectiveMileage } from "@/lib/mileage";
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 const TRIP_SELECT =
   "id, date, parking_fee_php, notes, car_id, driver_user_id, gas_price_id, " +
-  "trip_legs(leg, route, distance_km, trip_leg_riders(passenger_id, extra_distance_km))";
+  "trip_legs(leg, position, route, distance_km, trip_leg_riders(passenger_id, extra_distance_km))";
 
 export async function GET() {
   const supabase = await createClient();
@@ -59,18 +59,27 @@ export async function POST(req: Request) {
   const groupId = group.groupId;
   const body = (await req.json()) as StoredTrip;
 
-  if (!(body.morning.distanceKm > 0) || !(body.evening.distanceKm > 0)) {
+  // Authoritative ordered legs. `?? []` guards against a stale client that omits
+  // them entirely — the length check below rejects that with a 400.
+  const inputLegs: LegState[] = body.legs ?? [];
+
+  if (inputLegs.length === 0) {
     return NextResponse.json(
-      { error: "distance_km must be positive for both legs" },
+      { error: "at least one leg is required" },
+      { status: 400 }
+    );
+  }
+  if (inputLegs.some((leg) => !(leg.distanceKm > 0))) {
+    return NextResponse.json(
+      { error: "distance_km must be positive for every leg" },
       { status: 400 }
     );
   }
 
   // Model A per-rider detour distance must be non-negative (NaN rejected too).
-  const extraKms = [
-    ...Object.values(body.morning.extraKmByRider ?? {}),
-    ...Object.values(body.evening.extraKmByRider ?? {}),
-  ];
+  const extraKms = inputLegs.flatMap((leg) =>
+    Object.values(leg.extraKmByRider ?? {})
+  );
   if (extraKms.some((km) => !(km >= 0))) {
     return NextResponse.json(
       { error: "extra_distance_km must be >= 0" },
@@ -172,37 +181,37 @@ export async function POST(req: Request) {
     .eq("trip_id", tripId);
   if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
 
-  const legsToInsert = [
-    { group_id: groupId, trip_id: tripId, leg: "morning" as const, route: body.morning.route, distance_km: body.morning.distanceKm },
-    { group_id: groupId, trip_id: tripId, leg: "evening" as const, route: body.evening.route, distance_km: body.evening.distanceKm },
-  ];
+  // Ordered legs: position is authoritative; the first two keep their legacy
+  // morning/evening name, later legs are unnamed (leg null, position >= 2).
+  const legsToInsert = inputLegs.map((leg, i) => ({
+    group_id: groupId,
+    trip_id: tripId,
+    leg: i === 0 ? ("morning" as const) : i === 1 ? ("evening" as const) : null,
+    position: i,
+    route: leg.route,
+    distance_km: leg.distanceKm,
+  }));
   const { data: legRows, error: legErr } = await supabase
     .from("trip_legs")
     .insert(legsToInsert)
-    .select();
+    .select("id, position");
   if (legErr) return NextResponse.json({ error: legErr.message }, { status: 500 });
 
-  const morningLeg = (legRows ?? []).find((l: { leg: string }) => l.leg === "morning") as
-    | { id: string }
-    | undefined;
-  const eveningLeg = (legRows ?? []).find((l: { leg: string }) => l.leg === "evening") as
-    | { id: string }
-    | undefined;
+  // Map each inserted leg back to its position so riders attach to the right leg
+  // (insert/select does not guarantee row order).
+  const legIdByPosition = new Map<number, string>();
+  for (const row of (legRows ?? []) as { id: string; position: number }[]) {
+    legIdByPosition.set(row.position, row.id);
+  }
 
-  const riders = [
-    ...body.morning.passengerIds.map((pid) => ({
+  const riders = inputLegs.flatMap((leg, i) =>
+    leg.passengerIds.map((pid) => ({
       group_id: groupId,
-      trip_leg_id: morningLeg!.id,
+      trip_leg_id: legIdByPosition.get(i)!,
       passenger_id: pid,
-      extra_distance_km: body.morning.extraKmByRider?.[pid] ?? 0,
-    })),
-    ...body.evening.passengerIds.map((pid) => ({
-      group_id: groupId,
-      trip_leg_id: eveningLeg!.id,
-      passenger_id: pid,
-      extra_distance_km: body.evening.extraKmByRider?.[pid] ?? 0,
-    })),
-  ];
+      extra_distance_km: leg.extraKmByRider?.[pid] ?? 0,
+    }))
+  );
   if (riders.length > 0) {
     const { error: ridErr } = await supabase.from("trip_leg_riders").insert(riders);
     if (ridErr) return NextResponse.json({ error: ridErr.message }, { status: 500 });
@@ -243,8 +252,7 @@ export async function POST(req: Request) {
     {
       date: body.date,
       gasPricePhpPerL: body.gasPrice,
-      morning: { ...body.morning, distanceKm: body.morning.distanceKm },
-      evening: { ...body.evening, distanceKm: body.evening.distanceKm },
+      legs: inputLegs,
     },
     calcSettings
   );

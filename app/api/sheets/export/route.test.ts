@@ -28,8 +28,10 @@ const body = {
       date: "2026-05-13",
       gasPrice: 65.5,
       parkingFee: 90,
-      morning: { route: "skyway", passengerIds: ["p1"] },
-      evening: { route: "slex", passengerIds: ["p1"] },
+      legs: [
+        { route: "skyway", passengerIds: ["p1"], distanceKm: 21 },
+        { route: "slex", passengerIds: ["p1"], distanceKm: 21 },
+      ],
     },
   ],
   passengers: [{ id: "p1", name: "Ana" }],

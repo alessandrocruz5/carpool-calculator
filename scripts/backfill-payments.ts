@@ -98,22 +98,27 @@ async function main() {
   for (const t of (trips ?? []) as TripJoin[]) {
     const gas =
       gp.find((g) => g.id === t.gas_price_id)?.price_per_liter ?? 0;
-    const morning = t.trip_legs.find((l) => l.leg === "morning");
-    const evening = t.trip_legs.find((l) => l.leg === "evening");
+    // Ordered legs by position (legacy enum as the fallback ordering key).
+    const legOrder = (l: DbTripLeg): number =>
+      l.position != null
+        ? l.position
+        : l.leg === "morning"
+        ? 0
+        : l.leg === "evening"
+        ? 1
+        : Number.MAX_SAFE_INTEGER;
+    const legs = [...t.trip_legs]
+      .sort((a, b) => legOrder(a) - legOrder(b))
+      .map((l) => ({
+        route: l.route ?? "skyway",
+        passengerIds: l.trip_leg_riders.map((r) => r.passenger_id),
+        distanceKm: Number(l.distance_km),
+      }));
     const breakdown = calcDay(
       {
         date: t.date,
         gasPricePhpPerL: Number(gas),
-        morning: {
-          route: morning?.route ?? "skyway",
-          passengerIds: morning?.trip_leg_riders.map((r) => r.passenger_id) ?? [],
-          distanceKm: Number(morning?.distance_km ?? 21),
-        },
-        evening: {
-          route: evening?.route ?? "skyway",
-          passengerIds: evening?.trip_leg_riders.map((r) => r.passenger_id) ?? [],
-          distanceKm: Number(evening?.distance_km ?? 21),
-        },
+        legs,
       },
       calcSettings
     );

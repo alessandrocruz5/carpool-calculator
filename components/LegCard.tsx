@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
-import { calcLeg, type CalcSettings, type LegBreakdown, type LegName, type Route } from "@/lib/calc";
+import { calcLeg, type CalcSettings, type LegBreakdown, type Route } from "@/lib/calc";
 import { PassengerChips, type PassengerOption } from "./PassengerChips";
 import { RouteToggle } from "./RouteToggle";
 import { PHP } from "./PHP";
@@ -16,7 +16,8 @@ export interface LegState {
 type Tab = "simple" | "detours";
 
 export function LegCard({
-  leg,
+  label,
+  applyParking,
   state,
   onChange,
   passengers,
@@ -25,7 +26,10 @@ export function LegCard({
   readOnly = false,
   maxPassengers,
 }: {
-  leg: LegName;
+  /** Heading for this leg, e.g. "Leg 1". */
+  label: string;
+  /** Whether the parking fee applies to this leg (first leg only). */
+  applyParking: boolean;
   state: LegState;
   onChange: (s: LegState) => void;
   passengers: PassengerOption[];
@@ -43,16 +47,17 @@ export function LegCard({
     () =>
       calcLeg(
         {
-          leg,
+          leg: null,
           route: state.route,
           passengerCount: state.passengerIds.length,
           distanceKm: state.distanceKm,
           extraKmByRider: state.extraKmByRider,
         },
         gasPrice,
-        settings
+        settings,
+        applyParking
       ),
-    [leg, state, gasPrice, settings]
+    [applyParking, state, gasPrice, settings]
   );
 
   function switchTab(next: Tab) {
@@ -84,7 +89,7 @@ export function LegCard({
   return (
     <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h2 className="font-semibold capitalize">{leg}</h2>
+        <h2 className="font-semibold">{label}</h2>
         <RouteToggle value={state.route} onChange={(r) => onChange({ ...state, route: r })} readOnly={readOnly} />
       </div>
 
