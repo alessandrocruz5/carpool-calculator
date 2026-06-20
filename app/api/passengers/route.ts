@@ -4,6 +4,7 @@ import { fromDbPassenger } from "@/lib/supabase/mappers";
 import type { DbPassenger } from "@/lib/supabase/types";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
+import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,12 @@ export async function POST(req: Request) {
   if (!group.ok) return group.response;
   const denied = await requireGroupDriver(supabase, group.groupId);
   if (!denied.ok) return denied.response;
+  const limited = await enforceRateLimit(
+    "passengers:write",
+    getIdentifier(req, denied.userId),
+    { requests: 20, window: "1 m" }
+  );
+  if (limited) return limited;
   const body = (await req.json()) as { id?: string; name: string; active?: boolean };
   const insert: Partial<DbPassenger> = {
     group_id: group.groupId,
@@ -48,6 +55,12 @@ export async function PATCH(req: Request) {
   if (!group.ok) return group.response;
   const denied = await requireGroupDriver(supabase, group.groupId);
   if (!denied.ok) return denied.response;
+  const limited = await enforceRateLimit(
+    "passengers:write",
+    getIdentifier(req, denied.userId),
+    { requests: 20, window: "1 m" }
+  );
+  if (limited) return limited;
   const body = (await req.json()) as { id: string; active: boolean };
   const { data, error } = await supabase
     .from("passengers")
@@ -66,6 +79,12 @@ export async function DELETE(req: Request) {
   if (!group.ok) return group.response;
   const denied = await requireGroupDriver(supabase, group.groupId);
   if (!denied.ok) return denied.response;
+  const limited = await enforceRateLimit(
+    "passengers:write",
+    getIdentifier(req, denied.userId),
+    { requests: 20, window: "1 m" }
+  );
+  if (limited) return limited;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });

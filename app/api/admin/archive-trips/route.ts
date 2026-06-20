@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
+import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,13 @@ export async function POST(req: Request) {
   if (!group.ok) return group.response;
   const driver = await requireGroupDriver(supabase, group.groupId);
   if (!driver.ok) return driver.response;
+
+  const limited = await enforceRateLimit(
+    "admin:archive-trips",
+    getIdentifier(req, driver.userId),
+    { requests: 5, window: "1 m" }
+  );
+  if (limited) return limited;
 
   const body = (await req.json().catch(() => ({}))) as { olderThanDays?: number };
   const days = Number(body.olderThanDays);
