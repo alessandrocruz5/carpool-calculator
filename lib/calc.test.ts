@@ -368,6 +368,117 @@ describe("calcDay legs[] (N ordered legs)", () => {
   });
 });
 
+describe("penny-accurate allocation (SABAY-32)", () => {
+  // Sweep awkward inputs that force rounding residuals, then assert the rounded
+  // parts always foot back to the rounded total — per leg and per day, across
+  // passenger counts and split ratios.
+  const ratioSettings = [
+    DEFAULT_SETTINGS,
+    { ...DEFAULT_SETTINGS, split1pDriver: 33, split2pDriver: 33, split3pDriver: 33, split4pDriver: 33 },
+    { ...DEFAULT_SETTINGS, split1pDriver: 37, split2pDriver: 41, split3pDriver: 23, split4pDriver: 17 },
+    { ...DEFAULT_SETTINGS, split1pDriver: 50, split2pDriver: 50, split3pDriver: 50, split4pDriver: 50 },
+  ];
+  const gasPrices = [88.5, 90, 91.7, 105.33];
+  const distances = [17, 19, 20.5, 21, 23.7, 25];
+  const passengerCounts = [0, 1, 2, 3, 4, 5];
+
+  it("calcLeg: driverShare + passengerCount * passengerEach === total, every combo", () => {
+    for (const settings of ratioSettings) {
+      for (const gas of gasPrices) {
+        for (const distanceKm of distances) {
+          for (const route of ["skyway", "slex"] as const) {
+            for (const passengerCount of passengerCounts) {
+              for (const applyParking of [true, false]) {
+                const r = calcLeg(
+                  { leg: "morning", route, passengerCount, distanceKm },
+                  gas,
+                  settings,
+                  applyParking
+                );
+                // The parts foot exactly to the leg total.
+                expect(round2(r.driverShare + passengerCount * r.passengerEach)).toBe(r.total);
+                // Passengers split equally; the driver absorbs the sub-cent remainder.
+                expect(r.driverShare).toBe(round2(r.total - passengerCount * r.passengerEach));
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it("concrete residual case the old independent rounding would miss-foot", () => {
+    // gas (20.5/10.5)*91.7 + skyway toll 164 → 343.03; 3p @ 19/81.
+    // Independent rounding gave driver 65.18 + 3*92.62 = 343.04 (off by +0.01);
+    // largest-remainder lands the driver on 65.17 so the parts foot to 343.03.
+    const r = calcLeg(
+      { leg: "evening", route: "skyway", passengerCount: 3, distanceKm: 20.5 },
+      91.7,
+      DEFAULT_SETTINGS
+    );
+    expect(r.total).toBe(343.03);
+    expect(r.passengerEach).toBe(92.62);
+    expect(r.driverShare).toBe(65.17);
+    expect(round2(r.driverShare + 3 * r.passengerEach)).toBe(r.total);
+  });
+
+  it("calcDay: driverTotal + Σ perPassenger === Σ leg totals (mixed ridership, no detours)", () => {
+    for (const settings of ratioSettings) {
+      for (const gas of gasPrices) {
+        const d = calcDay(
+          {
+            date: "2026-06-20",
+            gasPricePhpPerL: gas,
+            legs: [
+              { route: "skyway", passengerIds: ["A", "B", "C"], distanceKm: 21 },
+              { route: "slex", passengerIds: ["A", "B"], distanceKm: 23.7 },
+              { route: "skyway", passengerIds: ["A"], distanceKm: 17 },
+            ],
+          },
+          settings
+        );
+        const legTotal = round2(d.legs.reduce((sum, l) => sum + l.total, 0));
+        const collected = round2(
+          d.driverTotal + Object.values(d.perPassenger).reduce((s, v) => s + v, 0)
+        );
+        expect(collected).toBe(legTotal);
+      }
+    }
+  });
+
+  it("calcDay: detours stay additive — collected === Σ leg totals + Σ detours", () => {
+    const gas = 91.7;
+    const d = calcDay(
+      {
+        date: "2026-06-20",
+        gasPricePhpPerL: gas,
+        legs: [
+          { route: "skyway", passengerIds: ["A", "B"], distanceKm: 20.5, extraKmByRider: { A: 6 } },
+          { route: "slex", passengerIds: ["A", "B"], distanceKm: 23.7, extraKmByRider: { B: 4 } },
+        ],
+      },
+      DEFAULT_SETTINGS
+    );
+    const legTotal = d.legs.reduce((sum, l) => sum + l.total, 0);
+    const detourSum = d.legs.reduce(
+      (sum, l) => sum + Object.values(l.detourByRider).reduce((a, b) => a + b, 0),
+      0
+    );
+    const collected = d.driverTotal + Object.values(d.perPassenger).reduce((s, v) => s + v, 0);
+    expect(round2(collected)).toBe(round2(legTotal + detourSum));
+  });
+
+  it("is pure/deterministic — identical inputs yield identical output", () => {
+    const input = {
+      leg: "morning" as const,
+      route: "skyway" as const,
+      passengerCount: 3,
+      distanceKm: 20.5,
+    };
+    expect(calcLeg(input, 91.7, DEFAULT_SETTINGS)).toEqual(calcLeg(input, 91.7, DEFAULT_SETTINGS));
+  });
+});
+
 describe("per-leg distance", () => {
   it("asymmetric legs produce different gas costs", () => {
     const d = calcDay(
