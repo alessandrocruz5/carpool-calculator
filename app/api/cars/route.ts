@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fromDbCar, toDbCarInsert } from "@/lib/supabase/mappers";
 import type { DbCar } from "@/lib/supabase/types";
 import { requireUser } from "@/lib/auth/requireDriver";
+import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,12 @@ export async function POST(req: Request) {
   const supabase = await createClient();
   const user = await requireUser(supabase);
   if (!user.ok) return user.response;
+  const limited = await enforceRateLimit(
+    "cars:write",
+    getIdentifier(req, user.userId),
+    { requests: 20, window: "1 m" }
+  );
+  if (limited) return limited;
   const body = (await req.json()) as CarBody;
   if (!body.name?.trim())
     return NextResponse.json({ error: "name required" }, { status: 400 });
@@ -55,6 +62,12 @@ export async function PATCH(req: Request) {
   const supabase = await createClient();
   const user = await requireUser(supabase);
   if (!user.ok) return user.response;
+  const limited = await enforceRateLimit(
+    "cars:write",
+    getIdentifier(req, user.userId),
+    { requests: 20, window: "1 m" }
+  );
+  if (limited) return limited;
   const body = (await req.json()) as CarBody;
   if (!body.id) return NextResponse.json({ error: "missing id" }, { status: 400 });
   const patch: Partial<DbCar> = {};
@@ -80,6 +93,12 @@ export async function DELETE(req: Request) {
   const supabase = await createClient();
   const user = await requireUser(supabase);
   if (!user.ok) return user.response;
+  const limited = await enforceRateLimit(
+    "cars:write",
+    getIdentifier(req, user.userId),
+    { requests: 20, window: "1 m" }
+  );
+  if (limited) return limited;
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });

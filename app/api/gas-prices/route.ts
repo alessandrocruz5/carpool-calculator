@@ -4,6 +4,7 @@ import { gasPriceFromDb } from "@/lib/supabase/mappers";
 import type { DbGasPrice } from "@/lib/supabase/types";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
+import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,12 @@ export async function POST(req: Request) {
   if (!group.ok) return group.response;
   const denied = await requireGroupDriver(supabase, group.groupId);
   if (!denied.ok) return denied.response;
+  const limited = await enforceRateLimit(
+    "gas-prices:write",
+    getIdentifier(req, denied.userId),
+    { requests: 20, window: "1 m" }
+  );
+  if (limited) return limited;
   const body = (await req.json()) as { price: number; effectiveDate?: string };
   const date = body.effectiveDate ?? new Date().toISOString().slice(0, 10);
   const { data, error } = await supabase

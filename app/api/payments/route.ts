@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
+import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 import type { DbTripPayment } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
@@ -92,6 +93,13 @@ export async function PATCH(req: Request) {
   if (!group.ok) return group.response;
   const denied = await requireGroupDriver(supabase, group.groupId);
   if (!denied.ok) return denied.response;
+
+  const limited = await enforceRateLimit(
+    "payments:mark",
+    getIdentifier(req, denied.userId),
+    { requests: 30, window: "1 m" }
+  );
+  if (limited) return limited;
 
   const body = (await req.json()) as
     | PatchItem
