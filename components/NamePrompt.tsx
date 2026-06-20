@@ -3,14 +3,11 @@ import { useEffect, useState } from "react";
 import { useProfile } from "@/lib/store/profile";
 import { useToast } from "@/components/Toast";
 
-const DISMISSED_KEY = "cc:name-prompt:dismissed";
-
-// One-time prompt shown after sign-in when the signed-in user has no name on
-// their profile yet. The real gate is the persisted name: once it's actually in
-// the DB, `hasName` is true and the prompt stops re-appearing on every device.
-// The localStorage flag only suppresses a same-browser re-prompt when the user
-// explicitly skips ("Not now"). A failed save marks nothing and re-prompts next
-// time. Writes via the profile store (SABAY-15 `/api/profile`).
+// Blocking prompt shown when the signed-in user has no name on their profile.
+// The gate is the persisted DB name: once saved, `hasName` is true and the
+// prompt stops re-appearing on every device. There is no dismiss — the user
+// must enter a name. The SABAY-28 profiles trigger syncs the name to the linked
+// passenger row automatically. Writes via the profile store (`/api/profile`).
 export function NamePrompt() {
   const profile = useProfile((s) => s.profile);
   const hydrated = useProfile((s) => s.hydrated);
@@ -24,15 +21,9 @@ export function NamePrompt() {
 
   useEffect(() => {
     if (!hydrated || !profile) return;
-    if (localStorage.getItem(DISMISSED_KEY)) return;
     const hasName = !!(profile.firstName || profile.lastName);
     if (!hasName) setOpen(true);
   }, [hydrated, profile]);
-
-  function dismiss() {
-    localStorage.setItem(DISMISSED_KEY, "1");
-    setOpen(false);
-  }
 
   async function save() {
     const first = firstName.trim();
@@ -44,8 +35,6 @@ export function NamePrompt() {
     setBusy(true);
     try {
       await update({ firstName: first, lastName: last });
-      // Only on a real success: the name is now persisted, so `hasName` keeps the
-      // prompt closed across devices — no localStorage flag needed here.
       setOpen(false);
       toast.show({ message: "Name saved.", variant: "success" });
     } catch {
@@ -58,14 +47,8 @@ export function NamePrompt() {
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-      onClick={() => !busy && dismiss()}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-xl max-w-sm w-full p-4 space-y-3"
-      >
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl max-w-sm w-full p-4 space-y-3">
         <h3 className="font-semibold">What&rsquo;s your name?</h3>
         <p className="text-sm text-slate-600">
           Add your name so the rest of the carpool sees who you are instead of
@@ -87,15 +70,7 @@ export function NamePrompt() {
             className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
           />
         </div>
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={dismiss}
-            className="text-sm text-slate-600 rounded-lg px-3 py-2 disabled:opacity-60"
-          >
-            Not now
-          </button>
+        <div className="flex justify-end">
           <button
             type="button"
             disabled={busy}
