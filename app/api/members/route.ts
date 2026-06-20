@@ -110,11 +110,13 @@ export async function POST(req: Request) {
   // sign-in. This MUST run after the RPC: admin.inviteUserByEmail creates the
   // auth user immediately, which would otherwise flip the RPC into the
   // existing-user branch and skip the member_invites -> claim flow.
+  // link_member_by_email stores pending invites with a lowercased email, so
+  // match case-insensitively here too (a mixed-case New@B.com still resolves).
   const { data: invite } = await supabase
     .from("member_invites")
     .select("email")
     .eq("group_id", groupId)
-    .eq("email", email)
+    .eq("email", email.toLowerCase())
     .maybeSingle();
   if (invite) {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
@@ -169,23 +171,12 @@ export async function PATCH(req: Request) {
       .select("display_name")
       .eq("user_id", body.userId)
       .maybeSingle();
-    // Prefer the account name, then the email local-part, then a short id —
-    // matching link_member_by_email so a roster label never degrades to a raw
-    // UUID when an email is known.
-    let name =
+    // Use the account name when known, otherwise an explicit "Pending invite"
+    // placeholder — matching link_member_by_email. A roster name is never
+    // derived from an email local-part.
+    const name =
       (profileRow as { display_name?: string | null } | null)?.display_name?.trim() ||
-      "";
-    if (!name) {
-      let email: string | null = null;
-      try {
-        const admin = createAdminClient();
-        const { data: lookup } = await admin.auth.admin.getUserById(body.userId);
-        email = lookup?.user?.email ?? null;
-      } catch {
-        // admin client not configured — fall through to the short id.
-      }
-      name = email ? email.split("@")[0] : body.userId.slice(0, 8);
-    }
+      "Pending invite";
     const { data: passenger, error: pErr } = await supabase
       .from("passengers")
       .insert({ group_id: groupId, name, active: true })

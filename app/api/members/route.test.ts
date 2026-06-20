@@ -201,6 +201,29 @@ describe("POST /api/members", () => {
     );
   });
 
+  it("looks up a pending invite case-insensitively (mixed-case New@B.com)", async () => {
+    // link_member_by_email stores the invite lowercased, so the follow-up
+    // member_invites lookup must lowercase too or the invite email is skipped.
+    const supa = setSupa({
+      rpcs: { link_member_by_email: [{ data: null, error: null }] },
+      tables: { member_invites: [{ data: { email: "new@b.com" }, error: null }] },
+    });
+    const res = await POST(
+      new Request("http://t/api/members", {
+        method: "POST",
+        body: JSON.stringify({ email: "New@B.com", role: "passenger" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    const inviteLookup = supa
+      .callsFor("member_invites")
+      .flat()
+      .find((c) => c.method === "eq" && c.args[0] === "email");
+    expect(inviteLookup?.args[1]).toBe("new@b.com");
+    expect(inviteCalls).toHaveLength(1);
+    expect(inviteCalls[0].email).toBe("New@B.com");
+  });
+
   it("does not email when the address already has an account", async () => {
     // No member_invites row means link_member_by_email took the existing-user
     // branch (added straight to members) — behavior must be unchanged.
@@ -305,7 +328,9 @@ describe("PATCH /api/members", () => {
     expect(passengerInsertName(supa)).toBe("Bob Smith");
   });
 
-  it("falls back to the email local-part (never a raw id) when no name", async () => {
+  it("uses the 'Pending invite' placeholder when the profile has no name", async () => {
+    // No account name → the roster label must be the explicit placeholder,
+    // never an email local-part or a short id.
     adminEmails.current = { u2: "bob@corp.com" };
     const supa = setSupa({
       tables: {
@@ -324,33 +349,7 @@ describe("PATCH /api/members", () => {
       })
     );
     expect(res.status).toBe(200);
-    expect(passengerInsertName(supa)).toBe("bob");
-  });
-
-  it("falls back to a short id (not a raw UUID) when no name and no email", async () => {
-    // No admin email queued for u2, and the profile has no name → the label
-    // must degrade to the short id, never the full UUID.
-    const supa = setSupa({
-      tables: {
-        members: [
-          { data: { role: "driver" }, error: null },
-          {
-            data: { ...row, user_id: "abcdef12-3456", role: "both", passenger_id: null },
-            error: null,
-          },
-        ],
-        profiles: [{ data: { display_name: null }, error: null }],
-        passengers: [{ data: { id: "p1" }, error: null }],
-      },
-    });
-    const res = await PATCH(
-      new Request("http://t/api/members", {
-        method: "PATCH",
-        body: JSON.stringify({ userId: "abcdef12-3456", role: "both" }),
-      })
-    );
-    expect(res.status).toBe(200);
-    expect(passengerInsertName(supa)).toBe("abcdef12");
+    expect(passengerInsertName(supa)).toBe("Pending invite");
   });
 });
 
