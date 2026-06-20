@@ -28,8 +28,11 @@ delete from public.member_invites older
 using public.member_invites newer
 where older.group_id = newer.group_id
   and lower(older.email) = lower(newer.email)
-  and older.email <> newer.email
-  and older.created_at < newer.created_at;
+  -- Total order (created_at, ctid) so exactly one row per (group_id, lower(email))
+  -- survives even when case-variant invites share an identical created_at — a
+  -- created_at-only tiebreaker would keep both and abort the lowercase update
+  -- below on the (group_id, email) primary key.
+  and (older.created_at, older.ctid) < (newer.created_at, newer.ctid);
 
 update public.member_invites
 set    email = lower(email)
@@ -183,6 +186,14 @@ begin
         update public.passengers
         set    name = v_name, active = true
         where  id = v_member_pass_id and group_id = v_invite.group_id;
+        -- Retire any distinct placeholder the invite pre-created so it doesn't
+        -- linger as a stray active row in the roster.
+        if v_invite.passenger_id is not null
+           and v_invite.passenger_id <> v_member_pass_id then
+          update public.passengers
+          set    active = false
+          where  id = v_invite.passenger_id and group_id = v_invite.group_id;
+        end if;
       elsif v_invite.passenger_id is not null then
         -- Reuse the placeholder created at invite time so trips logged against
         -- it are preserved; rename it to the real name.
@@ -218,3 +229,41 @@ $$;
 
 grant   execute on function public.claim_member_invite() to authenticated;
 revoke  execute on function public.claim_member_invite() from anon;
+
+-----------------------------------------------------------------------
+-- 5. Heal the placeholder when the name actually lands.
+--
+-- A genuinely new invitee signs up via the invite email (profile.display_name
+-- is NULL at that point) and claim_member_invite runs at /auth/confirm BEFORE
+-- they complete first-run naming — so the claim can only rename the placeholder
+-- to itself. The real name is written later by the profile PATCH (first/last →
+-- composed display_name). This trigger syncs that name onto the linked passenger
+-- the moment it lands, but only while the row still shows the "Pending invite"
+-- placeholder, so a name a driver deliberately set on the roster is never
+-- clobbered. SECURITY DEFINER because the profile owner (a passenger) is not a
+-- group driver and so cannot update passengers under RLS.
+-----------------------------------------------------------------------
+create or replace function public.heal_pending_passenger_name()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, auth
+as $$
+begin
+  if new.display_name is not null and trim(new.display_name) <> '' then
+    update public.passengers p
+    set    name = trim(new.display_name)
+    from   public.members m
+    where  m.user_id = new.user_id
+      and  m.passenger_id = p.id
+      and  p.name = 'Pending invite';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists heal_pending_passenger_name on public.profiles;
+create trigger heal_pending_passenger_name
+  after insert or update of display_name on public.profiles
+  for each row
+  execute function public.heal_pending_passenger_name();
