@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireGroupMember } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
 import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
+import { sendPushToUsers } from "@/lib/push";
 import type { DbTripPayment } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
@@ -228,11 +229,77 @@ export async function PATCH(req: Request) {
       .select()
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    updated.push(mapRow(data as DbTripPayment, cutoffMs));
+    const mapped = mapRow(data as DbTripPayment, cutoffMs);
+    updated.push(mapped);
+
+    // Fire notifications best-effort — never block the write response.
+    if (typeof it.paid === "boolean" && it.paid) {
+      void notifyConfirmToPassenger(group.groupId, it.passengerId, mapped.amountPhp);
+    } else if (typeof it.claim === "boolean" && it.claim) {
+      void notifyClaimToDrivers(group.groupId, it.passengerId, mapped.amountPhp);
+    }
   }
 
   if (!Array.isArray(body) && !("items" in (body as object))) {
     return NextResponse.json(updated[0]);
   }
   return NextResponse.json(updated);
+}
+
+async function notifyClaimToDrivers(
+  groupId: string,
+  passengerId: string,
+  amountPhp: number
+): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const [{ data: drivers }, { data: passenger }] = await Promise.all([
+      admin
+        .from("members")
+        .select("user_id")
+        .eq("group_id", groupId)
+        .in("role", ["driver", "both"]),
+      admin
+        .from("passengers")
+        .select("name")
+        .eq("group_id", groupId)
+        .eq("id", passengerId)
+        .maybeSingle(),
+    ]);
+    const ids = (drivers ?? []).map((d) => d.user_id as string);
+    const name = passenger?.name ?? "A passenger";
+    await sendPushToUsers(ids, {
+      title: "Payment claim received",
+      body: `${name} marked ₱${amountPhp.toFixed(2)} as paid — confirm?`,
+      url: "/payments",
+      tag: `claim-${passengerId}`,
+    });
+  } catch (err) {
+    console.error("payments claim notify failed", err);
+  }
+}
+
+async function notifyConfirmToPassenger(
+  groupId: string,
+  passengerId: string,
+  amountPhp: number
+): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const { data: member } = await admin
+      .from("members")
+      .select("user_id")
+      .eq("group_id", groupId)
+      .eq("passenger_id", passengerId)
+      .maybeSingle();
+    if (!member?.user_id) return;
+    await sendPushToUsers([member.user_id as string], {
+      title: "Payment confirmed",
+      body: `Your payment of ₱${amountPhp.toFixed(2)} has been confirmed.`,
+      url: "/payments",
+      tag: `confirm-${passengerId}`,
+    });
+  } catch (err) {
+    console.error("payments confirm notify failed", err);
+  }
 }
