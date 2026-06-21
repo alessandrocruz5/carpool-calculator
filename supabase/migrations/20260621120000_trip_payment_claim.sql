@@ -48,6 +48,7 @@ as $$
 $$;
 
 revoke execute on function public.is_own_passenger(uuid, uuid) from public;
+revoke execute on function public.is_own_passenger(uuid, uuid) from anon;
 grant  execute on function public.is_own_passenger(uuid, uuid) to authenticated;
 
 -----------------------------------------------------------------------
@@ -66,16 +67,20 @@ create policy "claim_own_update" on trip_payments
 -- 5. Column guard: non-drivers may only touch claimed_at
 -----------------------------------------------------------------------
 -- RLS is row-level only; it cannot stop a self-updating passenger from also
--- flipping `paid`. This BEFORE UPDATE trigger enforces column-level intent:
+-- flipping `paid`. The new `claim_own_update` policy deliberately opens a
+-- passenger UPDATE path on trip_payments, so this BEFORE UPDATE trigger is the
+-- security-critical defense for that path — it enforces column-level intent:
 --   * drivers (is_group_driver / 'both') may change anything → confirm intact
---   * everyone else may change ONLY claimed_at; any change to paid / paid_at /
---     amount_php / identity columns is rejected.
--- Safe for existing writers: the only UPDATE paths are the driver-gated
--- payments PATCH and the driver-gated trips upsert (both pass is_group_driver);
--- the backfill script INSERTs, so BEFORE UPDATE never fires for it.
+--   * everyone else may ONLY record a fresh claim (claimed_at NULL -> timestamp)
+--     on their own row; any change to paid / paid_at / amount_php / identity
+--     columns, or clearing/rewriting an existing claim, is rejected.
+-- The other existing UPDATE writers are unaffected: the payments PATCH and the
+-- trips upsert are both driver-gated (early-return above); the backfill script
+-- INSERTs, so BEFORE UPDATE never fires for it.
 create or replace function public.trip_payments_claim_guard()
 returns trigger
 language plpgsql
+security invoker
 set search_path = public, auth
 as $$
 begin
@@ -83,6 +88,7 @@ begin
     return new;
   end if;
 
+  -- Non-drivers may not touch confirmation, money, or identity columns.
   if new.trip_id        is distinct from old.trip_id
      or new.passenger_id is distinct from old.passenger_id
      or new.group_id     is distinct from old.group_id
@@ -92,6 +98,16 @@ begin
   then
     raise exception
       'passengers may only set claimed_at on their own payment'
+      using errcode = '42501';
+  end if;
+
+  -- ...and may only record a NEW claim, never clear or backdate/replay one.
+  -- (Un-claiming / expiry resets are driver/server paths.)
+  if new.claimed_at is distinct from old.claimed_at
+     and not (old.claimed_at is null and new.claimed_at is not null)
+  then
+    raise exception
+      'passengers may only record a new claim, not clear or change one'
       using errcode = '42501';
   end if;
 
