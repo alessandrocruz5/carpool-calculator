@@ -20,6 +20,16 @@ vi.mock("@/lib/rate-limit", () => ({
   getIdentifier: vi.fn(() => "user:u1"),
 }));
 
+// The GET expiry sweep uses the service-role client; default to "unconfigured"
+// (throws → sweep skipped) unless a test installs an admin double.
+const adminState: { current: ReturnType<typeof makeSupabase> | null } = { current: null };
+vi.mock("@/lib/supabase/admin", () => ({
+  createAdminClient: vi.fn(() => {
+    if (!adminState.current) throw new Error("admin not configured");
+    return adminState.current.client;
+  }),
+}));
+
 import { GET, PATCH } from "./route";
 
 function setSupa(opts: Parameters<typeof makeSupabase>[0]) {
@@ -29,6 +39,7 @@ function setSupa(opts: Parameters<typeof makeSupabase>[0]) {
 
 beforeEach(() => {
   supaState.current = null;
+  adminState.current = null;
   rlBlocked.value = false;
 });
 
@@ -45,6 +56,7 @@ describe("GET /api/payments", () => {
                 amount_php: "150",
                 paid: false,
                 paid_at: null,
+                claimed_at: null,
                 trips: { date: "2026-05-13" },
               },
             ],
@@ -63,9 +75,101 @@ describe("GET /api/payments", () => {
         amountPhp: 150,
         paid: false,
         paidAt: null,
+        claimedAt: null,
+        claimActive: false,
         date: "2026-05-13",
       },
     ]);
+  });
+
+  it("derives an active claim for a recent unconfirmed payment", async () => {
+    const recent = new Date(Date.now() - 60_000).toISOString();
+    setSupa({
+      tables: {
+        trip_payments: [
+          {
+            data: [
+              {
+                trip_id: "t1",
+                passenger_id: "p1",
+                amount_php: "150",
+                paid: false,
+                paid_at: null,
+                claimed_at: recent,
+                trips: { date: "2026-05-13" },
+              },
+            ],
+            error: null,
+          },
+        ],
+      },
+    });
+    const body = await (await GET(new Request("http://t/api/payments"))).json();
+    expect(body[0].claimedAt).toBe(recent);
+    expect(body[0].claimActive).toBe(true);
+  });
+
+  it("an unconfirmed claim older than 24h reads as inactive", async () => {
+    const stale = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+    setSupa({
+      tables: {
+        trip_payments: [
+          {
+            data: [
+              {
+                trip_id: "t1",
+                passenger_id: "p1",
+                amount_php: "150",
+                paid: false,
+                paid_at: null,
+                claimed_at: stale,
+                trips: { date: "2026-05-13" },
+              },
+            ],
+            error: null,
+          },
+        ],
+      },
+    });
+    const body = await (await GET(new Request("http://t/api/payments"))).json();
+    expect(body[0].claimActive).toBe(false);
+  });
+
+  it("a confirmed payment is never claimActive", async () => {
+    const recent = new Date(Date.now() - 60_000).toISOString();
+    setSupa({
+      tables: {
+        trip_payments: [
+          {
+            data: [
+              {
+                trip_id: "t1",
+                passenger_id: "p1",
+                amount_php: "150",
+                paid: true,
+                paid_at: recent,
+                claimed_at: recent,
+                trips: { date: "2026-05-13" },
+              },
+            ],
+            error: null,
+          },
+        ],
+      },
+    });
+    const body = await (await GET(new Request("http://t/api/payments"))).json();
+    expect(body[0].claimActive).toBe(false);
+  });
+
+  it("sweeps expired unconfirmed claims via the admin client on GET", async () => {
+    adminState.current = makeSupabase({
+      tables: { trip_payments: [{ data: null, error: null }] },
+    });
+    setSupa({ tables: { trip_payments: [{ data: [], error: null }] } });
+    await GET(new Request("http://t/api/payments"));
+    const sweep = adminState.current.callsFor("trip_payments")[0];
+    expect(sweep.some((c) => c.method === "update")).toBe(true);
+    expect(sweep.some((c) => c.method === "lt")).toBe(true);
   });
 
   it("aggregates summary view", async () => {
@@ -120,6 +224,7 @@ describe("PATCH /api/payments", () => {
               amount_php: 100,
               paid: true,
               paid_at: "now",
+              claimed_at: null,
             },
             error: null,
           },
@@ -140,12 +245,63 @@ describe("PATCH /api/payments", () => {
     expect((updateCall!.args[0] as { paid: boolean }).paid).toBe(true);
   });
 
-  it("denies non-driver", async () => {
+  it("denies a non-driver confirming a payment", async () => {
     setSupa({ auth: { userId: "u1", member: { role: "rider" } } });
     const res = await PATCH(
       new Request("http://t/api/payments", {
         method: "PATCH",
         body: JSON.stringify({ tripId: "t1", passengerId: "p1", paid: true }),
+      })
+    );
+    expect(res.status).toBe(403);
+  });
+
+  it("lets a passenger claim their own payment without touching paid", async () => {
+    const supa = setSupa({
+      auth: { userId: "u1", member: { role: "rider" } },
+      rpcs: { is_own_passenger: [{ data: true, error: null }] },
+      tables: {
+        trip_payments: [
+          {
+            data: {
+              trip_id: "t1",
+              passenger_id: "p1",
+              amount_php: 100,
+              paid: false,
+              paid_at: null,
+              claimed_at: new Date().toISOString(),
+            },
+            error: null,
+          },
+        ],
+      },
+    });
+    const res = await PATCH(
+      new Request("http://t/api/payments", {
+        method: "PATCH",
+        body: JSON.stringify({ tripId: "t1", passengerId: "p1", claim: true }),
+      })
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.claimedAt).toBeTruthy();
+    expect(body.claimActive).toBe(true);
+    expect(body.paid).toBe(false);
+    const updateCall = supa.callsFor("trip_payments")[0].find((c) => c.method === "update");
+    const patch = updateCall!.args[0] as { claimed_at?: string; paid?: boolean };
+    expect(patch.claimed_at).toBeTruthy();
+    expect(patch.paid).toBeUndefined();
+  });
+
+  it("denies a passenger claiming someone else's payment", async () => {
+    setSupa({
+      auth: { userId: "u1", member: { role: "rider" } },
+      rpcs: { is_own_passenger: [{ data: false, error: null }] },
+    });
+    const res = await PATCH(
+      new Request("http://t/api/payments", {
+        method: "PATCH",
+        body: JSON.stringify({ tripId: "t1", passengerId: "p2", claim: true }),
       })
     );
     expect(res.status).toBe(403);

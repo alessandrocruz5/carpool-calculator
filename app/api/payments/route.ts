@@ -1,11 +1,24 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { requireGroupDriver } from "@/lib/auth/requireDriver";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireGroupMember } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
 import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 import type { DbTripPayment } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
+
+/** A claim counts as active only within this window of being made. */
+const CLAIM_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** Derive whether a payment's claim is currently pending driver confirmation. */
+function isClaimActive(
+  claimedAt: string | null,
+  paid: boolean,
+  cutoffMs: number
+): boolean {
+  return !paid && claimedAt != null && new Date(claimedAt).getTime() > cutoffMs;
+}
 
 interface PaymentWithDate extends DbTripPayment {
   trips?: { date: string } | null;
@@ -55,9 +68,20 @@ export async function GET(req: Request) {
     return NextResponse.json(out);
   }
 
+  const cutoffMs = Date.now() - CLAIM_WINDOW_MS;
+
+  // Lazy expiry sweep: a claim unconfirmed for >24h reads as unclaimed and the
+  // passenger must re-mark. The SABAY-33 column-guard trigger forbids a
+  // passenger overwriting an existing claimed_at, so expired claims have to be
+  // reset to null server-side before the next claim can land — that reset is a
+  // server path. Best-effort: this is housekeeping, never block the read.
+  await sweepExpiredClaims(group.groupId, new Date(cutoffMs).toISOString());
+
   let q = supabase
     .from("trip_payments")
-    .select("trip_id, passenger_id, amount_php, paid, paid_at, trips!inner(date, archived_at)")
+    .select(
+      "trip_id, passenger_id, amount_php, paid, paid_at, claimed_at, trips!inner(date, archived_at)"
+    )
     .eq("group_id", group.groupId)
     .is("trips.archived_at", null);
 
@@ -76,35 +100,74 @@ export async function GET(req: Request) {
     amountPhp: Number(r.amount_php),
     paid: r.paid,
     paidAt: r.paid_at,
+    claimedAt: r.claimed_at,
+    claimActive: isClaimActive(r.claimed_at, r.paid, cutoffMs),
     date: r.trips?.date ?? null,
   }));
   return NextResponse.json(rows);
 }
 
+/**
+ * Reset expired, still-unconfirmed claims to null for a group. Touches rows
+ * across passengers, so it runs on the service-role client (the SABAY-33
+ * `trip_payments_pending_claim_idx` partial index backs this query). Swallows
+ * all failures — a missing admin config simply leaves the claim derived as
+ * inactive (GET already does that) at the cost of not enabling re-marks.
+ */
+async function sweepExpiredClaims(groupId: string, cutoffIso: string): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from("trip_payments")
+      .update({ claimed_at: null })
+      .eq("group_id", groupId)
+      .eq("paid", false)
+      .not("claimed_at", "is", null)
+      .lt("claimed_at", cutoffIso);
+    if (error) console.error("payments claim sweep failed", error.message);
+  } catch (err) {
+    console.error("payments claim sweep skipped", err);
+  }
+}
+
 interface PatchItem {
   tripId: string;
   passengerId: string;
-  paid: boolean;
+  /** Driver-only: confirm (true) / unconfirm (false) a payment. */
+  paid?: boolean;
+  /** Passenger-only: record an "I paid" claim on their own payment. */
+  claim?: boolean;
+}
+
+function mapRow(row: DbTripPayment, cutoffMs: number) {
+  return {
+    tripId: row.trip_id,
+    passengerId: row.passenger_id,
+    amountPhp: Number(row.amount_php),
+    paid: row.paid,
+    paidAt: row.paid_at,
+    claimedAt: row.claimed_at,
+    claimActive: isClaimActive(row.claimed_at, row.paid, cutoffMs),
+  };
 }
 
 export async function PATCH(req: Request) {
   const supabase = await createClient();
   const group = await requireActiveGroupId(supabase);
   if (!group.ok) return group.response;
-  const denied = await requireGroupDriver(supabase, group.groupId);
-  if (!denied.ok) return denied.response;
+  // Both roles may PATCH; the per-item rules below decide what each may write.
+  const member = await requireGroupMember(supabase, group.groupId);
+  if (!member.ok) return member.response;
+  const isDriver = member.role === "driver" || member.role === "both";
 
   const limited = await enforceRateLimit(
     "payments:mark",
-    getIdentifier(req, denied.userId),
+    getIdentifier(req, member.userId),
     { requests: 30, window: "1 m" }
   );
   if (limited) return limited;
 
-  const body = (await req.json()) as
-    | PatchItem
-    | { items: PatchItem[] }
-    | PatchItem[];
+  const body = (await req.json()) as PatchItem | { items: PatchItem[] } | PatchItem[];
 
   const items: PatchItem[] = Array.isArray(body)
     ? body
@@ -113,43 +176,55 @@ export async function PATCH(req: Request) {
     : [body as PatchItem];
 
   for (const it of items) {
-    if (!it || !it.tripId || !it.passengerId || typeof it.paid !== "boolean") {
+    const isConfirm = typeof it?.paid === "boolean";
+    const isClaim = typeof it?.claim === "boolean";
+    if (!it || !it.tripId || !it.passengerId || (!isConfirm && !isClaim)) {
       return NextResponse.json(
-        { error: "each item requires tripId, passengerId, paid" },
+        { error: "each item requires tripId, passengerId, and paid or claim" },
         { status: 400 }
       );
     }
   }
 
-  const updated: Array<{
-    tripId: string;
-    passengerId: string;
-    amountPhp: number;
-    paid: boolean;
-    paidAt: string | null;
-  }> = [];
+  // Per-role authorization, enforced in the route ahead of any write:
+  //  - confirm (paid): drivers only
+  //  - claim: only on a payment the caller's own passenger row owns
+  for (const it of items) {
+    if (typeof it.paid === "boolean") {
+      if (!isDriver) {
+        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+      }
+    } else {
+      const { data: owns, error } = await supabase.rpc("is_own_passenger", {
+        gid: group.groupId,
+        pid: it.passengerId,
+      });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (!owns) {
+        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+      }
+    }
+  }
+
+  const cutoffMs = Date.now() - CLAIM_WINDOW_MS;
+  const updated: ReturnType<typeof mapRow>[] = [];
 
   for (const it of items) {
+    const patch =
+      typeof it.paid === "boolean"
+        ? { paid: it.paid, paid_at: it.paid ? new Date().toISOString() : null }
+        : { claimed_at: new Date().toISOString() };
+
     const { data, error } = await supabase
       .from("trip_payments")
-      .update({
-        paid: it.paid,
-        paid_at: it.paid ? new Date().toISOString() : null,
-      })
+      .update(patch)
       .eq("group_id", group.groupId)
       .eq("trip_id", it.tripId)
       .eq("passenger_id", it.passengerId)
       .select()
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    const row = data as DbTripPayment;
-    updated.push({
-      tripId: row.trip_id,
-      passengerId: row.passenger_id,
-      amountPhp: Number(row.amount_php),
-      paid: row.paid,
-      paidAt: row.paid_at,
-    });
+    updated.push(mapRow(data as DbTripPayment, cutoffMs));
   }
 
   if (!Array.isArray(body) && !("items" in (body as object))) {

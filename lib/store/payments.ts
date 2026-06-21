@@ -9,6 +9,10 @@ export interface PaymentRow {
   amountPhp: number;
   paid: boolean;
   paidAt: string | null;
+  /** When the passenger last marked "I paid" (null = never / expired-swept). */
+  claimedAt: string | null;
+  /** Derived server-side: claim within 24h and not yet confirmed. */
+  claimActive: boolean;
   date: string | null;
 }
 
@@ -21,6 +25,8 @@ interface PaymentsStore {
     items: { tripId: string; passengerId: string }[],
     paid: boolean
   ) => Promise<void>;
+  /** Passenger marks their own payment as "I paid", pending driver confirmation. */
+  claim: (tripId: string, passengerId: string) => Promise<void>;
 }
 
 export const usePayments = create<PaymentsStore>()(
@@ -44,7 +50,7 @@ export const usePayments = create<PaymentsStore>()(
         set((s) => ({
           payments: s.payments.map((p) =>
             p.tripId === tripId && p.passengerId === passengerId
-              ? { ...p, paid, paidAt: paid ? now : null }
+              ? { ...p, paid, paidAt: paid ? now : null, claimActive: paid ? false : p.claimActive }
               : p
           ),
         }));
@@ -67,7 +73,7 @@ export const usePayments = create<PaymentsStore>()(
         set((s) => ({
           payments: s.payments.map((p) =>
             keys.has(`${p.tripId}:${p.passengerId}`)
-              ? { ...p, paid, paidAt: paid ? now : null }
+              ? { ...p, paid, paidAt: paid ? now : null, claimActive: paid ? false : p.claimActive }
               : p
           ),
         }));
@@ -82,6 +88,27 @@ export const usePayments = create<PaymentsStore>()(
           if (!res.ok) throw new Error(await res.text());
         } catch (err) {
           console.error("payments.markManyPaid failed", err);
+          await get().hydrate();
+        }
+      },
+      claim: async (tripId, passengerId) => {
+        const now = new Date().toISOString();
+        set((s) => ({
+          payments: s.payments.map((p) =>
+            p.tripId === tripId && p.passengerId === passengerId
+              ? { ...p, claimedAt: now, claimActive: true }
+              : p
+          ),
+        }));
+        try {
+          const res = await resilientFetch("/api/payments", {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ tripId, passengerId, claim: true }),
+          });
+          if (!res.ok) throw new Error(await res.text());
+        } catch (err) {
+          console.error("payments.claim failed", err);
           await get().hydrate();
         }
       },
