@@ -5,6 +5,7 @@ import type { DbSettings } from "@/lib/supabase/types";
 import type { CalcSettings } from "@/lib/calc";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
+import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,14 @@ export async function PATCH(req: Request) {
   if (!group.ok) return group.response;
   const denied = await requireGroupDriver(supabase, group.groupId);
   if (!denied.ok) return denied.response;
+
+  const limited = await enforceRateLimit(
+    "settings:write",
+    getIdentifier(req, denied.userId),
+    { requests: 20, window: "1 m" }
+  );
+  if (limited) return limited;
+
   const body = (await req.json()) as Partial<CalcSettings>;
   const patch = { ...toDbSettingsPatch(body), updated_at: new Date().toISOString() };
   const { data, error } = await supabase

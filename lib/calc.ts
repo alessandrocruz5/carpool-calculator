@@ -98,10 +98,18 @@ export function calcLeg(
   const parkingCost = (applyParking ?? input.leg === "morning") ? settings.parkingFeePhp : 0;
   const total = gasCost + tollCost + parkingCost;
 
+  // Largest-remainder allocation: round each passenger's equal share to the cent,
+  // then let the driver absorb the sub-cent rounding remainder so the parts foot
+  // exactly — `driverShare + passengerCount * passengerEach === round2(total)` for
+  // every leg. Because each leg foots in whole cents, calcDay's `perPassenger` map
+  // and `driverTotal` sum straight back to the day total with no residual drift.
   const ratio = driverRatio(input.passengerCount, settings);
-  const driverShare = total * ratio;
+  const totalRounded = round2(total);
   const passengerEach =
-    input.passengerCount > 0 ? (total - driverShare) / input.passengerCount : 0;
+    input.passengerCount > 0
+      ? round2((totalRounded * (1 - ratio)) / input.passengerCount)
+      : 0;
+  const driverShare = round2(totalRounded - input.passengerCount * passengerEach);
 
   // Model A: each rider's detour km is charged 100% to that rider, on top of the
   // base split above. Base fields (total/driverShare/passengerEach) are unchanged.
@@ -122,9 +130,9 @@ export function calcLeg(
     gasCost: round2(gasCost),
     tollCost: round2(tollCost),
     parkingCost: round2(parkingCost),
-    total: round2(total),
-    driverShare: round2(driverShare),
-    passengerEach: round2(passengerEach),
+    total: totalRounded,
+    driverShare,
+    passengerEach,
     detourByRider,
   };
 }

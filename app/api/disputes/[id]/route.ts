@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
+import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 import type { DbTripDispute, TripDisputeStatus } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,13 @@ export async function PATCH(
   if (!group.ok) return group.response;
   const driver = await requireGroupDriver(supabase, group.groupId);
   if (!driver.ok) return driver.response;
+
+  const limited = await enforceRateLimit(
+    "disputes:resolve",
+    getIdentifier(req, driver.userId),
+    { requests: 20, window: "1 m" }
+  );
+  if (limited) return limited;
 
   const body = (await req.json().catch(() => ({}))) as {
     status?: TripDisputeStatus;

@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAuth } from "@/lib/auth/requireDriver";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,13 @@ export async function POST() {
   const auth = await requireAuth(supabase);
   if (!auth.ok) return auth.response;
   const userId = auth.userId;
+
+  const limited = await enforceRateLimit(
+    "account:delete",
+    `user:${userId}`,
+    { requests: 3, window: "1 h" }
+  );
+  if (limited) return limited;
 
   const admin = createAdminClient();
 
