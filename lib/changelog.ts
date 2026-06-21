@@ -7,7 +7,7 @@ export interface ChangelogEntry {
   bodyMarkdown: string;
 }
 
-const HEADING_RE = /^##\s+(\S+)\s+[—–-]\s+(.+?)\s*$/;
+const HEADING_RE = /^##\s+\[?(\S+?)\]?\s+[—–-]\s+(.+?)\s*$/;
 
 function parseChangelog(source: string): ChangelogEntry[] {
   const lines = source.split(/\r?\n/);
@@ -40,7 +40,7 @@ let cached: ChangelogEntry[] | null = null;
 
 export function getChangelog(): ChangelogEntry[] {
   if (cached) return cached;
-  const filePath = path.join(process.cwd(), "docs", "changelog.md");
+  const filePath = path.join(process.cwd(), "CHANGELOG.md");
   const source = fs.readFileSync(filePath, "utf8");
   cached = parseChangelog(source);
   return cached;
