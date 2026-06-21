@@ -70,13 +70,6 @@ export async function GET(req: Request) {
 
   const cutoffMs = Date.now() - CLAIM_WINDOW_MS;
 
-  // Lazy expiry sweep: a claim unconfirmed for >24h reads as unclaimed and the
-  // passenger must re-mark. The SABAY-33 column-guard trigger forbids a
-  // passenger overwriting an existing claimed_at, so expired claims have to be
-  // reset to null server-side before the next claim can land — that reset is a
-  // server path. Best-effort: this is housekeeping, never block the read.
-  await sweepExpiredClaims(group.groupId, new Date(cutoffMs).toISOString());
-
   let q = supabase
     .from("trip_payments")
     .select(
@@ -104,6 +97,17 @@ export async function GET(req: Request) {
     claimActive: isClaimActive(r.claimed_at, r.paid, cutoffMs),
     date: r.trips?.date ?? null,
   }));
+
+  // Lazy expiry sweep, only when this view actually surfaced an expired,
+  // still-unconfirmed claim — so an ordinary read (or one filtered to paid
+  // rows / a date range) never issues a privileged write. A claim unconfirmed
+  // for >24h reads as unclaimed and the passenger must re-mark, but the
+  // SABAY-33 column-guard trigger forbids a passenger overwriting an existing
+  // claimed_at, so expired claims must be reset to null server-side first.
+  // Best-effort housekeeping: never block the read.
+  if (rows.some((r) => r.claimedAt != null && !r.paid && !r.claimActive)) {
+    await sweepExpiredClaims(group.groupId, new Date(cutoffMs).toISOString());
+  }
   return NextResponse.json(rows);
 }
 

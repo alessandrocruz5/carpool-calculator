@@ -161,15 +161,67 @@ describe("GET /api/payments", () => {
     expect(body[0].claimActive).toBe(false);
   });
 
-  it("sweeps expired unconfirmed claims via the admin client on GET", async () => {
+  it("sweeps expired unconfirmed claims via the admin client, group-scoped", async () => {
+    const stale = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
     adminState.current = makeSupabase({
       tables: { trip_payments: [{ data: null, error: null }] },
     });
-    setSupa({ tables: { trip_payments: [{ data: [], error: null }] } });
+    setSupa({
+      tables: {
+        trip_payments: [
+          {
+            data: [
+              {
+                trip_id: "t1",
+                passenger_id: "p1",
+                amount_php: "150",
+                paid: false,
+                paid_at: null,
+                claimed_at: stale,
+                trips: { date: "2026-05-13" },
+              },
+            ],
+            error: null,
+          },
+        ],
+      },
+    });
     await GET(new Request("http://t/api/payments"));
     const sweep = adminState.current.callsFor("trip_payments")[0];
     expect(sweep.some((c) => c.method === "update")).toBe(true);
     expect(sweep.some((c) => c.method === "lt")).toBe(true);
+    // RLS-bypassing client: the sweep MUST stay scoped to the caller's group.
+    expect(
+      sweep.some((c) => c.method === "eq" && c.args[0] === "group_id")
+    ).toBe(true);
+  });
+
+  it("does not sweep when no expired claim is present in the view", async () => {
+    adminState.current = makeSupabase({
+      tables: { trip_payments: [{ data: null, error: null }] },
+    });
+    setSupa({
+      tables: {
+        trip_payments: [
+          {
+            data: [
+              {
+                trip_id: "t1",
+                passenger_id: "p1",
+                amount_php: "150",
+                paid: false,
+                paid_at: null,
+                claimed_at: null,
+                trips: { date: "2026-05-13" },
+              },
+            ],
+            error: null,
+          },
+        ],
+      },
+    });
+    await GET(new Request("http://t/api/payments"));
+    expect(adminState.current.callsFor("trip_payments")).toHaveLength(0);
   });
 
   it("aggregates summary view", async () => {
