@@ -4,6 +4,45 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 semantic versioning.
 
+## [2.0.0] — 2026-06-21
+
+Sprint 5 — Go-live hardening + payment confirmation. Launch-readiness sprint: invite
+case-insensitive matching and self-healing placeholders, mandatory first-run name capture,
+rate-limit sweep across unprotected routes, penny-accurate split allocation, and a full
+payment-confirmation handshake (passenger claims → driver confirms, 24h expiry, web-push
+on both events). First major version; marks the app fit for production use.
+
+### Added
+- Payment-confirmation schema: `trip_payments.claimed_at`, `confirmed_at`, `expires_at`
+  columns + `claim_payment`/`confirm_payment` RPCs with RLS gating (passenger can claim own
+  unclaimed rows; driver can confirm within their group); `lib/supabase/types.ts` updated
+  (SABAY-33).
+- Payment-confirmation API: `/api/payments` POST actions `claim`/`confirm`, 24 h expiry
+  enforced server-side, `payments` store extended with `claim(id)`/`confirm(id)` (SABAY-34).
+- Payment-confirmation UI: Payments page shows per-row "Mark as paid" / "Confirm" / "Pending
+  confirmation" / "Expired — re-mark" states with optimistic updates (SABAY-35).
+- Web-push on payment events: passenger receives a push on driver confirm; driver receives a
+  push on passenger claim; both fire from `/api/payments` via `lib/push.ts` (SABAY-36).
+
+### Changed
+- Invite overhaul: `link_member_by_email`/`claim_member_invite` now use `lower()` for
+  case-insensitive email matching, eliminating silent stranding of mixed-case invites; a
+  placeholder passenger row ("Pending invite") is created at invite time and self-healed to
+  `display_name` via a `profiles` trigger on first sign-in (SABAY-28).
+- Mandatory name on first run: `NamePrompt` no longer offers a "Not now" dismiss — the
+  modal stays until the user provides a name, ensuring the SABAY-28 self-heal always has a
+  name to write (SABAY-29).
+- Rate-limit sweep: `payments`, `settings`, `cars`, `fillups`, `gas-prices`, `passengers`,
+  `account/delete`, `account/export`, `admin/archive-trips`, `disputes/[id]`, and
+  `groups/switch` routes all now enforce per-user rate limits (SABAY-30).
+
+### Fixed
+- Penny-accurate split allocation: passenger shares now use a largest-remainder algorithm so
+  the sum of rounded shares always equals the total exactly, eliminating off-by-one rounding
+  errors (SABAY-32).
+- Sentry example scaffolding (`app/sentry-example-page/`, `app/api/sentry-example-api/`)
+  removed — was live in production and exposed an unintentional error trigger (SABAY-31).
+
 ## [1.9.0] — 2026-06-18
 
 Sprint 4 — variable trip legs. The Trip page generalizes from a fixed

@@ -1,7 +1,7 @@
 # Carpool Calculator — Sprints
 Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded from changelog)
 
-## Sprint 5 — Go-live hardening + payment confirmation   (planned 2026-06-19)
+## Sprint 5 — Go-live hardening + payment confirmation   (planned 2026-06-19 · released v2.0.0 2026-06-21)
 Epic: SABAY-27 · base branch: `develop` · target version: v2.0.0 (go-live, MAJOR)
 
 Launch-readiness sprint. (a) Invite overhaul: case-insensitive email matching in
