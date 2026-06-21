@@ -23,7 +23,7 @@ carry migration/auth/money → code-guardian gate. Each unit line tags its build
 - [x] SABAY-33 — Payment confirmation: schema + RLS · Added · files: supabase/migrations/<new>.sql, lib/supabase/types.ts · depends: — · high-stakes (migration+money+auth → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high · (merged 2026-06-21, PR #170)
 - [x] SABAY-34 — Payment confirmation: API (claim/confirm/24h expiry) · Added · files: app/api/payments/route.ts (+test), lib/store/payments.ts (+test) · depends: SABAY-33 · high-stakes (money+auth → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high · (merged 2026-06-20, PR #171)
 - [x] SABAY-35 — Payment confirmation: UI · Added · files: app/payments/page.tsx · depends: SABAY-34 · build: Sonnet 4.6 · thinking on (brief) · effort medium · (merged 2026-06-20, PR #172)
-- [ ] SABAY-36 — Payment notifications · Added · files: app/api/payments/route.ts, lib/push.ts · depends: SABAY-35 · guardian (notify surface) · build: Sonnet 4.6 · thinking on (brief) · effort medium
+- [x] SABAY-36 — Payment notifications · Added · files: app/api/payments/route.ts, lib/push.ts · depends: SABAY-35 · guardian (notify surface) · build: Sonnet 4.6 · thinking on (brief) · effort medium · (merged 2026-06-20, PR #173)
 
 ## Sprint 4 — Variable trip legs (N ordered legs)   (planned 2026-06-18 · released v1.9.0 2026-06-18)
 Epic: SABAY-22 · base branch: `develop` · target version: v1.9.0
