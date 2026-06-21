@@ -25,7 +25,16 @@ describe("payments store", () => {
   it("hydrate loads from /api/payments", async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse([
-        { tripId: "t1", passengerId: "p1", amountPhp: 100, paid: false, paidAt: null, date: "2026-05-13" },
+        {
+          tripId: "t1",
+          passengerId: "p1",
+          amountPhp: 100,
+          paid: false,
+          paidAt: null,
+          claimedAt: null,
+          claimActive: false,
+          date: "2026-05-13",
+        },
       ])
     );
     await usePayments.getState().hydrate();
@@ -44,7 +53,7 @@ describe("payments store", () => {
   it("markPaid optimistically updates and PATCHes the API", async () => {
     usePayments.setState({
       payments: [
-        { tripId: "t1", passengerId: "p1", amountPhp: 100, paid: false, paidAt: null, date: "2026-05-13" },
+        { tripId: "t1", passengerId: "p1", amountPhp: 100, paid: false, paidAt: null, claimedAt: null, claimActive: false, date: "2026-05-13" },
       ],
       hydrated: true,
     });
@@ -70,7 +79,7 @@ describe("payments store", () => {
   it("markPaid rehydrates on server error", async () => {
     usePayments.setState({
       payments: [
-        { tripId: "t1", passengerId: "p1", amountPhp: 100, paid: false, paidAt: null, date: null },
+        { tripId: "t1", passengerId: "p1", amountPhp: 100, paid: false, paidAt: null, claimedAt: null, claimActive: false, date: null },
       ],
       hydrated: true,
     });
@@ -79,6 +88,48 @@ describe("payments store", () => {
       .mockResolvedValueOnce(jsonResponse([]));
 
     await usePayments.getState().markPaid("t1", "p1", true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(usePayments.getState().payments).toEqual([]);
+  });
+
+  it("claim optimistically marks the row pending and PATCHes claim:true", async () => {
+    usePayments.setState({
+      payments: [
+        { tripId: "t1", passengerId: "p1", amountPhp: 100, paid: false, paidAt: null, claimedAt: null, claimActive: false, date: "2026-05-13" },
+      ],
+      hydrated: true,
+    });
+    fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+    await usePayments.getState().claim("t1", "p1");
+
+    const row = usePayments.getState().payments[0];
+    expect(row.claimActive).toBe(true);
+    expect(row.claimedAt).not.toBeNull();
+    expect(row.paid).toBe(false);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/payments");
+    expect((init as RequestInit).method).toBe("PATCH");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      tripId: "t1",
+      passengerId: "p1",
+      claim: true,
+    });
+  });
+
+  it("claim rehydrates on server error", async () => {
+    usePayments.setState({
+      payments: [
+        { tripId: "t1", passengerId: "p1", amountPhp: 100, paid: false, paidAt: null, claimedAt: null, claimActive: false, date: null },
+      ],
+      hydrated: true,
+    });
+    fetchMock
+      .mockResolvedValueOnce(new Response("nope", { status: 500 }))
+      .mockResolvedValueOnce(jsonResponse([]));
+
+    await usePayments.getState().claim("t1", "p1");
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(usePayments.getState().payments).toEqual([]);
   });
