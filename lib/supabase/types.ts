@@ -129,6 +129,7 @@ export interface DbTripPayment {
   amount_php: number;
   paid: boolean;
   paid_at: string | null;
+  claimed_at: string | null;
 }
 
 export type TripDisputeStatus = "open" | "resolved" | "dismissed";
