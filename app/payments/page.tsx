@@ -4,6 +4,8 @@ import Link from "next/link";
 import dayjs from "dayjs";
 import { usePayments } from "@/lib/store/payments";
 import { useRoster } from "@/lib/store/roster";
+import { useMembers } from "@/lib/store/members";
+import { useProfile } from "@/lib/store/profile";
 import { PHP } from "@/components/PHP";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -11,10 +13,16 @@ import { CheckCircle2 } from "lucide-react";
 import { ReportIssueButton } from "./ReportIssueButton";
 
 export default function PaymentsPage() {
-  const { payments, markPaid, markManyPaid } = usePayments();
+  const { payments, markPaid, markManyPaid, claim } = usePayments();
   const { passengers } = useRoster();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const isDriver = useIsDriver();
+  const userId = useProfile((s) => s.profile?.userId ?? null);
+  const members = useMembers((s) => s.members);
+  const myPassengerId = useMemo(
+    () => members.find((m) => m.userId === userId)?.passengerId ?? null,
+    [members, userId]
+  );
 
   const byPassenger = useMemo(() => {
     const m = new Map<
@@ -140,16 +148,27 @@ export default function PaymentsPage() {
                     <span className="flex items-center gap-2">
                       <PHP value={r.amountPhp} />
                       <ReportIssueButton tripId={r.tripId} tripDate={r.date} />
-                      {isDriver && (
+                      {isDriver ? (
                         <button
-                          onClick={() =>
-                            markPaid(r.tripId, r.passengerId, true)
-                          }
+                          onClick={() => markPaid(r.tripId, r.passengerId, true)}
                           className="px-2 py-0.5 rounded border bg-brand-600 text-white border-brand-600 text-[11px]"
                         >
-                          Mark paid
+                          {r.claimActive ? "Confirm" : "Mark paid"}
                         </button>
-                      )}
+                      ) : r.passengerId === myPassengerId ? (
+                        r.claimActive ? (
+                          <span className="px-2 py-0.5 text-[11px] text-slate-400">
+                            Pending…
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => claim(r.tripId, r.passengerId)}
+                            className="px-2 py-0.5 rounded border bg-brand-50 text-brand-700 border-brand-300 text-[11px]"
+                          >
+                            Mark as paid
+                          </button>
+                        )
+                      ) : null}
                     </span>
                   </li>
                 ))}
@@ -159,12 +178,6 @@ export default function PaymentsPage() {
         );
       })}
 
-      {!isDriver && entries.length > 0 && (
-        <p className="text-[11px] text-slate-500 text-center">
-          Only drivers can mark payments. Ask a driver to grant you driver
-          access from the Members admin page.
-        </p>
-      )}
     </div>
   );
 }
