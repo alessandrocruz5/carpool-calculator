@@ -16,7 +16,12 @@ interface Body {
     date: string;
     gasPrice: number;
     parkingFee: number;
-    legs: { route: Route; passengerIds: string[]; distanceKm: number }[];
+    legs: {
+      route: Route;
+      passengerIds: string[];
+      distanceKm: number;
+      tollPhp?: number | null;
+    }[];
   }>;
   passengers: { id: string; name: string }[];
   settings: CalcSettings;
@@ -65,7 +70,13 @@ export async function POST(req: Request) {
       // Parking applies to the first leg only, matching calcDay.
       t.legs.forEach((leg, i) => {
         const breakdown = calcLeg(
-          { leg: null, route: leg.route, passengerCount: leg.passengerIds.length, distanceKm: leg.distanceKm },
+          {
+            leg: null,
+            route: leg.route,
+            passengerCount: leg.passengerIds.length,
+            distanceKm: leg.distanceKm,
+            tollPhp: leg.tollPhp,
+          },
           t.gasPrice,
           body.settings,
           i === 0

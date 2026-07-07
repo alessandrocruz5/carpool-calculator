@@ -216,6 +216,83 @@ describe("toll route options", () => {
   });
 });
 
+describe("per-leg toll override (SABAY-39)", () => {
+  const gas = 90;
+
+  it("omitted tollPhp falls back to the route default (legacy unchanged)", () => {
+    const skyway = calcLeg(
+      { leg: "morning", route: "skyway", passengerCount: 2, distanceKm: 21 },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    const slex = calcLeg(
+      { leg: "evening", route: "slex", passengerCount: 2, distanceKm: 21 },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    expect(skyway.tollCost).toBe(DEFAULT_SETTINGS.tollSkywayPhp);
+    expect(slex.tollCost).toBe(DEFAULT_SETTINGS.tollSlexPhp);
+  });
+
+  it("null tollPhp falls back to the route default", () => {
+    const r = calcLeg(
+      { leg: "morning", route: "skyway", passengerCount: 2, distanceKm: 21, tollPhp: null },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    expect(r.tollCost).toBe(DEFAULT_SETTINGS.tollSkywayPhp);
+  });
+
+  it("a provided tollPhp overrides the route default", () => {
+    const r = calcLeg(
+      { leg: "morning", route: "skyway", passengerCount: 2, distanceKm: 21, tollPhp: 200 },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    expect(r.tollCost).toBe(200);
+    // gas (21/10.5)*90 = 180; toll 200; parking 90 -> 470
+    expect(r.total).toBe(470);
+  });
+
+  it("tollPhp of 0 is a real override (no toll), not treated as unset", () => {
+    const r = calcLeg(
+      { leg: "morning", route: "skyway", passengerCount: 2, distanceKm: 21, tollPhp: 0 },
+      gas,
+      DEFAULT_SETTINGS
+    );
+    expect(r.tollCost).toBe(0);
+    // gas 180 + toll 0 + parking 90 -> 270
+    expect(r.total).toBe(270);
+  });
+
+  it("calcDay threads per-leg tollPhp into the split; NULL uses the route default", () => {
+    const override = calcDay(
+      {
+        date: "2026-07-07",
+        gasPricePhpPerL: gas,
+        legs: [
+          { route: "skyway", passengerIds: ["A"], distanceKm: 21, tollPhp: 250 },
+          { route: "slex", passengerIds: ["A"], distanceKm: 21 },
+        ],
+      },
+      DEFAULT_SETTINGS
+    );
+    const legDefault = calcLeg(
+      { leg: "morning", route: "skyway", passengerCount: 1, distanceKm: 21 },
+      gas,
+      DEFAULT_SETTINGS,
+      true
+    );
+    expect(override.legs[0].tollCost).toBe(250);
+    // The overridden leg differs from the route-default leg by the toll delta.
+    expect(override.legs[0].total).toBe(
+      round2(legDefault.total - DEFAULT_SETTINGS.tollSkywayPhp + 250)
+    );
+    // Second leg (no override) still uses the slex route default.
+    expect(override.legs[1].tollCost).toBe(DEFAULT_SETTINGS.tollSlexPhp);
+  });
+});
+
 describe("calcLeg explicit applyParking flag", () => {
   const gas = 90;
 

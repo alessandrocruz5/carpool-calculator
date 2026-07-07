@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 
 const TRIP_SELECT =
   "id, date, parking_fee_php, notes, car_id, driver_user_id, gas_price_id, " +
-  "trip_legs(leg, position, route, distance_km, trip_leg_riders(passenger_id, extra_distance_km))";
+  "trip_legs(leg, position, route, distance_km, toll_php, trip_leg_riders(passenger_id, extra_distance_km))";
 
 export async function GET() {
   const supabase = await createClient();
@@ -83,6 +83,23 @@ export async function POST(req: Request) {
   if (extraKms.some((km) => !(km >= 0))) {
     return NextResponse.json(
       { error: "extra_distance_km must be >= 0" },
+      { status: 400 }
+    );
+  }
+
+  // Per-leg toll override (SABAY-39): null/undefined means "use the route
+  // default"; any provided value must be a finite, non-negative number. The
+  // finiteness guard rejects Infinity/NaN and numeric-coercible strings before
+  // they reach the money split or overflow the numeric(8,2) column as a 500.
+  if (
+    inputLegs.some(
+      (leg) =>
+        leg.tollPhp != null &&
+        !(Number.isFinite(leg.tollPhp) && leg.tollPhp >= 0)
+    )
+  ) {
+    return NextResponse.json(
+      { error: "toll_php must be a finite number >= 0" },
       { status: 400 }
     );
   }
@@ -190,6 +207,8 @@ export async function POST(req: Request) {
     position: i,
     route: leg.route,
     distance_km: leg.distanceKm,
+    // Null = use the route default; a provided value overrides it (SABAY-39).
+    toll_php: leg.tollPhp ?? null,
   }));
   const { data: legRows, error: legErr } = await supabase
     .from("trip_legs")
