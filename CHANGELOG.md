@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 semantic versioning.
 
+## [2.1.0] — 2026-07-07
+
+Sprint 6 — per-leg editable toll. Toll was previously a fixed amount keyed to the
+route enum (skyway/slex) from group settings, over- or undercharging trips that exit
+at a different point on the same expressway. Now each leg carries its own `toll_php`
+field: it pre-fills from the route default, can be overridden by the driver on the
+leg card, is persisted on `trip_legs.toll_php`, and flows through `calcLeg`, the API,
+the Sheets export, and optimistic UI.
+
+### Added
+- `trip_legs.toll_php` column (nullable): a forward-only migration adds the column;
+  `null` means "use route default" (zero backfill), so existing trips are unchanged
+  (SABAY-38).
+
+### Changed
+- Per-leg toll flows end-to-end: `calcLeg` accepts `tollPhp` (takes precedence over
+  the route-keyed settings lookup when provided); the mapper, trips store, and API
+  route read/write `toll_php`; the Sheets export column includes the per-leg value
+  (SABAY-39).
+- Leg card UI: an editable toll field pre-fills from the route default and updates
+  the split live; driver can override per leg before saving (SABAY-40).
+
 ## [2.0.0] — 2026-06-21
 
 Sprint 5 — Go-live hardening + payment confirmation. Launch-readiness sprint: invite
