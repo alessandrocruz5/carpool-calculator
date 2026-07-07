@@ -10,6 +10,8 @@ export interface LegState {
   passengerIds: string[];
   distanceKm: number;
   extraKmByRider?: Record<string, number>;
+  /** Per-leg toll override; null/undefined uses the route default (SABAY-39). */
+  tollPhp?: number | null;
 }
 
 export interface StoredTrip {

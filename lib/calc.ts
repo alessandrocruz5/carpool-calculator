@@ -35,6 +35,12 @@ export interface LegInput {
    * top of the unchanged base split. Omit (or use 0) for riders with no detour.
    */
   extraKmByRider?: Record<string, number>;
+  /**
+   * Per-leg toll override (SABAY-39). When null/undefined the route default
+   * (`route === "skyway" ? settings.tollSkywayPhp : settings.tollSlexPhp`) is
+   * used. A non-null value — including `0` — wins over the route default.
+   */
+  tollPhp?: number | null;
 }
 
 export interface LegBreakdown {
@@ -94,7 +100,10 @@ export function calcLeg(
 ): LegBreakdown {
   const distance = input.distanceKm;
   const gasCost = (distance / settings.mileageKmPerL) * gasPricePhpPerL;
-  const tollCost = input.route === "skyway" ? settings.tollSkywayPhp : settings.tollSlexPhp;
+  // Per-leg toll override wins over the route default; `??` keeps an explicit 0
+  // (a leg with no toll) rather than treating it as "unset".
+  const tollCost =
+    input.tollPhp ?? (input.route === "skyway" ? settings.tollSkywayPhp : settings.tollSlexPhp);
   const parkingCost = (applyParking ?? input.leg === "morning") ? settings.parkingFeePhp : 0;
   const total = gasCost + tollCost + parkingCost;
 
@@ -143,6 +152,8 @@ export interface DayLegInput {
   passengerIds: string[];
   distanceKm: number;
   extraKmByRider?: Record<string, number>;
+  /** Per-leg toll override; null/undefined falls back to the route default. */
+  tollPhp?: number | null;
 }
 
 /** A day's ordered legs (minimum 1). Parking applies to the first leg only. */
@@ -173,6 +184,7 @@ export function calcDay(input: DayInput, settings: CalcSettings): DayBreakdown {
         passengerCount: leg.passengerIds.length,
         distanceKm: leg.distanceKm,
         extraKmByRider: leg.extraKmByRider,
+        tollPhp: leg.tollPhp,
       },
       input.gasPricePhpPerL,
       settings,

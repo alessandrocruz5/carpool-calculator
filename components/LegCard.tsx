@@ -11,6 +11,8 @@ export interface LegState {
   distanceKm: number;
   /** Model A per-rider detour distance (km), keyed by passenger id. */
   extraKmByRider?: Record<string, number>;
+  /** Per-leg toll override (SABAY-40). null/undefined uses the route default. */
+  tollPhp?: number | null;
 }
 
 type Tab = "simple" | "detours";
@@ -43,6 +45,9 @@ export function LegCard({
     Object.values(extraKmByRider).some((km) => km > 0) ? "detours" : "simple"
   );
 
+  const routeDefault =
+    state.route === "skyway" ? settings.tollSkywayPhp : settings.tollSlexPhp;
+
   const breakdown: LegBreakdown = useMemo(
     () =>
       calcLeg(
@@ -52,6 +57,7 @@ export function LegCard({
           passengerCount: state.passengerIds.length,
           distanceKm: state.distanceKm,
           extraKmByRider: state.extraKmByRider,
+          tollPhp: state.tollPhp,
         },
         gasPrice,
         settings,
@@ -128,6 +134,20 @@ export function LegCard({
         />
       </label>
 
+      <label className="flex items-center justify-between text-sm">
+        <span className="text-slate-500">Toll (₱)</span>
+        <input
+          type="number"
+          step="1"
+          min="0"
+          inputMode="decimal"
+          value={state.tollPhp ?? routeDefault}
+          onChange={(e) => onChange({ ...state, tollPhp: Number(e.target.value) })}
+          disabled={readOnly}
+          className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-24 text-right disabled:bg-slate-50 disabled:text-slate-500"
+        />
+      </label>
+
       <div>
         <p className="text-xs text-slate-500 mb-2">
           Passengers ({state.passengerIds.length}
@@ -180,7 +200,7 @@ export function LegCard({
         <dd className="text-right">{breakdown.distanceKm} km</dd>
         <dt className="text-slate-500">Gas</dt>
         <dd className="text-right"><PHP value={breakdown.gasCost} /></dd>
-        <dt className="text-slate-500">Toll ({state.route})</dt>
+        <dt className="text-slate-500">Toll</dt>
         <dd className="text-right"><PHP value={breakdown.tollCost} /></dd>
         {breakdown.parkingCost > 0 && (
           <>
