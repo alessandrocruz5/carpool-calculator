@@ -44,6 +44,7 @@ export default function TodayPage() {
     route: "skyway",
     passengerIds: [],
     distanceKm: settings.roundTripKm / 2,
+    tollPhp: null,
   });
   const [legs, setLegs] = useState<LegState[]>(
     existing?.legs ?? [newLeg(), newLeg()]
