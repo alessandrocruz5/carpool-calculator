@@ -113,6 +113,11 @@ export interface DbTripLeg {
   // unique per trip by SABAY-25's migration; every existing row already carries a
   // position from SABAY-23's backfill, so reads can treat it as present.
   position: number;
+  // Per-leg toll override (SABAY-38). Null/absent = use the route default from
+  // settings; a non-null value is the editable per-leg amount. Numeric(8,2),
+  // non-negative. Optional since existing rows/fixtures predate the column and
+  // SABAY-39 coalesces `toll_php ?? (route → settings)`.
+  toll_php?: number | null;
 }
 
 export interface DbTripLegRider {
