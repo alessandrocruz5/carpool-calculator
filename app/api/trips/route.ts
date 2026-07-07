@@ -88,14 +88,18 @@ export async function POST(req: Request) {
   }
 
   // Per-leg toll override (SABAY-39): null/undefined means "use the route
-  // default"; any provided value must be a finite, non-negative amount.
+  // default"; any provided value must be a finite, non-negative number. The
+  // finiteness guard rejects Infinity/NaN and numeric-coercible strings before
+  // they reach the money split or overflow the numeric(8,2) column as a 500.
   if (
     inputLegs.some(
-      (leg) => leg.tollPhp != null && !(leg.tollPhp >= 0)
+      (leg) =>
+        leg.tollPhp != null &&
+        !(Number.isFinite(leg.tollPhp) && leg.tollPhp >= 0)
     )
   ) {
     return NextResponse.json(
-      { error: "toll_php must be >= 0" },
+      { error: "toll_php must be a finite number >= 0" },
       { status: 400 }
     );
   }
