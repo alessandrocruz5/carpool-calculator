@@ -224,12 +224,12 @@ export default function SettingsPage() {
           onChange={(v) => setSettings({ parkingFeePhp: v })}
         />
         <Field
-          label="Toll Skyway"
+          label="Toll Skyway (default)"
           value={settings.tollSkywayPhp}
           onChange={(v) => setSettings({ tollSkywayPhp: v })}
         />
         <Field
-          label="Toll SLEX"
+          label="Toll SLEX (default)"
           value={settings.tollSlexPhp}
           onChange={(v) => setSettings({ tollSlexPhp: v })}
         />
