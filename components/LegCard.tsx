@@ -124,7 +124,7 @@ export function LegCard({
       <label className="flex items-center justify-between text-sm">
         <span className="text-slate-500">{tab === "detours" ? "Base distance (km)" : "Distance (km)"}</span>
         <input
-          type="number"
+          type="text" inputMode="decimal"
           step="0.1"
           inputMode="decimal"
           value={state.distanceKm}
@@ -137,7 +137,7 @@ export function LegCard({
       <label className="flex items-center justify-between text-sm">
         <span className="text-slate-500">Toll (₱)</span>
         <input
-          type="number"
+          type="text" inputMode="decimal"
           step="1"
           min="0"
           inputMode="decimal"
@@ -178,7 +178,7 @@ export function LegCard({
                       <PHP value={breakdown.passengerEach + detour} />
                     </span>
                     <input
-                      type="number"
+                      type="text" inputMode="decimal"
                       step="0.1"
                       min="0"
                       inputMode="decimal"
