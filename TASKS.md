@@ -13,7 +13,7 @@ migration/money → code-guardian gate. Each unit line tags its build config (mo
 
 - [x] SABAY-38 — Migration + DB type: trip_legs.toll_php (nullable) · Added · files: supabase/migrations/<new>.sql, lib/supabase/types.ts · depends: — · guardian (migration) · build: Opus 4.8 · thinking on (medium) · effort medium (merged 2026-07-07, PR #177)
 - [x] SABAY-39 — Thread per-leg toll through calc, persistence & export · Changed · files: lib/calc.ts, lib/calc.test.ts, app/api/trips/route.ts, lib/supabase/mappers.ts, lib/store/trips.ts, app/api/sheets/export/route.ts · depends: SABAY-38 · high-stakes (money → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high (merged 2026-07-07, PR #178)
-- [ ] SABAY-40 — UI: editable toll field on the leg card · Changed · files: components/LegCard.tsx, app/page.tsx, (opt.) app/settings/page.tsx · depends: SABAY-39 · build: Sonnet 4.6 · thinking on (brief) · effort medium
+- [x] SABAY-40 — UI: editable toll field on the leg card · Changed · files: components/LegCard.tsx, app/page.tsx, (opt.) app/settings/page.tsx · depends: SABAY-39 · build: Sonnet 4.6 · thinking on (brief) · effort medium (merged 2026-07-07, PR #179)
 
 ## Sprint 5 — Go-live hardening + payment confirmation   (planned 2026-06-19 · released v2.0.0 2026-06-21)
 Epic: SABAY-27 · base branch: `develop` · target version: v2.0.0 (go-live, MAJOR)
