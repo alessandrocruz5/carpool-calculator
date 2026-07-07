@@ -220,6 +220,9 @@ function toLegState(l: DbTripLeg & { trip_leg_riders: DbTripLegRider[] }) {
     passengerIds: l.trip_leg_riders.map((x) => x.passenger_id),
     distanceKm: Number(l.distance_km),
     extraKmByRider: extraKmByRider(l.trip_leg_riders),
+    // Per-leg toll override (SABAY-39). Null/absent → omit so legacy trips fall
+    // back to the route default in calc; a stored value (incl. 0) is carried.
+    tollPhp: l.toll_php != null ? Number(l.toll_php) : undefined,
   };
 }
 
