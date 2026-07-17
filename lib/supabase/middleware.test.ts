@@ -25,13 +25,23 @@ function setSupa(opts: Parameters<typeof makeSupabase>[0]) {
 function makeRequest(
   pathname: string,
   cookies: Record<string, string> = {},
+  extraHeaders: Record<string, string> = {},
 ): NextRequest {
   const cookieHeader = Object.entries(cookies)
     .map(([k, v]) => `${k}=${v}`)
     .join("; ");
+  const headers: Record<string, string> = { ...extraHeaders };
+  if (cookieHeader) headers.cookie = cookieHeader;
   return new NextRequest(`http://localhost${pathname}`, {
-    headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+    headers: Object.keys(headers).length ? headers : undefined,
   });
+}
+
+// NextResponse.next({ request: { headers } }) encodes the overridden request
+// headers back onto the response as `x-middleware-request-<name>`; read them
+// to assert what the middleware forwards to downstream RSCs.
+function forwardedHeader(res: Response, name: string): string | null {
+  return res.headers.get(`x-middleware-request-${name}`);
 }
 
 describe("updateSession /admin gate", () => {
@@ -184,5 +194,49 @@ describe("updateSession /admin gate", () => {
       makeRequest("/log", { "carpool-group": "g1" }),
     );
     expect(res.status).toBe(200);
+  });
+});
+
+describe("updateSession public landing at /", () => {
+  it("lets a signed-out visitor stay on / and flags the bare landing", async () => {
+    setSupa({ auth: { userId: null } });
+    const res = await updateSession(makeRequest("/"));
+    // No redirect to login.
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+    // Layout reads x-landing to render without the authed shell.
+    expect(forwardedHeader(res, "x-landing")).toBe("1");
+    // No user identity is forwarded for an anonymous visitor.
+    expect(forwardedHeader(res, "x-user-id")).toBeNull();
+  });
+
+  it("strips a spoofed x-user-id on the signed-out landing", async () => {
+    setSupa({ auth: { userId: null } });
+    const res = await updateSession(
+      makeRequest("/", {}, { "x-user-id": "attacker" }),
+    );
+    expect(res.status).toBe(200);
+    // The spoofed header must not survive — page.tsx would otherwise treat the
+    // visitor as authenticated and render the app home instead of the landing.
+    expect(forwardedHeader(res, "x-user-id")).toBeNull();
+    expect(forwardedHeader(res, "x-landing")).toBe("1");
+  });
+
+  it("forwards x-user-id and no x-landing for an authed user on /", async () => {
+    setSupa({ auth: { userId: "u1", member: { role: "driver" } } });
+    const res = await updateSession(
+      makeRequest("/", { "carpool-group": "g1" }),
+    );
+    expect(res.status).toBe(200);
+    expect(forwardedHeader(res, "x-user-id")).toBe("u1");
+    // The authed home must never render as the bare landing.
+    expect(forwardedHeader(res, "x-landing")).toBeNull();
+  });
+
+  it("still redirects signed-out users away from other protected paths", async () => {
+    setSupa({ auth: { userId: null } });
+    const res = await updateSession(makeRequest("/log"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/auth/login");
   });
 });
