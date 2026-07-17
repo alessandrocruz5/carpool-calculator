@@ -1,6 +1,6 @@
 # Carpool Calculator
 
-A PWA for splitting carpool costs per leg (morning/evening) with a driver-favored ratio. Built for the Mt. McDo ↔ office run.
+A PWA for splitting carpool costs per leg (morning/evening) with a driver-favored ratio.
 
 ## Split scheme
 
@@ -55,12 +55,20 @@ Both are in **Project Settings → API Keys** in the Supabase dashboard.
    - `SUPABASE_SERVICE_ROLE_KEY` = secret key
    - (optional) `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `GOOGLE_SHEET_ID` for Sheets export. Leave unset to disable that feature cleanly.
 5. **Deploy.** Vercel auto-detects Next.js. After deploy, open the URL, go to `/settings`, add a passenger, and confirm the row appears in the Supabase **Table Editor**. If it does, every other store is wired the same way.
-6. **Bootstrap the first user → first group.** The app is invite-only: every data table is gated by `is_group_member(gid)`, so a brand-new auth user can't see (or be seen) until they belong to a group. To bring up the first one:
+6. **Create the first group.** The app is invite-only: every data table is gated by `is_group_member(gid)`, so a brand-new auth user can't see (or be seen) until they belong to a group. Signup is self-serve — no SQL Editor step needed:
    1. Have the first user sign in once via the magic link on `/auth/login`. The `handle_new_user` trigger creates their empty profile row.
-   2. In the Supabase **SQL Editor**, call `select public.create_group('Your Carpool Name');` while authenticated as that user (or run it inside a `SET LOCAL role authenticated; SET LOCAL "request.jwt.claim.sub" = '<auth.users.id>';` block as service role). `create_group` inserts the group, adds the caller as `role = 'both'`, and seeds a default `settings` row in one shot.
+   2. On `/groups`, that user creates a group by name. This calls the `create_group` RPC, which inserts the group, adds the caller as `role = 'both'`, and seeds a default `settings` row in one shot.
    3. From `/admin/members`, invite everyone else by email. Pick `driver` (can edit shared settings, manage trips/fillups), `passenger` (read-only on shared data, can mark their own payments), or `both`. If the invitee already has an auth user, they're added immediately; otherwise a row in `member_invites` is created and consumed the next time they sign in with that email.
 
 The full /admin/members surface (and the underlying `link_member_by_email` RPC) is the only way to add a second user — RLS does not allow self-joining a group. **Invite-only is preserved end-to-end.**
+
+## Launch configuration (production SMTP, CAPTCHA, leaked-password protection)
+
+Before opening the app to public self-serve signup, walk through
+[`docs/ops/launch-config.md`](docs/ops/launch-config.md) — it covers
+production SMTP (custom domain + SPF/DKIM), Supabase's leaked-password
+protection toggle, and Cloudflare Turnstile setup for CAPTCHA on sign-in,
+including the required deploy-before-toggle sequencing.
 
 ## Google Sheets export
 
