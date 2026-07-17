@@ -13,7 +13,7 @@ Ships as v2.2.0 (MINOR) when all units merge. **Key sequencing risk:** enabling 
 toggle before SABAY-43 ships token-sending breaks ALL sign-ins — deploy SABAY-43, *then* flip the
 toggle, then verify (documented in SABAY-42). Magic-link route is already rate-limited 3/hr/email.
 
-- [ ] SABAY-42 — Launch-config runbook + brand generalization · Added/Changed · files: docs/ops/launch-config.md (new), app/manifest.ts, .env.example, README.md · depends: — · build: Sonnet 5 · thinking on (brief) · effort medium
+- [x] SABAY-42 — Launch-config runbook + brand generalization · Added/Changed · files: docs/ops/launch-config.md (new), app/manifest.ts, .env.example, README.md · depends: — · build: Sonnet 5 · thinking on (brief) · effort medium
 - [ ] SABAY-43 — CAPTCHA on the sign-in surface · Added/Changed · files: app/auth/login/LoginForm.tsx, app/api/auth/magic-link/route.ts (+test), .env.example, components/Turnstile.tsx (new) · depends: SABAY-42 · high-stakes (auth → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high
 - [ ] SABAY-44 — Public landing page at `/` · Added · files: app/page.tsx, lib/supabase/middleware.ts, app/layout.tsx, components (landing) · depends: — · high-stakes (auth-gating middleware → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high
 
