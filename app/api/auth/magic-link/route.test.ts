@@ -1,14 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextResponse } from "next/server";
 import { makeSupabase } from "@/lib/test/supabase-mock";
 
-type OtpResult = { error: { message: string } | null };
+type OtpResult = { error: { message: string; status?: number } | null };
 
 const supaState: {
   client: { auth: { signInWithOtp: ReturnType<typeof vi.fn> } } | null;
 } = { client: null };
 
+// Controls whether the (mocked) rate limiter short-circuits with a 429.
+const rlState: { limited: NextResponse | null } = { limited: null };
+
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn(async () => supaState.client),
+}));
+
+vi.mock("@/lib/rate-limit", () => ({
+  enforceRateLimit: vi.fn(async () => rlState.limited),
 }));
 
 import { POST } from "./route";
@@ -36,6 +44,7 @@ function post(body: unknown) {
 
 beforeEach(() => {
   supaState.client = null;
+  rlState.limited = null;
 });
 
 describe("POST /api/auth/magic-link", () => {
@@ -71,10 +80,25 @@ describe("POST /api/auth/magic-link", () => {
     expect(arg.options.captchaToken).toBeUndefined();
   });
 
-  it("surfaces a Supabase error as a 500", async () => {
-    setSupa({ error: { message: "captcha verification failed" } });
+  it("keeps the rate limit: a limited request 429s before Supabase", async () => {
+    const otp = setSupa();
+    rlState.limited = NextResponse.json({ error: "rate_limited" }, { status: 429 });
+    const res = await post({ email: "ana@example.com", captchaToken: "tok" });
+    expect(res.status).toBe(429);
+    expect(otp).not.toHaveBeenCalled();
+  });
+
+  it("forwards a Supabase 4xx (e.g. rejected captcha) instead of 500", async () => {
+    setSupa({ error: { message: "captcha protection: invalid token", status: 400 } });
     const res = await post({ email: "ana@example.com", captchaToken: "bad" });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("captcha protection: invalid token");
+  });
+
+  it("maps a status-less Supabase error to a 500", async () => {
+    setSupa({ error: { message: "boom" } });
+    const res = await post({ email: "ana@example.com" });
     expect(res.status).toBe(500);
-    expect((await res.json()).error).toBe("captcha verification failed");
+    expect((await res.json()).error).toBe("boom");
   });
 });
