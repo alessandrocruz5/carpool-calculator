@@ -51,7 +51,22 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // so we don't have to make the same two Supabase round-trips here.
   const h = await headers();
   const role = h.get("x-user-role");
+  // Middleware flags the signed-out public landing at `/`. Render it bare —
+  // no authed header, bottom nav, store hydration or app chrome.
+  const isLanding = h.get("x-landing") === "1";
   const latestVersion = getLatestVersion();
+
+  if (isLanding) {
+    return (
+      <html lang="en" className={cn("font-sans", inter.variable)}>
+        <body>
+          {children}
+          <Analytics />
+          <SpeedInsights />
+        </body>
+      </html>
+    );
+  }
 
   return (
     <html lang="en" className={cn("font-sans", inter.variable)}>

@@ -41,8 +41,14 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname
 
+  // `/` is the public marketing landing — signed-out visitors stay here
+  // instead of being bounced to login. Every other protected path still
+  // redirects unauthenticated users to the login page.
+  const isPublicLanding = !user && pathname === '/'
+
   if (
     !user &&
+    pathname !== '/' &&
     !pathname.startsWith('/login') &&
     !pathname.startsWith('/auth') &&
     !pathname.startsWith('/legal')
@@ -158,21 +164,31 @@ export async function updateSession(request: NextRequest) {
   // layout can read them without re-querying Supabase. We rebuild the response
   // with the augmented request headers and copy over any auth cookies that
   // the Supabase client set during getClaims().
-  if (userId || role) {
-    const forwardedHeaders = new Headers(request.headers)
-    if (userId) forwardedHeaders.set('x-user-id', userId)
-    if (role) forwardedHeaders.set('x-user-role', role)
-    if (userId && isPageRoute) {
-      forwardedHeaders.set('x-member-exists', memberExists ? '1' : '0')
-    }
-    const forwardedResponse = NextResponse.next({
-      request: { headers: forwardedHeaders },
-    })
-    supabaseResponse.cookies.getAll().forEach((c) =>
-      forwardedResponse.cookies.set(c)
-    )
-    return forwardedResponse
+  //
+  // This runs on every (non-redirect) request so the trusted-header strip below
+  // is unconditional: a client can only spoof its own request, but the invariant
+  // "these headers are server-controlled" then holds on every path, not just `/`.
+  const forwardedHeaders = new Headers(request.headers)
+  // Never trust client-supplied copies of these — strip first, then set only
+  // the values we resolved server-side. Prevents a signed-out visitor from
+  // spoofing `x-user-id` on `/` to bypass the landing and reach the app home.
+  forwardedHeaders.delete('x-user-id')
+  forwardedHeaders.delete('x-user-role')
+  forwardedHeaders.delete('x-member-exists')
+  forwardedHeaders.delete('x-landing')
+  if (userId) forwardedHeaders.set('x-user-id', userId)
+  if (role) forwardedHeaders.set('x-user-role', role)
+  if (userId && isPageRoute) {
+    forwardedHeaders.set('x-member-exists', memberExists ? '1' : '0')
   }
-
-  return supabaseResponse
+  // Signal the signed-out landing so the root layout renders it bare
+  // (no authed header / bottom-nav shell).
+  if (isPublicLanding) forwardedHeaders.set('x-landing', '1')
+  const forwardedResponse = NextResponse.next({
+    request: { headers: forwardedHeaders },
+  })
+  supabaseResponse.cookies.getAll().forEach((c) =>
+    forwardedResponse.cookies.set(c)
+  )
+  return forwardedResponse
 }

@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "Sabay",
     short_name: "Sabay",
-    description: "Per-leg carpool cost calculator for Mt. McDo ↔ office runs",
+    description: "Per-leg carpool cost calculator with a driver-favored split",
     start_url: "/",
     display: "standalone",
     background_color: "#f8fafc",
