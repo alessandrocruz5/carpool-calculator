@@ -4,6 +4,56 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 semantic versioning.
 
+## [2.2.0] — 2026-07-18
+
+Sprint 7 — Public self-serve launch hardening. Closes the go-live gaps for opening the app
+to public self-serve signup: a CAPTCHA on the sign-in surface, a public marketing landing at
+`/`, brand generalization away from the original Mt. McDo ↔ office run, and an operations
+runbook for the Supabase-dashboard config (production SMTP, leaked-password protection, and
+the CAPTCHA toggle sequencing). No migrations, no schema, no money-flow changes.
+
+### Added
+- Public landing page at `/`: signed-out visitors now see a marketing/explainer page (what
+  Sabay is, how the per-leg split works, a driver-favored split visual, and a "Get started /
+  Sign in" CTA) instead of being redirected to login; authenticated users see the app home
+  unchanged. Middleware allowlists `/` for anonymous visitors while keeping every other
+  protected path gated, and forwards a server-controlled `x-landing` flag so the landing
+  renders without the app shell (SABAY-44).
+- Cloudflare Turnstile CAPTCHA on the login form; the `/api/auth/magic-link` route verifies
+  the token before sending a magic link, degrading cleanly when the Turnstile env is unset
+  (SABAY-43).
+- Launch-config operations runbook (`docs/ops/launch-config.md`) covering production SMTP,
+  leaked-password protection, and the deploy-then-enable CAPTCHA toggle sequence (SABAY-42).
+
+### Changed
+- Sign-in surface wires the Turnstile widget into `LoginForm`, passing the token through to
+  the magic-link request (SABAY-43).
+- Brand generalization: manifest, `.env.example`, and README copy no longer hard-code the
+  original Mt. McDo ↔ office carpool, readying the app for public multi-tenant signup
+  (SABAY-42).
+
+## [2.1.0] — 2026-07-07
+
+Sprint 6 — per-leg editable toll. Toll was previously a fixed amount keyed to the
+route enum (skyway/slex) from group settings, over- or undercharging trips that exit
+at a different point on the same expressway. Now each leg carries its own `toll_php`
+field: it pre-fills from the route default, can be overridden by the driver on the
+leg card, is persisted on `trip_legs.toll_php`, and flows through `calcLeg`, the API,
+the Sheets export, and optimistic UI.
+
+### Added
+- `trip_legs.toll_php` column (nullable): a forward-only migration adds the column;
+  `null` means "use route default" (zero backfill), so existing trips are unchanged
+  (SABAY-38).
+
+### Changed
+- Per-leg toll flows end-to-end: `calcLeg` accepts `tollPhp` (takes precedence over
+  the route-keyed settings lookup when provided); the mapper, trips store, and API
+  route read/write `toll_php`; the Sheets export column includes the per-leg value
+  (SABAY-39).
+- Leg card UI: an editable toll field pre-fills from the route default and updates
+  the split live; driver can override per leg before saving (SABAY-40).
+
 ## [2.0.0] — 2026-06-21
 
 Sprint 5 — Go-live hardening + payment confirmation. Launch-readiness sprint: invite

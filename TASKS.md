@@ -1,8 +1,8 @@
 # Carpool Calculator — Sprints
 Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded from changelog)
 
-## Sprint 7 — Public self-serve launch hardening   (planned 2026-07-17)
-Epic: SABAY-41 · base branch: `main` · target version: v2.2.0 (MINOR)
+## Sprint 7 — Public self-serve launch hardening   (planned 2026-07-17 · released v2.2.0 2026-07-18)
+Epic: SABAY-41 · base branch: `develop` · target version: v2.2.0 (MINOR)
 
 Go-live gaps for opening the app to public self-serve signup (self-serve group creation +
 onboarding already ship). Two items are Supabase-dashboard config with no code diff (production
@@ -13,9 +13,9 @@ Ships as v2.2.0 (MINOR) when all units merge. **Key sequencing risk:** enabling 
 toggle before SABAY-43 ships token-sending breaks ALL sign-ins — deploy SABAY-43, *then* flip the
 toggle, then verify (documented in SABAY-42). Magic-link route is already rate-limited 3/hr/email.
 
-- [x] SABAY-42 — Launch-config runbook + brand generalization · Added/Changed · files: docs/ops/launch-config.md (new), app/manifest.ts, .env.example, README.md · depends: — · build: Sonnet 5 · thinking on (brief) · effort medium
-- [x] SABAY-43 — CAPTCHA on the sign-in surface · Added/Changed · files: app/auth/login/LoginForm.tsx, app/api/auth/magic-link/route.ts (+test), .env.example, components/Turnstile.tsx (new) · depends: SABAY-42 · high-stakes (auth → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high
-- [x] SABAY-44 — Public landing page at `/` · Added · files: app/page.tsx, lib/supabase/middleware.ts, app/layout.tsx, components (landing) · depends: — · high-stakes (auth-gating middleware → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high
+- [x] SABAY-42 — Launch-config runbook + brand generalization · Added/Changed · files: docs/ops/launch-config.md (new), app/manifest.ts, .env.example, README.md · depends: — · build: Sonnet 5 · thinking on (brief) · effort medium (merged 2026-07-18, PR #181) — launch-config runbook (production SMTP, leaked-password protection, deploy-then-enable CAPTCHA toggle sequencing) + brand generalization away from the Mt. McDo ↔ office run in manifest/env/README.
+- [x] SABAY-43 — CAPTCHA on the sign-in surface · Added/Changed · files: app/auth/login/LoginForm.tsx, app/api/auth/magic-link/route.ts (+test), .env.example, components/Turnstile.tsx (new) · depends: SABAY-42 · high-stakes (auth → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high (merged 2026-07-18, PR #182) — Cloudflare Turnstile widget (`components/Turnstile.tsx`) wired into `LoginForm`; `/api/auth/magic-link` verifies the token before sending; degrades cleanly when Turnstile env is unset.
+- [x] SABAY-44 — Public landing page at `/` · Added · files: app/page.tsx, lib/supabase/middleware.ts, app/layout.tsx, components (landing) · depends: — · high-stakes (auth-gating middleware → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high (merged 2026-07-18, PR #184) — `/` is now public: middleware allowlists `/` for signed-out visitors (every other protected path still redirects to `/auth/login`) and forwards a server-controlled `x-landing` header for the signed-out landing; `app/page.tsx` became a server component branching on the middleware-forwarded `x-user-id` (no user → `<LandingPage/>`, authed → app home unchanged); `app/layout.tsx` renders the landing bare (no authed shell/bottom-nav/store-hydration). **Two files beyond the listed scope** (flagged, code-guardian-approved): `app/TodayHome.tsx` (the previous client home extracted verbatim so `page.tsx` can branch server-side, flash-free) and `lib/supabase/middleware.test.ts` (guardian-recommended tests). Header hardening: the middleware now strips client-supplied `x-user-id`/`x-user-role`/`x-member-exists`/`x-landing` on every non-redirect request before setting server-resolved values (anti-spoofing). PWA `start_url` unchanged; no new tables/columns/endpoints. **New shared surface for future units:** the `x-landing` request header + the server-side auth branch in `app/page.tsx`.
 
 ## Sprint 6 — Per-leg editable toll   (planned 2026-07-07)
 Epic: SABAY-37 · base branch: `develop` · target version: v2.1.0 (MINOR)
