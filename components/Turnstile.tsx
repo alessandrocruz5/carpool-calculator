@@ -21,6 +21,7 @@ type TurnstileRenderOpts = {
 };
 
 type TurnstileApi = {
+  ready: (cb: () => void) => void;
   render: (el: HTMLElement, opts: TurnstileRenderOpts) => string;
   reset: (widgetId?: string) => void;
   remove: (widgetId?: string) => void;
@@ -53,7 +54,7 @@ export const Turnstile = forwardRef<TurnstileHandle, TurnstileProps>(
     const containerRef = useRef<HTMLDivElement>(null);
     const widgetIdRef = useRef<string | null>(null);
     const onTokenRef = useRef(onToken);
-    const [scriptLoaded, setScriptLoaded] = useState(false);
+    const [failed, setFailed] = useState(false);
 
     // Keep the latest callback without re-running the render effect (which would
     // tear down and re-create the widget on every parent re-render).
@@ -71,22 +72,52 @@ export const Turnstile = forwardRef<TurnstileHandle, TurnstileProps>(
     }), []);
 
     useEffect(() => {
-      if (!SITE_KEY || !scriptLoaded || !window.turnstile) return;
-      const container = containerRef.current;
-      if (!container || widgetIdRef.current) return;
-      widgetIdRef.current = window.turnstile.render(container, {
-        sitekey: SITE_KEY,
-        callback: (token) => onTokenRef.current(token),
-        "expired-callback": () => onTokenRef.current(null),
-        "error-callback": () => onTokenRef.current(null),
-      });
+      if (!SITE_KEY) return;
+      let cancelled = false;
+      let pollId: number | undefined;
+
+      // The Turnstile API may already be cached from a previous mount (e.g. an
+      // auth-mode switch), in which case next/script's one-shot `onLoad` never
+      // fires again. Poll for the global instead of relying on it, then render
+      // via `ready()` (fires immediately when the API is already initialized).
+      const setup = (): boolean => {
+        if (!window.turnstile) return false;
+        window.turnstile.ready(() => {
+          const container = containerRef.current;
+          if (cancelled || widgetIdRef.current || !container || !window.turnstile)
+            return;
+          widgetIdRef.current = window.turnstile.render(container, {
+            sitekey: SITE_KEY,
+            callback: (token) => onTokenRef.current(token),
+            "expired-callback": () => onTokenRef.current(null),
+            "error-callback": () => onTokenRef.current(null),
+          });
+        });
+        return true;
+      };
+
+      if (!setup()) {
+        pollId = window.setInterval(() => {
+          if (cancelled || setup()) window.clearInterval(pollId);
+        }, 200);
+      }
+
+      // Surface a dead-end if the widget never loads (ad blocker, CSP, network),
+      // rather than leaving the submit button silently disabled forever.
+      const timeoutId = window.setTimeout(() => {
+        if (!cancelled && !widgetIdRef.current) setFailed(true);
+      }, 15000);
+
       return () => {
+        cancelled = true;
+        if (pollId) window.clearInterval(pollId);
+        window.clearTimeout(timeoutId);
         if (widgetIdRef.current && window.turnstile) {
           window.turnstile.remove(widgetIdRef.current);
           widgetIdRef.current = null;
         }
       };
-    }, [scriptLoaded]);
+    }, []);
 
     if (!SITE_KEY) return null;
 
@@ -95,9 +126,14 @@ export const Turnstile = forwardRef<TurnstileHandle, TurnstileProps>(
         <Script
           src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
           strategy="afterInteractive"
-          onLoad={() => setScriptLoaded(true)}
         />
         <div ref={containerRef} className="flex justify-center" />
+        {failed && (
+          <p className="text-sm text-red-600">
+            Couldn&apos;t load the verification widget. Disable any ad blocker,
+            then refresh to continue.
+          </p>
+        )}
       </>
     );
   }

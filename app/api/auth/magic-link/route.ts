@@ -31,7 +31,12 @@ export async function POST(req: Request) {
     },
   });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    // Forward Supabase's own 4xx (e.g. a rejected/missing CAPTCHA token once the
+    // dashboard toggle is on) instead of masking it as a 500 — a bot without a
+    // token is a client error, not a server fault, and shouldn't spam Sentry.
+    const upstream = (error as { status?: number }).status;
+    const status = upstream && upstream >= 400 && upstream < 500 ? upstream : 500;
+    return NextResponse.json({ error: error.message }, { status });
   }
   return NextResponse.json({ ok: true });
 }
