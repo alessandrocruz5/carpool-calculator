@@ -1,6 +1,22 @@
 # Carpool Calculator — Sprints
 Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded from changelog)
 
+## Sprint 7 — Public self-serve launch hardening   (planned 2026-07-17)
+Epic: SABAY-41 · base branch: `main` · target version: v2.2.0 (MINOR)
+
+Go-live gaps for opening the app to public self-serve signup (self-serve group creation +
+onboarding already ship). Two items are Supabase-dashboard config with no code diff (production
+SMTP, leaked-password protection) and land in a runbook unit; two have real code (CAPTCHA on auth,
+public landing page at `/`). No migrations, no schema, no money flow — the only high-stakes surface
+is auth (middleware redirect logic + CAPTCHA on sign-in), so SABAY-43/44 carry a code-guardian gate.
+Ships as v2.2.0 (MINOR) when all units merge. **Key sequencing risk:** enabling the Supabase CAPTCHA
+toggle before SABAY-43 ships token-sending breaks ALL sign-ins — deploy SABAY-43, *then* flip the
+toggle, then verify (documented in SABAY-42). Magic-link route is already rate-limited 3/hr/email.
+
+- [ ] SABAY-42 — Launch-config runbook + brand generalization · Added/Changed · files: docs/ops/launch-config.md (new), app/manifest.ts, .env.example, README.md · depends: — · build: Sonnet 5 · thinking on (brief) · effort medium
+- [ ] SABAY-43 — CAPTCHA on the sign-in surface · Added/Changed · files: app/auth/login/LoginForm.tsx, app/api/auth/magic-link/route.ts (+test), .env.example, components/Turnstile.tsx (new) · depends: SABAY-42 · high-stakes (auth → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high
+- [ ] SABAY-44 — Public landing page at `/` · Added · files: app/page.tsx, lib/supabase/middleware.ts, app/layout.tsx, components (landing) · depends: — · high-stakes (auth-gating middleware → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high
+
 ## Sprint 6 — Per-leg editable toll   (planned 2026-07-07)
 Epic: SABAY-37 · base branch: `develop` · target version: v2.1.0 (MINOR)
 
