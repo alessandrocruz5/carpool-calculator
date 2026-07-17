@@ -1,11 +1,14 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) as { email?: string };
+export async function POST(req: Request) {
+  const body = (await req.json().catch(() => ({}))) as {
+    email?: string;
+    captchaToken?: string;
+  };
   const email = (body.email ?? "").trim().toLowerCase();
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return NextResponse.json({ error: "invalid email" }, { status: 400 });
@@ -22,7 +25,10 @@ export async function POST(req: NextRequest) {
     process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: `${siteUrl}/auth/confirm` },
+    options: {
+      emailRedirectTo: `${siteUrl}/auth/confirm`,
+      captchaToken: body.captchaToken,
+    },
   });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
