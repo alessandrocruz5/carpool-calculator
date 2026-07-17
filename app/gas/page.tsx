@@ -58,7 +58,7 @@ export default function GasPage() {
         <label className="block">
           <span className="text-sm text-slate-600">New price (₱/L)</span>
           <input
-            type="number"
+            type="text" inputMode="decimal"
             step="0.01"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}

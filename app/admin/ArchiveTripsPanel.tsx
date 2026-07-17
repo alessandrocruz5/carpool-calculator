@@ -37,7 +37,7 @@ export function ArchiveTripsPanel() {
         <label className="text-sm">
           Older than
           <input
-            type="number"
+            type="text" inputMode="decimal"
             min={1}
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}

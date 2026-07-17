@@ -4,6 +4,7 @@ import { calcLeg, type CalcSettings, type LegBreakdown, type Route } from "@/lib
 import { PassengerChips, type PassengerOption } from "./PassengerChips";
 import { RouteToggle } from "./RouteToggle";
 import { PHP } from "./PHP";
+import { NumericInput } from "./NumericInput";
 
 export interface LegState {
   route: Route;
@@ -123,12 +124,9 @@ export function LegCard({
 
       <label className="flex items-center justify-between text-sm">
         <span className="text-slate-500">{tab === "detours" ? "Base distance (km)" : "Distance (km)"}</span>
-        <input
-          type="number"
-          step="0.1"
-          inputMode="decimal"
+        <NumericInput
           value={state.distanceKm}
-          onChange={(e) => onChange({ ...state, distanceKm: Number(e.target.value) })}
+          onChange={(n) => onChange({ ...state, distanceKm: n })}
           disabled={readOnly}
           className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-24 text-right disabled:bg-slate-50 disabled:text-slate-500"
         />
@@ -136,13 +134,9 @@ export function LegCard({
 
       <label className="flex items-center justify-between text-sm">
         <span className="text-slate-500">Toll (₱)</span>
-        <input
-          type="number"
-          step="1"
-          min="0"
-          inputMode="decimal"
+        <NumericInput
           value={state.tollPhp ?? routeDefault}
-          onChange={(e) => onChange({ ...state, tollPhp: Number(e.target.value) })}
+          onChange={(n) => onChange({ ...state, tollPhp: n })}
           disabled={readOnly}
           className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-24 text-right disabled:bg-slate-50 disabled:text-slate-500"
         />
@@ -177,13 +171,9 @@ export function LegCard({
                     <span className="text-slate-500">
                       <PHP value={breakdown.passengerEach + detour} />
                     </span>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      inputMode="decimal"
+                    <NumericInput
                       value={extraKmByRider[p.id] ?? 0}
-                      onChange={(e) => setExtra(p.id, Number(e.target.value))}
+                      onChange={(n) => setExtra(p.id, n)}
                       disabled={readOnly}
                       className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-20 text-right disabled:bg-slate-50 disabled:text-slate-500"
                     />

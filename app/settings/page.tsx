@@ -13,6 +13,7 @@ import { Switch } from "@/components/Switch";
 import { useToast } from "@/components/Toast";
 import { EnablePushReminders } from "@/components/push/EnablePushReminders";
 import { ONBOARDING_START_EVENT } from "@/components/OnboardingTour";
+import { NumericInput } from "@/components/NumericInput";
 
 export default function SettingsPage() {
   const { settings, setSettings } = useSettings();
@@ -278,7 +279,7 @@ export default function SettingsPage() {
           <span className="text-slate-500">Manual override</span>
           <div className="flex items-center gap-2">
             <input
-              type="number"
+              type="text" inputMode="decimal"
               step="0.01"
               placeholder="km/L"
               value={mileageDraft}
@@ -351,7 +352,7 @@ export default function SettingsPage() {
         <label className="block text-sm">
           <span className="text-slate-600">Liters</span>
           <input
-            type="number"
+            type="text" inputMode="decimal"
             step="0.01"
             value={liters}
             onChange={(e) => setLiters(e.target.value)}
@@ -361,7 +362,7 @@ export default function SettingsPage() {
         <label className="block text-sm">
           <span className="text-slate-600">Total ₱</span>
           <input
-            type="number"
+            type="text" inputMode="decimal"
             step="0.01"
             value={total}
             onChange={(e) => setTotal(e.target.value)}
@@ -371,7 +372,7 @@ export default function SettingsPage() {
         <label className="block text-sm">
           <span className="text-slate-600">Odometer (km)</span>
           <input
-            type="number"
+            type="text" inputMode="decimal"
             step="0.1"
             value={odo}
             onChange={(e) => setOdo(e.target.value)}
@@ -518,9 +519,7 @@ function Field({
 
   useEffect(() => () => clearTimeout(savedTimer.current), []);
 
-  async function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const n =
-      (integer ? parseInt(e.target.value, 10) : parseFloat(e.target.value)) || 0;
+  async function commit(n: number) {
     const res = await onChange(n);
     if (!res.ok) return;
     // Non-toast confirmation for these auto-saving inputs; transient so rapid
@@ -542,11 +541,10 @@ function Field({
         >
           Saved ✓
         </span>
-        <input
-          type="number"
+        <NumericInput
           value={value}
-          step={integer ? "1" : "0.01"}
-          onChange={handleChange}
+          onChange={commit}
+          integer={integer}
           className="w-28 border border-slate-300 rounded-lg px-2 py-1 text-right"
         />
       </span>
