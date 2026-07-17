@@ -1,8 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import {
+  Turnstile,
+  turnstileEnabled,
+  type TurnstileHandle,
+} from "@/components/Turnstile";
 
 const ERROR_COPY: Record<string, string> = {
   expired: "That sign-in link has expired. Send a new one.",
@@ -22,6 +27,8 @@ export default function LoginForm() {
     "idle"
   );
   const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const turnstileRef = useRef<TurnstileHandle>(null);
 
   useEffect(() => {
     if (errorParam) {
@@ -34,6 +41,7 @@ export default function LoginForm() {
     setMode(next);
     setStatus("idle");
     setErrMsg(null);
+    setCaptchaToken(null);
   }
 
   async function signInWithPassword(e: React.FormEvent) {
@@ -45,10 +53,13 @@ export default function LoginForm() {
       const { error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
+        options: { captchaToken: captchaToken ?? undefined },
       });
       if (error) throw error;
       window.location.assign("/");
     } catch (err) {
+      // The token is single-use; re-arm the widget so a retry gets a fresh one.
+      turnstileRef.current?.reset();
       setStatus("error");
       setErrMsg(
         err instanceof Error && /invalid login credentials/i.test(err.message)
@@ -68,7 +79,10 @@ export default function LoginForm() {
       const res = await fetch("/api/auth/magic-link", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({
+          email: email.trim(),
+          captchaToken: captchaToken ?? undefined,
+        }),
       });
       if (res.status === 429) {
         throw new Error(
@@ -81,6 +95,8 @@ export default function LoginForm() {
       }
       setStatus("sent");
     } catch (err) {
+      // The token is single-use; re-arm the widget so a retry gets a fresh one.
+      turnstileRef.current?.reset();
       setStatus("error");
       setErrMsg(err instanceof Error ? err.message : "failed to send link");
     }
@@ -125,9 +141,12 @@ export default function LoginForm() {
               placeholder="Password"
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
             />
+            <Turnstile ref={turnstileRef} onToken={setCaptchaToken} />
             <button
               type="submit"
-              disabled={status === "working"}
+              disabled={
+                status === "working" || (turnstileEnabled && !captchaToken)
+              }
               className="w-full bg-brand-600 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-60"
             >
               {status === "working" ? "Signing in..." : "Sign in"}
@@ -157,9 +176,12 @@ export default function LoginForm() {
               placeholder="you@example.com"
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
             />
+            <Turnstile ref={turnstileRef} onToken={setCaptchaToken} />
             <button
               type="submit"
-              disabled={status === "working"}
+              disabled={
+                status === "working" || (turnstileEnabled && !captchaToken)
+              }
               className="w-full bg-brand-600 text-white text-sm rounded-lg px-3 py-2 disabled:opacity-60"
             >
               {status === "working" ? "Sending..." : "Send magic link"}
