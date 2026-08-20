@@ -390,4 +390,63 @@ describe("trip mapper", () => {
     expect(t.legs[0].route).toBe("skyway");
     expect(t.legs[1].distanceKm).toBe(25);
   });
+
+  const snapshotBase = {
+    id: "t1",
+    group_id: "g1",
+    car_id: null,
+    driver_user_id: null,
+    date: "2026-08-17",
+    gas_price_id: "g1",
+    parking_fee_php: 90,
+    notes: null,
+    created_at: "x",
+    trip_legs: [
+      {
+        id: "l1",
+        group_id: "g1",
+        trip_id: "t1",
+        leg: "morning" as const,
+        position: 0,
+        route: "skyway" as const,
+        distance_km: 21,
+        trip_leg_riders: [
+          { group_id: "g1", trip_leg_id: "l1", passenger_id: "p1", extra_distance_km: 0 },
+        ],
+      },
+    ],
+  };
+
+  it("legacy trip (null snapshot) falls back to the linked gas price, no mileageKml", () => {
+    const t = fromDbTrip(
+      { ...snapshotBase, mileage_kml: null, gas_price_php: null },
+      65.5
+    );
+    // Byte-identical to before: linked price wins, snapshot fields absent.
+    expect(t.gasPrice).toBe(65.5);
+    expect(t.mileageKml).toBeUndefined();
+  });
+
+  it("reads the frozen snapshot: gas price from gas_price_php, mileage from mileage_kml", () => {
+    const t = fromDbTrip(
+      { ...snapshotBase, mileage_kml: 10.5, gas_price_php: 50 },
+      // The live/linked price is deliberately different to prove the snapshot wins.
+      65.5
+    );
+    expect(t.gasPrice).toBe(50);
+    expect(t.mileageKml).toBe(10.5);
+  });
+
+  it("coerces numeric-string snapshot values", () => {
+    const t = fromDbTrip(
+      {
+        ...snapshotBase,
+        mileage_kml: "12.345" as unknown as number,
+        gas_price_php: "58.20" as unknown as number,
+      },
+      65.5
+    );
+    expect(t.gasPrice).toBe(58.2);
+    expect(t.mileageKml).toBe(12.345);
+  });
 });

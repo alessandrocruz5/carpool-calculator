@@ -24,6 +24,13 @@ export interface StoredTrip {
   /** Authoritative ordered legs (min 1), parking on the first leg only. */
   legs: LegState[];
   notes?: string;
+  /**
+   * Frozen per-trip mileage (km/L) snapshot (SABAY-47). Present when the server
+   * froze it on create so a backfilled trip prices as of its own date; absent on
+   * legacy trips, which recompute from live mileage. Read-only from the client's
+   * perspective — the server owns freezing/preserving it.
+   */
+  mileageKml?: number;
 }
 
 interface TripsStore {
