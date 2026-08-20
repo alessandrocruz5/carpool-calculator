@@ -9,8 +9,11 @@
 --
 -- Idempotent: `add column if not exists` + constraint guards so re-running is a
 -- no-op.
+-- mileage_kml is numeric(6,3) to match `settings.mileage_kml_override` and the
+-- unrounded float from `rollingMileage()`, so a frozen *today* trip recomputes
+-- byte-identically to the live recompute (SABAY-47's guarantee).
 alter table trips
-  add column if not exists mileage_kml numeric(5,2);
+  add column if not exists mileage_kml numeric(6,3);
 
 alter table trips
   add column if not exists gas_price_php numeric(8,2);

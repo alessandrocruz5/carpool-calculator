@@ -101,7 +101,7 @@ export interface DbTrip {
   // Per-trip day snapshot (SABAY-46). The two calc inputs that drift over time,
   // frozen on write by SABAY-47 so a backfilled trip prices as of its own date.
   // Null/absent = legacy trip that recomputes from live mileage + current gas
-  // price exactly as today. Numeric(5,2) km/L and numeric(8,2) PHP.
+  // price exactly as today. Numeric(6,3) km/L and numeric(8,2) PHP.
   mileage_kml?: number | null;
   gas_price_php?: number | null;
 }
