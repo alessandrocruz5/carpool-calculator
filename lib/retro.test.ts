@@ -40,4 +40,17 @@ describe("retro window (Sunday-anchored)", () => {
     expect(isWithinRetroWindow("2026-08-21", thursday)).toBe(false);
     expect(isWithinRetroWindow("2026-09-01", thursday)).toBe(false);
   });
+
+  it("ignores a trailing time component on the date", () => {
+    expect(isWithinRetroWindow("2026-08-20T00:00:00", thursday)).toBe(true);
+  });
+
+  it("anchors 'today' to Manila, not UTC, when given a Date instant", () => {
+    // 2026-08-19T16:30:00Z is 2026-08-20 00:30 in Manila (UTC+8). A naive
+    // UTC/server-local reading would call today 2026-08-19 and reject a
+    // same-day (2026-08-20) trip as being in the future.
+    const instant = new Date("2026-08-19T16:30:00Z");
+    expect(retroWindowEnd(instant)).toBe("2026-08-20");
+    expect(isWithinRetroWindow("2026-08-20", instant)).toBe(true);
+  });
 });

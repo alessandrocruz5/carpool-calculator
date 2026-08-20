@@ -18,10 +18,11 @@ function setSupa(opts: Parameters<typeof makeSupabase>[0]) {
 }
 
 // 2026-08-20 is a Thursday; the Sunday-anchored backfill window is
-// [2026-08-16 → 2026-08-20]. Freeze time so the retro guard is deterministic.
+// [2026-08-16 → 2026-08-20]. Freeze time to noon Manila (04:00Z) so the retro
+// guard resolves the same window regardless of the CI runner's timezone.
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.setSystemTime(new Date("2026-08-20T12:00:00"));
+  vi.setSystemTime(new Date("2026-08-20T04:00:00Z"));
   supaState.current = null;
 });
 afterEach(() => {
@@ -105,6 +106,48 @@ describe("GET /api/trips", () => {
     expect(body).toHaveLength(1);
     expect(body[0].gasPrice).toBe(65.5);
     expect(body[0].legs[0].passengerIds).toEqual(["p1"]);
+  });
+
+  it("sources gasPrice + mileageKml from the per-trip snapshot when present", async () => {
+    setSupa({
+      tables: {
+        trips: [
+          {
+            data: [
+              {
+                id: "t1",
+                date: "2026-08-17",
+                gas_price_id: "g1",
+                parking_fee_php: 90,
+                notes: null,
+                // Frozen snapshot differs from the linked gas row to prove it wins.
+                mileage_kml: 10.5,
+                gas_price_php: 50,
+                trip_legs: [
+                  {
+                    id: "l1",
+                    trip_id: "t1",
+                    leg: "morning",
+                    position: 0,
+                    route: "skyway",
+                    trip_leg_riders: [{ trip_leg_id: "l1", passenger_id: "p1" }],
+                  },
+                ],
+              },
+            ],
+            error: null,
+          },
+        ],
+        gas_prices: [
+          { data: [{ id: "g1", effective_date: "2026-08-17", price_per_liter: 65.5 }], error: null },
+        ],
+      },
+    });
+    const res = await GET();
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body[0].gasPrice).toBe(50); // frozen snapshot, not the linked 65.5
+    expect(body[0].mileageKml).toBe(10.5);
   });
 
   it("surfaces auth-scoped empty results (RLS hides rows)", async () => {
@@ -387,6 +430,36 @@ describe("POST /api/trips snapshot freeze (SABAY-47)", () => {
     const settings = { ...fromDbSettings(driverSettings.data as unknown as DbSettings), mileageKmPerL: 16 };
     const expected = calcDay(
       { date: todayTrip.date, gasPricePhpPerL: 65.5, legs: todayTrip.legs },
+      settings
+    );
+    const payUpsert = supa
+      .callsFor("trip_payments")
+      .flat()
+      .find((c) => c.method === "upsert");
+    const payments = payUpsert!.args[0] as Array<{ passenger_id: string; amount_php: number }>;
+    expect(payments.find((p) => p.passenger_id === "p1")!.amount_php).toBe(
+      expected.perPassenger["p1"]
+    );
+  });
+
+  it("freezes the effective gas row, not a diverging body.gasPrice (stale client)", async () => {
+    // Intended semantics: the split stops trusting the client's gas price and
+    // uses the row effective as of the trip date. Here they disagree (client 65.5
+    // vs effective 70) and the frozen effective price must win.
+    const todayTrip = { ...backfillTrip, date: "2026-08-20", gasPrice: 65.5 };
+    const supa = setSupa({ tables: snapshotTables({ id: "g-eff", price_per_liter: 70 }) });
+
+    const res = await POST(
+      new Request("http://t/api/trips", { method: "POST", body: JSON.stringify(todayTrip) })
+    );
+    expect(res.status).toBe(200);
+
+    const upsert = supa.callsFor("trips")[1].find((c) => c.method === "upsert");
+    expect(upsert!.args[0]).toMatchObject({ gas_price_php: 70 });
+
+    const settings = { ...fromDbSettings(driverSettings.data as unknown as DbSettings), mileageKmPerL: 16 };
+    const expected = calcDay(
+      { date: todayTrip.date, gasPricePhpPerL: 70, legs: todayTrip.legs },
       settings
     );
     const payUpsert = supa

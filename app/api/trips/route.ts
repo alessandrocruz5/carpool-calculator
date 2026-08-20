@@ -22,6 +22,9 @@ export const dynamic = "force-dynamic";
 
 const TRIP_SELECT =
   "id, date, parking_fee_php, notes, car_id, driver_user_id, gas_price_id, " +
+  // Per-trip day snapshot (SABAY-47) — fromDbTrip sources gasPrice from
+  // gas_price_php and reads mileageKml from these when present.
+  "mileage_kml, gas_price_php, " +
   "trip_legs(leg, position, route, distance_km, toll_php, trip_leg_riders(passenger_id, extra_distance_km))";
 
 export async function GET() {
