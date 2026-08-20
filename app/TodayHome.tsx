@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dayjs from "dayjs";
 import Link from "next/link";
 import { LegCard, type LegState } from "@/components/LegCard";
+import { DatePicker } from "@/components/DatePicker";
 import { PHP } from "@/components/PHP";
 import { useSettings } from "@/lib/store/settings";
 import { useRoster } from "@/lib/store/roster";
@@ -20,13 +21,16 @@ import { DriverSelect } from "@/components/DriverSelect";
 import { rollingMileage, resolveEffectiveMileage } from "@/lib/mileage";
 import { calcDay } from "@/lib/calc";
 import { daysSince } from "@/lib/week";
+import { retroWindow } from "@/lib/retro";
 
 export default function TodayHome() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const dateParam = searchParams.get("date");
   const isValidDate = dateParam != null && /^\d{4}-\d{2}-\d{2}$/.test(dateParam);
   const today = isValidDate ? (dateParam as string) : dayjs().format("YYYY-MM-DD");
   const isPastEdit = isValidDate && today !== dayjs().format("YYYY-MM-DD");
+  const retroWin = retroWindow();
   const { settings, gasPrice, gasPriceUpdatedAt } = useSettings();
   const { passengers } = useRoster();
   const { fillups } = useFillups();
@@ -173,14 +177,26 @@ export default function TodayHome() {
             Gas <PHP value={gasPrice} />/L · Mileage {effectiveMileage.toFixed(2)} km/L
           </p>
         </div>
-        {isDriver && (
-          <button
-            onClick={save}
-            className="bg-brand-600 text-white text-sm font-medium rounded-lg px-4 py-2"
-          >
-            {existing ? "Update" : "Save"}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {isDriver && (
+            <DatePicker
+              value={today}
+              min={retroWin.start}
+              max={retroWin.end}
+              onChange={(next) =>
+                router.push(next === dayjs().format("YYYY-MM-DD") ? "/" : `/?date=${next}`)
+              }
+            />
+          )}
+          {isDriver && (
+            <button
+              onClick={save}
+              className="bg-brand-600 text-white text-sm font-medium rounded-lg px-4 py-2"
+            >
+              {existing ? "Update" : "Save"}
+            </button>
+          )}
+        </div>
       </div>
 
       {stale && (
