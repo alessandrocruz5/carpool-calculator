@@ -16,6 +16,11 @@ interface Body {
     date: string;
     gasPrice: number;
     parkingFee: number;
+    /**
+     * Frozen per-trip mileage (km/L) snapshot (SABAY-47). Present for backfilled
+     * trips; null/absent on legacy trips, which recompute from live group mileage.
+     */
+    mileageKml?: number | null;
     legs: {
       route: Route;
       passengerIds: string[];
@@ -67,6 +72,16 @@ export async function POST(req: Request) {
 
     const rows: ExportRow[] = [];
     for (const t of body.trips) {
+      // Per-trip settings clone so the recomputed Legs shares equal the frozen
+      // trip_payments: a backfilled trip froze its own mileage snapshot
+      // (SABAY-47), so price it with that mileage rather than live group mileage.
+      // Legacy trips (null snapshot) fall back to body.settings and recompute
+      // byte-identically to before. Gas price is already the frozen snapshot —
+      // StoredTrip.gasPrice sources from it when present (fromDbTrip).
+      const tripSettings: CalcSettings =
+        t.mileageKml != null && t.mileageKml > 0
+          ? { ...body.settings, mileageKmPerL: t.mileageKml }
+          : body.settings;
       // Parking applies to the first leg only, matching calcDay.
       t.legs.forEach((leg, i) => {
         const breakdown = calcLeg(
@@ -78,7 +93,7 @@ export async function POST(req: Request) {
             tollPhp: leg.tollPhp,
           },
           t.gasPrice,
-          body.settings,
+          tripSettings,
           i === 0
         );
         const passenger_shares: Record<string, number> = {};
