@@ -1,5 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { makeSupabase } from "@/lib/test/supabase-mock";
+import { calcDay } from "@/lib/calc";
+import { fromDbSettings } from "@/lib/supabase/mappers";
+import type { DbSettings } from "@/lib/supabase/types";
 
 const supaState: { current: ReturnType<typeof makeSupabase> | null } = { current: null };
 
@@ -14,9 +17,21 @@ function setSupa(opts: Parameters<typeof makeSupabase>[0]) {
   return supaState.current;
 }
 
+// 2026-08-20 is a Thursday; the Sunday-anchored backfill window is
+// [2026-08-16 → 2026-08-20]. Freeze time so the retro guard is deterministic.
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-08-20T12:00:00"));
+  supaState.current = null;
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 const baseTrip = {
   id: "ignored",
-  date: "2026-05-13",
+  // In-window date so create-path tests pass the retro guard.
+  date: "2026-08-19",
   gasPrice: 65.5,
   parkingFee: 90,
   legs: [
@@ -42,9 +57,8 @@ const driverSettings = {
   error: null,
 };
 
-beforeEach(() => {
-  supaState.current = null;
-});
+// The existing-trip lookup that precedes every upsert. `null` = create path.
+const noExistingTrip = { data: null, error: null };
 
 describe("GET /api/trips", () => {
   it("returns mapped trips with their gas price snapshot", async () => {
@@ -134,17 +148,74 @@ describe("POST /api/trips auth", () => {
   });
 });
 
+describe("POST /api/trips retro window guard", () => {
+  it("rejects creating a trip for a date before the Sunday window", async () => {
+    setSupa({});
+    const res = await POST(
+      new Request("http://t/api/trips", {
+        method: "POST",
+        // 2026-08-15 is the Saturday of the previous week — outside the window.
+        body: JSON.stringify({ ...baseTrip, date: "2026-08-15" }),
+      })
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/window/i);
+  });
+
+  it("rejects creating a trip in the future", async () => {
+    setSupa({});
+    const res = await POST(
+      new Request("http://t/api/trips", {
+        method: "POST",
+        body: JSON.stringify({ ...baseTrip, date: "2026-08-21" }),
+      })
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("allows editing an already-existing trip whose date is outside the window", async () => {
+    const supa = setSupa({
+      tables: {
+        // Existing legacy trip (null snapshot) dated well before the window.
+        trips: [
+          { data: { id: "t-old", mileage_kml: null, gas_price_php: null }, error: null },
+          { data: { id: "t-old" }, error: null },
+        ],
+        gas_prices: [{ data: { id: "g-existing", price_per_liter: 60 }, error: null }],
+        trip_legs: [
+          { data: null, error: null },
+          { data: [{ id: "lm", position: 0 }, { id: "le", position: 1 }], error: null },
+        ],
+        trip_leg_riders: [{ data: null, error: null }],
+        settings: [driverSettings],
+        trip_payments: [
+          { data: null, error: null },
+          { data: [], error: null },
+          { data: null, error: null },
+        ],
+      },
+    });
+    const res = await POST(
+      new Request("http://t/api/trips", {
+        method: "POST",
+        body: JSON.stringify({ ...baseTrip, date: "2026-05-13" }),
+      })
+    );
+    expect(res.status).toBe(200);
+    // A legacy edit preserves the null snapshot (recomputes live).
+    const upsert = supa.callsFor("trips")[1].find((c) => c.method === "upsert");
+    expect(upsert!.args[0]).toMatchObject({ mileage_kml: null, gas_price_php: null });
+  });
+});
+
 describe("POST /api/trips gas snapshot", () => {
   it("re-uses an existing gas_prices row when one already exists for the date", async () => {
     const supa = setSupa({
       tables: {
-        // 1) lookup existing gp -> returns row
-        gas_prices: [{ data: { id: "g-existing" }, error: null }],
-        // upsert trip
-        trips: [{ data: { id: "t1" }, error: null }],
-        // delete legs, insert legs
+        trips: [noExistingTrip, { data: { id: "t1" }, error: null }],
+        gas_prices: [{ data: { id: "g-existing", price_per_liter: 65.5 }, error: null }],
         trip_legs: [
-          { data: null, error: null }, // delete
+          { data: null, error: null },
           {
             data: [
               { id: "lm", leg: "morning", position: 0 },
@@ -153,14 +224,12 @@ describe("POST /api/trips gas snapshot", () => {
             error: null,
           },
         ],
-        // riders insert
         trip_leg_riders: [{ data: null, error: null }],
-        // settings lookup, then trip_payments existing + upsert + delete-not-in
         settings: [driverSettings],
         trip_payments: [
-          { data: null, error: null }, // delete not-in
-          { data: [], error: null }, // existing
-          { data: null, error: null }, // upsert
+          { data: null, error: null },
+          { data: [], error: null },
+          { data: null, error: null },
         ],
       },
     });
@@ -182,7 +251,7 @@ describe("POST /api/trips gas snapshot", () => {
           { data: null, error: null }, // lookup returns nothing
           { data: { id: "g-new" }, error: null }, // insert returns new id
         ],
-        trips: [{ data: { id: "t1" }, error: null }],
+        trips: [noExistingTrip, { data: { id: "t1" }, error: null }],
         trip_legs: [
           { data: null, error: null },
           {
@@ -221,12 +290,113 @@ describe("POST /api/trips gas snapshot", () => {
       price_per_liter: baseTrip.gasPrice,
     });
 
-    // The trips upsert must carry the newly minted gas_price_id, not null.
+    // The trips upsert (2nd trips call, after the existence lookup) must carry the
+    // newly minted gas_price_id, not null.
     const tripsChains = supa.callsFor("trips");
-    expect(tripsChains).toHaveLength(1);
-    const upsertCall = tripsChains[0].find((c) => c.method === "upsert");
+    expect(tripsChains).toHaveLength(2);
+    const upsertCall = tripsChains[1].find((c) => c.method === "upsert");
     expect(upsertCall).toBeDefined();
     expect((upsertCall!.args[0] as { gas_price_id: string }).gas_price_id).toBe("g-new");
+  });
+});
+
+describe("POST /api/trips snapshot freeze (SABAY-47)", () => {
+  // A single-leg, single-passenger trip keeps the hand-calc simple.
+  const backfillTrip = {
+    ...baseTrip,
+    date: "2026-08-17", // within window, but in the past
+    legs: [{ route: "skyway" as const, passengerIds: ["p1"], distanceKm: 21 }],
+  };
+
+  // Fill-ups: two dated on/before the trip date give a rolling avg of 10 km/L;
+  // a later fill-up (after the trip date) would drag the live avg to 16 km/L.
+  const fillups = [
+    { id: "f1", car_id: null, date: "2026-08-10", liters: 40, total_php: 2000, odometer_km: 1000 },
+    { id: "f2", car_id: null, date: "2026-08-16", liters: 40, total_php: 2000, odometer_km: 1400 },
+    { id: "f3", car_id: null, date: "2026-08-19", liters: 10, total_php: 500, odometer_km: 1800 },
+  ];
+
+  function snapshotTables(gasLookup: { id: string; price_per_liter: number | null } | null) {
+    return {
+      trips: [noExistingTrip, { data: { id: "t1" }, error: null }],
+      gas_prices: [{ data: gasLookup, error: null }],
+      fillups: [{ data: fillups, error: null }],
+      trip_legs: [
+        { data: null, error: null },
+        { data: [{ id: "lm", position: 0 }], error: null },
+      ],
+      trip_leg_riders: [{ data: null, error: null }],
+      settings: [driverSettings],
+      trip_payments: [
+        { data: null, error: null }, // delete not-in
+        { data: [], error: null }, // existing
+        { data: null, error: null }, // upsert
+      ],
+    } as Parameters<typeof makeSupabase>[0]["tables"];
+  }
+
+  it("freezes the day's mileage (fill-ups ≤ date) and gas price, and prices from them", async () => {
+    // Effective gas row for 2026-08-17 is the historical 50, not body.gasPrice 65.5.
+    const supa = setSupa({ tables: snapshotTables({ id: "g-hist", price_per_liter: 50 }) });
+
+    const res = await POST(
+      new Request("http://t/api/trips", { method: "POST", body: JSON.stringify(backfillTrip) })
+    );
+    expect(res.status).toBe(200);
+
+    // The trips upsert freezes mileage 10 (only fill-ups ≤ 2026-08-17) and gas 50.
+    const upsert = supa.callsFor("trips")[1].find((c) => c.method === "upsert");
+    expect(upsert!.args[0]).toMatchObject({ mileage_kml: 10, gas_price_php: 50 });
+
+    // Payments equal a hand-calc at the frozen day's gas + mileage.
+    const settings = { ...fromDbSettings(driverSettings.data as unknown as DbSettings), mileageKmPerL: 10 };
+    const expected = calcDay(
+      { date: backfillTrip.date, gasPricePhpPerL: 50, legs: backfillTrip.legs },
+      settings
+    );
+    const payUpsert = supa
+      .callsFor("trip_payments")
+      .flat()
+      .find((c) => c.method === "upsert");
+    const payments = payUpsert!.args[0] as Array<{ passenger_id: string; amount_php: number }>;
+    const p1 = payments.find((p) => p.passenger_id === "p1")!;
+    expect(p1.amount_php).toBe(expected.perPassenger["p1"]);
+
+    // And it must NOT match the (buggy) split at today's gas + live mileage.
+    const wrong = calcDay(
+      { date: backfillTrip.date, gasPricePhpPerL: 65.5, legs: backfillTrip.legs },
+      { ...fromDbSettings(driverSettings.data as unknown as DbSettings), mileageKmPerL: 16 }
+    );
+    expect(p1.amount_php).not.toBe(wrong.perPassenger["p1"]);
+  });
+
+  it("keeps a today trip numerically identical to live gas + live mileage", async () => {
+    // Effective gas row equals body.gasPrice for a today trip.
+    const todayTrip = { ...backfillTrip, date: "2026-08-20" };
+    const supa = setSupa({ tables: snapshotTables({ id: "g-now", price_per_liter: 65.5 }) });
+
+    const res = await POST(
+      new Request("http://t/api/trips", { method: "POST", body: JSON.stringify(todayTrip) })
+    );
+    expect(res.status).toBe(200);
+
+    // All fill-ups are ≤ today, so the frozen mileage equals the live avg (16).
+    const upsert = supa.callsFor("trips")[1].find((c) => c.method === "upsert");
+    expect(upsert!.args[0]).toMatchObject({ mileage_kml: 16, gas_price_php: 65.5 });
+
+    const settings = { ...fromDbSettings(driverSettings.data as unknown as DbSettings), mileageKmPerL: 16 };
+    const expected = calcDay(
+      { date: todayTrip.date, gasPricePhpPerL: 65.5, legs: todayTrip.legs },
+      settings
+    );
+    const payUpsert = supa
+      .callsFor("trip_payments")
+      .flat()
+      .find((c) => c.method === "upsert");
+    const payments = payUpsert!.args[0] as Array<{ passenger_id: string; amount_php: number }>;
+    expect(payments.find((p) => p.passenger_id === "p1")!.amount_php).toBe(
+      expected.perPassenger["p1"]
+    );
   });
 });
 
@@ -243,8 +413,8 @@ describe("POST /api/trips N legs", () => {
   it("persists every leg with its position and attaches riders + payments per leg", async () => {
     const supa = setSupa({
       tables: {
-        gas_prices: [{ data: { id: "g-existing" }, error: null }],
-        trips: [{ data: { id: "t1" }, error: null }],
+        trips: [noExistingTrip, { data: { id: "t1" }, error: null }],
+        gas_prices: [{ data: { id: "g-existing", price_per_liter: 65.5 }, error: null }],
         trip_legs: [
           { data: null, error: null }, // delete
           {
@@ -337,8 +507,8 @@ describe("POST /api/trips car + driver attachment", () => {
 
   function fullTables(extra: Record<string, unknown[]>) {
     return {
-      gas_prices: [{ data: { id: "g-existing" }, error: null }],
-      trips: [{ data: { id: "t1" }, error: null }],
+      trips: [noExistingTrip, { data: { id: "t1" }, error: null }],
+      gas_prices: [{ data: { id: "g-existing", price_per_liter: 65.5 }, error: null }],
       trip_legs: [
         { data: null, error: null },
         { data: [{ id: "lm", leg: "morning", position: 0 }, { id: "le", leg: "evening", position: 1 }], error: null },
@@ -401,7 +571,7 @@ describe("POST /api/trips car + driver attachment", () => {
       new Request("http://t/api/trips", { method: "POST", body: JSON.stringify(tripWithCar) })
     );
     expect(res.status).toBe(200);
-    const upsert = supa.callsFor("trips")[0].find((c) => c.method === "upsert");
+    const upsert = supa.callsFor("trips")[1].find((c) => c.method === "upsert");
     expect(upsert!.args[0]).toMatchObject({ car_id: "car1", driver_user_id: "u-driver" });
   });
 });
