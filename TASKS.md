@@ -1,6 +1,29 @@
 # Carpool Calculator — Sprints
 Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded from changelog)
 
+## Sprint 8 — Retroactive trips with per-day snapshot   (planned 2026-08-20)
+Epic: SABAY-45 · base branch: `develop` · target version: v2.3.0 (MINOR)
+
+Let the driver backfill a forgotten trip on a later day and have it price as if logged that day.
+The snapshot grain is the **trip**, not the month: store the two calc inputs that drift — mileage
+(km/L) and gas price — directly on the `trips` row (two nullable numeric columns, zero backfill;
+null snapshot = legacy trips recompute exactly as today, numbers byte-identical). This also fixes an
+existing money bug: the payment split currently uses the client's *current* gas price (`body.gasPrice`)
+and live rolling mileage at save time, so a backfilled Thursday trip is priced with Saturday's
+gas+mileage. Backfill is constrained to the current **Sunday-anchored** window `[most-recent-Sunday →
+today]` (a dedicated `lib/retro.ts` helper — deliberately NOT touching `lib/week.ts`'s Monday-anchored
+`weekStart`/`weekdays`, which drive the Log view); *editing* an already-existing older trip stays
+allowed (guard only gates *creating* a trip for a new date). Passenger side needs no new work —
+`trip_payments` is already frozen and the Sprint-5 claim/confirm handshake covers "exists but unpaid";
+SABAY-48 only fixes the Sheets Legs tab to read the snapshot so its recomputed shares match the frozen
+balances. Units 1/2/3 touch migration/money → code-guardian gate. Each unit line tags its build config
+(model · thinking · effort) for token optimization. Ships as v2.3.0 (MINOR) when all merge.
+
+- [x] SABAY-46 — Migration + DB types: per-trip day snapshot · Added · files: supabase/migrations/<new>_trip_day_snapshot.sql, lib/supabase/types.ts · depends: — · high-stakes (migration → code-guardian) · build: Opus 4.8 · thinking on (medium) · effort medium — add nullable `trips.mileage_kml numeric(5,2)` + `trips.gas_price_php numeric(8,2)`; update `DbTrip`. No backfill, no RLS change (inherits table RLS). Legacy trips keep both null and recompute as today. Downstream: SABAY-47 freezes/reads these columns. (merged 2026-08-20)
+- [x] SABAY-47 — Freeze snapshot on write + calc from frozen inputs + retro date guard · Fixed/Changed · files: app/api/trips/route.ts (+test), lib/supabase/mappers.ts (+test), lib/store/trips.ts, lib/retro.ts (new, +test) · depends: SABAY-46 · high-stakes (money + auth → code-guardian) · build: Opus 4.8 · thinking on (high) · effort high — server POST freezes `mileage_kml` (fillups dated ≤ trip date) + `gas_price_php` (effective gas row for date) on create, preserves on update, and computes `trip_payments` from the frozen values instead of `body.gasPrice`/live mileage; Sunday-window guard rejects *creating* a trip outside `[sunday→today]` (existing-trip edits exempt); `fromDbTrip` reads the snapshot; `StoredTrip` gains `mileageKml?` + sources `gasPrice` from the snapshot when present; new pure `lib/retro.ts` window rule (shared with SABAY-49). Today's trips numerically unchanged. (merged 2026-08-20)
+- [x] SABAY-48 — Sheets export reads the per-trip snapshot · Fixed · files: app/api/sheets/export/route.ts (+test) · depends: SABAY-47 · high-stakes (money-display → code-guardian, light) · build: Opus 4.8 · thinking on (medium) · effort medium — Legs-tab recompute uses each trip's snapshot mileage + snapshot gas price (per-trip settings clone) so exported shares equal the frozen `trip_payments`; Payments tab unchanged. (merged 2026-08-20)
+- [x] SABAY-49 — UI: retroactive date picker (Sunday window) · Added · files: app/TodayHome.tsx, app/log/page.tsx, (opt.) components/DatePicker · depends: SABAY-47 · build: Sonnet 5 · thinking on (brief) · effort medium — date picker on the Trip page constrained to `lib/retro.ts`'s window (default today; "Editing past trip" banner already exists) + a "Log a missing day" entry from the Log page for empty weekdays this week. (merged 2026-08-20)
+
 ## Sprint 7 — Public self-serve launch hardening   (planned 2026-07-17 · released v2.2.0 2026-07-18)
 Epic: SABAY-41 · base branch: `develop` · target version: v2.2.0 (MINOR)
 

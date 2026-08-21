@@ -231,14 +231,22 @@ export function fromDbTrip(r: DbTripWithLegs, gasPrice: number): StoredTrip {
   const ordered = [...r.trip_legs].sort((a, b) => legOrder(a) - legOrder(b));
   const legs = ordered.map(toLegState);
 
+  // Per-trip day snapshot (SABAY-47). When the trip carries a frozen gas price,
+  // it wins over the live/linked `gasPrice` arg so a backfilled trip displays and
+  // recomputes at its own-date price. Null/absent snapshot = legacy trip → fall
+  // back to the passed-in price, byte-identical to before.
+  const snapGas = r.gas_price_php != null ? Number(r.gas_price_php) : null;
+  const snapMileage = r.mileage_kml != null ? Number(r.mileage_kml) : undefined;
+
   return {
     id: r.id,
     date: r.date,
-    gasPrice,
+    gasPrice: snapGas ?? gasPrice,
     parkingFee: Number(r.parking_fee_php),
     carId: r.car_id,
     driverUserId: r.driver_user_id,
     legs,
     notes: r.notes ?? undefined,
+    mileageKml: snapMileage,
   };
 }

@@ -8,6 +8,7 @@ import { useSettings } from "@/lib/store/settings";
 import { usePayments } from "@/lib/store/payments";
 import { calcDay, calcWeek } from "@/lib/calc";
 import { weekStart, weekdays, isFriday } from "@/lib/week";
+import { isWithinRetroWindow } from "@/lib/retro";
 import { PHP } from "@/components/PHP";
 import { useToast } from "@/components/Toast";
 import { useIsDriver } from "@/lib/auth/useIsDriver";
@@ -96,6 +97,12 @@ export default function LogPage() {
   const sorted = [...trips].sort((a, b) => (a.date < b.date ? 1 : -1));
   const mostRecent = sorted[0];
   const weekHasTrips = days.some((d) => trips.some((t) => t.date === d));
+  const isCurrentWeek = weekRef === weekStart();
+  const missingDays = isCurrentWeek
+    ? days.filter(
+        (d) => !trips.some((t) => t.date === d) && isWithinRetroWindow(d)
+      )
+    : [];
 
   async function copyYesterday() {
     if (!mostRecent) return;
@@ -249,6 +256,23 @@ export default function LogPage() {
               </button>
             </div>
           </div>
+
+          {isDriver && missingDays.length > 0 && (
+            <section className="bg-white rounded-xl border border-slate-200 p-4 space-y-2">
+              <h2 className="font-semibold">Missing days</h2>
+              <div className="flex flex-wrap gap-2">
+                {missingDays.map((d) => (
+                  <Link
+                    key={d}
+                    href={`/?date=${d}`}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800"
+                  >
+                    Log {dayjs(d).format("ddd, MMM D")}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
 
           {!weekHasTrips ? (
             <EmptyState

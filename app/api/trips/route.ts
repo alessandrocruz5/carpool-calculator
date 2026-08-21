@@ -9,7 +9,12 @@ import {
 import type { StoredTrip, LegState } from "@/lib/store/trips";
 import type { DbGasPrice, DbSettings, DbFillup } from "@/lib/supabase/types";
 import { calcDay, DEFAULT_SETTINGS } from "@/lib/calc";
-import { rollingMileage, resolveEffectiveMileage } from "@/lib/mileage";
+import {
+  rollingMileage,
+  resolveEffectiveMileage,
+  type Fillup,
+} from "@/lib/mileage";
+import { isWithinRetroWindow } from "@/lib/retro";
 import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { requireActiveGroupId } from "@/lib/group";
 
@@ -17,6 +22,9 @@ export const dynamic = "force-dynamic";
 
 const TRIP_SELECT =
   "id, date, parking_fee_php, notes, car_id, driver_user_id, gas_price_id, " +
+  // Per-trip day snapshot (SABAY-47) — fromDbTrip sources gasPrice from
+  // gas_price_php and reads mileageKml from these when present.
+  "mileage_kml, gas_price_php, " +
   "trip_legs(leg, position, route, distance_km, toll_php, trip_leg_riders(passenger_id, extra_distance_km))";
 
 export async function GET() {
@@ -104,6 +112,30 @@ export async function POST(req: Request) {
     );
   }
 
+  // A trip is uniquely keyed by (group_id, date); look up whether one already
+  // exists so we can (a) exempt *edits* from the backfill-window guard and
+  // (b) preserve an existing frozen snapshot instead of recomputing it.
+  const { data: existingTripRow } = await supabase
+    .from("trips")
+    .select("id, mileage_kml, gas_price_php")
+    .eq("group_id", groupId)
+    .eq("date", body.date)
+    .maybeSingle();
+  const existingTrip = existingTripRow as
+    | { id: string; mileage_kml: number | null; gas_price_php: number | null }
+    | null;
+  const isCreate = !existingTrip;
+
+  // Retro date guard (SABAY-47): creating a trip for a new date is constrained to
+  // the current Sunday-anchored window `[most-recent-Sunday → today]`. Editing an
+  // already-existing older trip stays allowed (isCreate === false → skipped).
+  if (isCreate && !isWithinRetroWindow(body.date)) {
+    return NextResponse.json(
+      { error: "trip date is outside the allowed backfill window" },
+      { status: 400 }
+    );
+  }
+
   // When a car/driver is attached, validate ownership + group membership and
   // resolve the car's fuel efficiency for the cost calculation below.
   let carMileageKmPerL: number | null = null;
@@ -147,15 +179,27 @@ export async function POST(req: Request) {
 
   // Find the gas_prices row effective for this trip's date (latest with effective_date <= trip.date).
   // If none exists, snapshot body.gasPrice into a new gas_prices row so the Log renders correctly.
+  // `effectiveGasPrice` is the price *as of the trip's date*; it is what SABAY-47
+  // freezes on create, so a backfilled past trip prices with its own-date gas
+  // instead of body.gasPrice (which is the client's current price).
   const { data: gpRow } = await supabase
     .from("gas_prices")
-    .select("id")
+    .select("id, price_per_liter")
     .eq("group_id", groupId)
     .lte("effective_date", body.date)
     .order("effective_date", { ascending: false })
     .limit(1)
     .maybeSingle();
-  let gasPriceId = (gpRow as { id: string } | null)?.id ?? null;
+  const gpExisting = gpRow as
+    | { id: string; price_per_liter: number | null }
+    | null;
+  let gasPriceId = gpExisting?.id ?? null;
+  // Fall back to body.gasPrice when the effective row has no usable price so a
+  // today-trip stays numerically identical to the previous behaviour.
+  let effectiveGasPrice =
+    gpExisting?.price_per_liter != null
+      ? Number(gpExisting.price_per_liter)
+      : body.gasPrice;
   if (!gasPriceId && body.gasPrice > 0) {
     const { data: newGp, error: newGpErr } = await supabase
       .from("gas_prices")
@@ -169,7 +213,59 @@ export async function POST(req: Request) {
     if (newGpErr)
       return NextResponse.json({ error: newGpErr.message }, { status: 500 });
     gasPriceId = (newGp as { id: string }).id;
+    effectiveGasPrice = body.gasPrice;
   }
+
+  // Resolve the effective mileage with the same precedence as the trip UI so the
+  // saved payment split matches what the user sees:
+  //   car rated → car measured → manual override → overall rolling avg → default.
+  const { data: settingsRow } = await supabase
+    .from("settings")
+    .select("*")
+    .eq("group_id", groupId)
+    .maybeSingle();
+  const baseSettings = settingsRow
+    ? fromDbSettings(settingsRow as DbSettings)
+    : DEFAULT_SETTINGS;
+  const { data: fillupRows } = await supabase
+    .from("fillups")
+    .select("*")
+    .eq("group_id", groupId);
+  const fillups = (fillupRows ?? []).map((f) => fromDbFillup(f as DbFillup));
+
+  const mileageFor = (list: Fillup[]): number => {
+    const carMeasured = body.carId ? rollingMileage(list, 5, body.carId) : null;
+    const overallRolling = rollingMileage(list);
+    const carEfficiency =
+      carMileageKmPerL != null && carMileageKmPerL > 0
+        ? carMileageKmPerL
+        : carMeasured;
+    return resolveEffectiveMileage({
+      carEfficiency,
+      override: baseSettings.mileageKmPerL,
+      overrideEnabled: baseSettings.mileageOverrideEnabled,
+      rollingAvg: overallRolling,
+      fallback: DEFAULT_SETTINGS.mileageKmPerL,
+    });
+  };
+
+  // Live mileage (all fill-ups) is the legacy fallback and, for a today trip,
+  // equals the frozen value below — so today's numbers are unchanged.
+  const liveMileage = mileageFor(fillups);
+
+  // Per-trip snapshot (SABAY-47): freeze on create from fill-ups dated ≤ the trip
+  // date + the effective gas price; preserve the existing snapshot on update
+  // (legacy trips keep a null snapshot and recompute live, byte-identical).
+  const snapMileage: number | null = isCreate
+    ? mileageFor(fillups.filter((f) => f.date <= body.date))
+    : existingTrip!.mileage_kml != null
+      ? Number(existingTrip!.mileage_kml)
+      : null;
+  const snapGas: number | null = isCreate
+    ? effectiveGasPrice
+    : existingTrip!.gas_price_php != null
+      ? Number(existingTrip!.gas_price_php)
+      : null;
 
   const { data: tripRow, error: tripErr } = await supabase
     .from("trips")
@@ -182,6 +278,8 @@ export async function POST(req: Request) {
         notes: body.notes ?? null,
         car_id: body.carId ?? null,
         driver_user_id: body.driverUserId ?? null,
+        mileage_kml: snapMileage,
+        gas_price_php: snapGas,
       },
       { onConflict: "group_id,date" }
     )
@@ -238,39 +336,17 @@ export async function POST(req: Request) {
 
   // Compute per-passenger amounts for this trip and upsert trip_payments.
   // Preserve existing paid status; only update amount + insert new rows.
-  const { data: settingsRow } = await supabase
-    .from("settings")
-    .select("*")
-    .eq("group_id", groupId)
-    .maybeSingle();
-  const baseSettings = settingsRow
-    ? fromDbSettings(settingsRow as DbSettings)
-    : DEFAULT_SETTINGS;
-  // Resolve the effective mileage with the same precedence as the trip UI so
-  // the saved payment split matches what the user sees:
-  // car rated → car measured → manual override → overall rolling avg → default.
-  const { data: fillupRows } = await supabase
-    .from("fillups")
-    .select("*")
-    .eq("group_id", groupId);
-  const fillups = (fillupRows ?? []).map((f) => fromDbFillup(f as DbFillup));
-  const carMeasured = body.carId ? rollingMileage(fillups, 5, body.carId) : null;
-  const overallRolling = rollingMileage(fillups);
-  const carEfficiency =
-    carMileageKmPerL != null && carMileageKmPerL > 0 ? carMileageKmPerL : carMeasured;
-  const effectiveMileage = resolveEffectiveMileage({
-    carEfficiency,
-    override: baseSettings.mileageKmPerL,
-    overrideEnabled: baseSettings.mileageOverrideEnabled,
-    rollingAvg: overallRolling,
-    fallback: DEFAULT_SETTINGS.mileageKmPerL,
-  });
-  const calcSettings = { ...baseSettings, mileageKmPerL: effectiveMileage };
+  // Price from the frozen snapshot (SABAY-47): the snapshot mileage/gas when
+  // present, else live mileage / body.gasPrice for legacy (null-snapshot) trips.
+  const calcSettings = {
+    ...baseSettings,
+    mileageKmPerL: snapMileage ?? liveMileage,
+  };
 
   const breakdown = calcDay(
     {
       date: body.date,
-      gasPricePhpPerL: body.gasPrice,
+      gasPricePhpPerL: snapGas ?? body.gasPrice,
       legs: inputLegs,
     },
     calcSettings
