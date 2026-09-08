@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { log } from "@/lib/log";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,15 @@ export async function POST(req: Request) {
     // token is a client error, not a server fault, and shouldn't spam Sentry.
     const upstream = (error as { status?: number }).status;
     const status = upstream && upstream >= 400 && upstream < 500 ? upstream : 500;
+    // Either way, record the upstream reason server-side: a misconfigured
+    // dashboard (CAPTCHA protection enabled while the client sends no token,
+    // custom SMTP rejecting the handoff) rejects every real sign-in too, and
+    // without this line that failure leaves no trace anywhere. 5xx is a genuine
+    // send failure and pages via Sentry; 4xx stays a log-only warn so bot
+    // traffic can't spam it. The address is deliberately not logged.
+    const meta = { reason: error.message, status: upstream };
+    if (status >= 500) log.error("magic link send failed", meta);
+    else log.warn("magic link rejected upstream", meta);
     return NextResponse.json({ error: error.message }, { status });
   }
   return NextResponse.json({ ok: true });

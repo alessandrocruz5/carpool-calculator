@@ -118,6 +118,12 @@ export async function POST(req: Request) {
     .eq("group_id", groupId)
     .eq("email", email.toLowerCase())
     .maybeSingle();
+  // Whether an invite email actually went out, reported to the caller so the
+  // admin UI can tell the driver to share a sign-in link by hand instead of
+  // letting them wait on an email that was never delivered. `null` means no
+  // email was owed at all — an existing account is added to the group straight
+  // away and never gets an invite — which is not a failure to warn about.
+  let emailed: boolean | null = null;
   if (invite) {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
     // The pending membership is already durable (member_invites row) and will
@@ -125,22 +131,37 @@ export async function POST(req: Request) {
     // degrades cleanly rather than failing the request — matching the project's
     // "optional integrations degrade cleanly" convention and avoiding a second
     // email on driver retry. A concurrent sign-up can race us into "already
-    // registered", which is benign and isn't logged.
+    // registered", which is benign: the account exists, so treat it as sent.
     try {
       const admin = createAdminClient();
       const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
         email,
         { redirectTo: `${siteUrl}/auth/confirm` }
       );
-      if (inviteErr && !/already.*registered/i.test(inviteErr.message)) {
-        log.warn("member invite email failed to send", { groupId });
+      const alreadyRegistered =
+        !!inviteErr && /already.*registered/i.test(inviteErr.message);
+      emailed = !inviteErr || alreadyRegistered;
+      if (inviteErr && !alreadyRegistered) {
+        // log.error (not warn) so this reaches Sentry: a rejected send means the
+        // dashboard SMTP config is broken for *every* auth email — magic-link
+        // sign-in included — and that is otherwise invisible from inside the app.
+        // The upstream message carries the cause (bad credentials, refused
+        // connection, unlisted redirect URL, rate limit); the invitee's address
+        // is deliberately left out of the log.
+        log.error("member invite email failed to send", {
+          groupId,
+          reason: inviteErr.message,
+          status: (inviteErr as { status?: number }).status,
+        });
       }
     } catch (e) {
-      // Admin client not configured (no service-role key) or threw.
+      // Admin client not configured (no service-role key) or threw. An email
+      // was owed here, so this still reports as unsent.
+      emailed = false;
       log.warn("member invite email skipped", { groupId, err: e });
     }
   }
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, emailed });
 }
 
 export async function PATCH(req: Request) {

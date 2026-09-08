@@ -46,16 +46,27 @@ export function MembersAdmin() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email: invited, role }),
       });
+      const body = (await res.json().catch(() => null)) as
+        | { error?: string; emailed?: boolean | null }
+        | null;
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | null;
         throw new Error(body?.error ?? "failed to invite");
       }
-      toast.show({
-        message: `Invited ${invited} as ${role}. They join once they sign in.`,
-        variant: "success",
-      });
+      // The membership is durable either way — it is claimed on first sign-in —
+      // but when the invite email could not be sent the driver has to pass the
+      // link on themselves, so say so rather than showing a bare success.
+      if (body?.emailed === false) {
+        toast.show({
+          message: `${invited} was added as ${role}, but the invite email couldn't be sent. Ask them to sign in at ${window.location.origin}/auth/login with this address.`,
+          variant: "info",
+          durationMs: 12000,
+        });
+      } else {
+        toast.show({
+          message: `Invited ${invited} as ${role}. They join once they sign in.`,
+          variant: "success",
+        });
+      }
       setEmail("");
       await load();
     } catch (err) {
