@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { log } from "@/lib/log";
+import { resolveSiteUrl } from "@/lib/auth/siteUrl";
 
 export const dynamic = "force-dynamic";
 
@@ -22,12 +23,12 @@ export async function POST(req: Request) {
   if (limited) return limited;
 
   const supabase = await createClient();
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
+  const siteUrl = resolveSiteUrl(req);
+  const emailRedirectTo = `${siteUrl}/auth/confirm`;
   const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: `${siteUrl}/auth/confirm`,
+      emailRedirectTo,
       captchaToken: body.captchaToken,
     },
   });
@@ -48,5 +49,12 @@ export async function POST(req: Request) {
     else log.warn("magic link rejected upstream", meta);
     return NextResponse.json({ error: error.message }, { status });
   }
+  // Record where the link will send the user back to. Supabase silently
+  // substitutes its own Site URL when `redirect_to` is not in the dashboard's
+  // Redirect URL allowlist, so this line is what tells apart "the app asked
+  // for the wrong host" from "the app asked correctly and Supabase overrode
+  // it" — a distinction that is invisible in the delivered email and cost a
+  // full debugging cycle to establish by hand. Not sensitive; no address.
+  log.info("magic link sent", { emailRedirectTo });
   return NextResponse.json({ ok: true });
 }

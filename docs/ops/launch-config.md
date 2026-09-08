@@ -58,6 +58,44 @@ process and dies with it. **Only a sign-in started in the browser produces a
 clickable link** — so reproduce from the real login form before treating this
 as a bug.
 
+#### Check the link's `redirect_to` first
+
+Open the email, copy the link without clicking it, and read the `redirect_to`
+parameter:
+
+```
+https://<project>.supabase.co/auth/v1/verify?token=pkce_...&type=magiclink
+  &redirect_to=https://www.sabay.cc/auth/confirm
+                ^^^^^^^^^^^^^^^^^^^ must be the host you signed in from
+```
+
+**If that host is not the one you were on, sign-in cannot work and nothing
+else in this section applies.** The PKCE code verifier is stored in a cookie,
+and cookies belong to one origin: a link returning to a different host arrives
+with no verifier, so `/auth/confirm` has nothing to exchange the code with.
+This is what a stale hostname looks like — the link is well-formed, the mail
+is delivered, and every sign-in still fails.
+
+Two places can put the wrong host there, and both need to be right:
+
+1. **Vercel → Settings → Environment Variables → `NEXT_PUBLIC_SITE_URL`**
+   (Production scope). It is baked in at build time, so **redeploy** after
+   changing it — editing the variable alone does not reach the running build.
+2. **Supabase → Authentication → URL Configuration.** Set **Site URL** to the
+   live origin, and list `<site>/auth/confirm` under **Redirect URLs**.
+   Supabase *silently replaces* a `redirect_to` that is not allowlisted with
+   its own Site URL, so a correct app can still emit a wrong link. Keep the
+   `*.vercel.app` preview pattern in the list if you want preview deployments
+   to sign in too.
+
+The app now settles which of the two it is on its own. Every send logs
+`magic link sent` with the `emailRedirectTo` it *asked* for: if that line
+shows the right host but the email shows the wrong one, Supabase overrode it
+and the fix is the allowlist, not the env var. A deployment whose
+`NEXT_PUBLIC_SITE_URL` disagrees with the host being browsed also logs
+`emailed links point at a different origin than the request` at error level,
+which reaches Sentry.
+
 #### Read the error code first
 
 `/auth/confirm` now names the cause instead of collapsing everything into
@@ -84,7 +122,9 @@ This is the default failure and it is not a bug in the link. `signInWithOtp`
 stores a PKCE **code verifier** in a cookie belonging to the browser that
 requested the link. `/auth/confirm` needs that cookie to exchange the `code`.
 Open the mail anywhere else — your email app's in-app browser, or your phone
-when you requested the link on a laptop — and the cookie is not there.
+when you requested the link on a laptop — and the cookie is not there. A link
+whose `redirect_to` names a different host does the same thing for the same
+reason, so rule that out first with the section above.
 
 Two fixes, and you probably want both:
 

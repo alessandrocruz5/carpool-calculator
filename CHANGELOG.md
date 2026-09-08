@@ -13,6 +13,19 @@ semantic versioning.
   downstream at the SMTP provider.
 
 ### Fixed
+- Emailed sign-in and invite links could point at a hostname the user was never on,
+  which breaks sign-in completely rather than partially: the PKCE code verifier lives in a
+  cookie, cookies belong to one origin, and a link returning to a different host arrives with
+  no verifier for `/auth/confirm` to exchange the code with. The failure is invisible from
+  the outside — the mail is delivered and the link is well-formed — so it reads as "invalid
+  link". `NEXT_PUBLIC_SITE_URL` and the request origin are now resolved in one place
+  (`lib/auth/siteUrl.ts`, shared by `/api/auth/magic-link` and `/api/members` instead of
+  being duplicated), a mismatch between the two is logged at `error` so it reaches Sentry,
+  and a malformed or trailing-slash value no longer yields `https://host//auth/confirm`.
+- `/api/auth/magic-link` now logs the `emailRedirectTo` it requested. Supabase silently
+  substitutes its own Site URL for a `redirect_to` that is not in the dashboard allowlist, so
+  a correct app can still emit a wrong link; this line is what separates "the app asked for
+  the wrong host" from "Supabase overrode it", which is otherwise invisible in the email.
 - Sign-in links reported as "invalid" when they were fine. A magic link is bound by PKCE to
   the browser that requested it — the code verifier lives in a cookie there — so opening the
   mail in an email app's in-app browser, or on a phone after requesting on a laptop, leaves
