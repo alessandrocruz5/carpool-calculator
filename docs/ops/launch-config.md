@@ -72,10 +72,24 @@ responsible. Then corroborate with:
 3. **Sentry.** `magic link send failed` and `member invite email failed to
    send` both now carry the upstream `reason`.
 
+**If the send is accepted but nothing arrives**, the rejection causes below
+are all ruled out — GoTrue sends synchronously, so bad credentials, a
+CAPTCHA block and a rate limit would each have returned an error. One test
+separates the two remaining causes: send to an address that **is a member
+of your Supabase organization** and compare.
+
+- Member address arrives, others don't → **"Custom SMTP" is not actually
+  enabled/saved.** Supabase is still on its built-in sender, which only
+  delivers to your own org's members and silently drops everything else.
+  This is the usual cause of "the API says sent and no mail exists".
+- Neither arrives → custom SMTP is live but Resend is dropping it. Check
+  Resend → Emails for the message's status and that the domain is Verified.
+
 Then work the common causes:
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
+| Send is accepted, but mail only ever reaches your own org's members | "Custom SMTP" is off, so the built-in sender is in use | **Authentication → Emails → SMTP Settings** → enable Custom SMTP and save (§1 above) |
 | **Every** send fails, including the very first, with a CAPTCHA-ish error | **Authentication → Attack Protection** has CAPTCHA protection on while the deployment has no `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, so the widget renders nothing and no token is ever sent | Set the Turnstile env vars in Vercel and redeploy, or turn the toggle off until they are set — see the sequencing warning in §3 |
 | `535` / auth failed | Username is not literally `resend`, or the password is not a Resend API key | Username must be the literal string `resend`; the password is the API key (`re_…`) |
 | `550` / sender rejected | "Sender email" is not on a domain Resend shows as **Verified** | Use an address on the verified domain, or finish DKIM/SPF verification |

@@ -145,12 +145,24 @@ async function main(): Promise<void> {
   if (!error) {
     console.log(`\nSupabase ACCEPTED the send (${elapsed}ms).`);
     console.log(
-      "\nSo the rejection paths are ruled out: credentials, CAPTCHA and rate limits\n" +
-        "are all fine. If no mail arrives, it died after Supabase handed it off:\n" +
-        "  1. Resend -> Emails: if the message is not listed, Supabase is still using\n" +
-        "     its built-in sender — 'Custom SMTP' is not actually enabled/saved.\n" +
-        "  2. If it IS listed, read its status there (bounced, complained, suppressed).\n" +
-        "  3. Check spam, and confirm the sending domain shows Verified in Resend."
+      "\nThat rules out the whole rejection class — credentials, CAPTCHA and rate limits\n" +
+        "would all have returned an error here, because GoTrue sends synchronously. The\n" +
+        "message died AFTER Supabase handed it off. Two causes, and one test separates them:\n" +
+        "\n" +
+        "  Re-run this against an address that is a MEMBER of your Supabase organization,\n" +
+        "  and compare:\n" +
+        "\n" +
+        "    member address arrives, others don't\n" +
+        "      -> 'Custom SMTP' is not actually enabled/saved, so Supabase is still on its\n" +
+        "         built-in sender, which only delivers to your own org's members and\n" +
+        "         silently drops everything else. Fix: Authentication -> Emails -> SMTP\n" +
+        "         Settings, enable Custom SMTP and save (section 1 of the runbook).\n" +
+        "\n" +
+        "    nothing arrives for either\n" +
+        "      -> Custom SMTP is live but Resend is dropping it. Open Resend -> Emails:\n" +
+        "         if the message is not listed, the credentials point at a different\n" +
+        "         project; if it is, read its status (bounced, suppressed, spam) and\n" +
+        "         confirm the sending domain shows Verified."
     );
     return;
   }
