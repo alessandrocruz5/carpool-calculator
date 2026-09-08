@@ -46,8 +46,22 @@ export async function updateSession(request: NextRequest) {
   // redirects unauthenticated users to the login page.
   const isPublicLanding = !user && pathname === '/'
 
+  // Never redirect /api/* to the login page. A redirect answers an API call
+  // with a 307 to an HTML page, and because fetch() follows redirects the
+  // caller sees `res.ok === true` and a 200 of markup — a fake success that
+  // hides the failure completely. Three callers here are unauthenticated by
+  // design and were all silently broken by it: /api/auth/magic-link (the
+  // signed-out sign-in request itself — note it starts with `/api/auth`, so
+  // the `/auth` prefix below never covered it), /api/health (uptime probe),
+  // and /api/push/send (Vercel cron, which sends no session cookie and
+  // authenticates with CRON_SECRET). Every API route enforces its own auth
+  // and returns JSON, so letting them through denies nothing that was denied
+  // before — it just returns the right status instead of a login page.
+  const isApiRoute = pathname.startsWith('/api')
+
   if (
     !user &&
+    !isApiRoute &&
     pathname !== '/' &&
     !pathname.startsWith('/login') &&
     !pathname.startsWith('/auth') &&

@@ -153,6 +153,23 @@ async function viaApp(email: string, baseUrl: string): Promise<void> {
   console.log(`\n  status: ${res.status} (${elapsed}ms)`);
   console.log(`  body:   ${text.slice(0, 500)}`);
 
+  // A 2xx alone does not mean the route ran. Middleware redirecting an API call
+  // to the login page yields a followed redirect and a 200 of HTML, which reads
+  // as success to any caller that only checks res.ok — including the login form.
+  if (res.ok && !text.trimStart().startsWith("{")) {
+    console.log(
+      "\nStatus is 2xx but the body is NOT this route's JSON — it looks like a page.\n" +
+        "Nothing was sent. Something answered before the route did, and because fetch\n" +
+        "follows redirects a caller checking only res.ok would report success:\n" +
+        "  - Middleware redirecting the request to /auth/login (a signed-out API call\n" +
+        "    must never be redirected — it has to return JSON).\n" +
+        "  - A rewrite, proxy or CDN page in front of the app.\n" +
+        "Check the app's middleware first."
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   if (res.ok) {
     console.log(NOT_CLICKABLE);
     console.log(
