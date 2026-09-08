@@ -54,19 +54,113 @@ that is expected. Sign-in pairs the emailed link with a secret the
 requesting client keeps: plain `supabase-js` uses the implicit flow, whose
 tokens arrive in the URL fragment that browsers never send to a server, and
 `--via-app` mints a PKCE code whose verifier cookie goes to the script
-process and dies with it. `/auth/confirm` finds neither a `code` nor a
-`token_hash` and reports `invalid`. **Only a sign-in started in the browser
-produces a clickable link** — so reproduce from the real login form before
-treating this as a bug.
+process and dies with it. **Only a sign-in started in the browser produces a
+clickable link** — so reproduce from the real login form before treating this
+as a bug.
 
-If a link from the actual login form fails, the cause is one of:
+#### Check the link's `redirect_to` first
+
+Open the email, copy the link without clicking it, and read the `redirect_to`
+parameter:
+
+```
+https://<project>.supabase.co/auth/v1/verify?token=pkce_...&type=magiclink
+  &redirect_to=https://www.sabay.cc/auth/confirm
+                ^^^^^^^^^^^^^^^^^^^ must be the host you signed in from
+```
+
+**If that host is not the one you were on, sign-in cannot work and nothing
+else in this section applies.** The PKCE code verifier is stored in a cookie,
+and cookies belong to one origin: a link returning to a different host arrives
+with no verifier, so `/auth/confirm` has nothing to exchange the code with.
+This is what a stale hostname looks like — the link is well-formed, the mail
+is delivered, and every sign-in still fails.
+
+Two places can put the wrong host there, and both need to be right:
+
+1. **Vercel → Settings → Environment Variables → `NEXT_PUBLIC_SITE_URL`**
+   (Production scope). It is baked in at build time, so **redeploy** after
+   changing it — editing the variable alone does not reach the running build.
+2. **Supabase → Authentication → URL Configuration.** Set **Site URL** to the
+   live origin, and list `<site>/auth/confirm` under **Redirect URLs**.
+   Supabase *silently replaces* a `redirect_to` that is not allowlisted with
+   its own Site URL, so a correct app can still emit a wrong link. Keep the
+   `*.vercel.app` preview pattern in the list if you want preview deployments
+   to sign in too.
+
+The app now settles which of the two it is on its own. Every send logs
+`magic link sent` with the `emailRedirectTo` it *asked* for: if that line
+shows the right host but the email shows the wrong one, Supabase overrode it
+and the fix is the allowlist, not the env var. A deployment whose
+`NEXT_PUBLIC_SITE_URL` disagrees with the host being browsed also logs
+`emailed links point at a different origin than the request` at error level,
+which reaches Sentry.
+
+#### Read the error code first
+
+`/auth/confirm` now names the cause instead of collapsing everything into
+"invalid". Two places carry it:
+
+- **The URL the user lands on**: `/auth/error?error=<code>`.
+- **The platform logs** (Vercel → Deployment → Runtime Logs): a line
+  `auth confirm failed: <code>` carrying `stage`, `grant` and the upstream
+  `reason` verbatim. Only `invalid` escalates to Sentry — the rest are
+  expected in normal use and would drown it, so search the runtime logs, not
+  Sentry, when every sign-in is failing.
+
+| Code | Meaning | Where to look |
+| --- | --- | --- |
+| `wrong_browser` | The link was opened somewhere other than the browser that requested it. The link is fine | The table below — this is the common one |
+| `expired` | Link outlived its TTL | **Authentication → Email templates** → raise expiry |
+| `used` | The one-time token was already consumed — often by a mail scanner that fetched the URL first | The table below |
+| `incomplete` | The link reached us carrying no `code` and no `token_hash`+`type` | Email template is malformed, or the URL was truncated in transit |
+| `invalid` | Anything we could not explain. Paged to Sentry | Read the `reason` field on the log line |
+
+#### `wrong_browser`: why PKCE links are browser-bound
+
+This is the default failure and it is not a bug in the link. `signInWithOtp`
+stores a PKCE **code verifier** in a cookie belonging to the browser that
+requested the link. `/auth/confirm` needs that cookie to exchange the `code`.
+Open the mail anywhere else — your email app's in-app browser, or your phone
+when you requested the link on a laptop — and the cookie is not there. A link
+whose `redirect_to` names a different host does the same thing for the same
+reason, so rule that out first with the section above.
+
+Two fixes, and you probably want both:
+
+1. **Immediate, no config**: request the link and open it in the *same*
+   browser. The error page now says this and its "Send a new link" button
+   lands you on a form in the right browser.
+2. **Durable, one dashboard change**: make the link browser-independent by
+   switching the Supabase email template to the `token_hash` form.
+   `/auth/confirm` already accepts it and verifies it server-side with
+   `verifyOtp`, so no code change is needed.
+
+   Supabase dashboard → **Authentication → Email Templates → Magic Link**,
+   replace the `{{ .ConfirmationURL }}` link with:
+
+   ```html
+   <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink">Sign in to Sabay</a>
+   ```
+
+   Apply the same change to **Invite user** (`type=invite`) and **Change
+   Email Address** (`type=email_change`), which route through `/auth/confirm`
+   too. Confirm **Site URL** under **Authentication → URL Configuration** is
+   the live domain — `{{ .SiteURL }}` renders it verbatim into every link.
+
+   Trade-off worth knowing: a `token_hash` link works in any browser, which
+   is the point, but that also means anyone holding the URL can use it. Keep
+   the expiry short (**Authentication → Email templates**), and prefer this
+   only if the browser-bound flow is actually costing you sign-ins.
+
+#### The rest
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| Fails when opened from a mail app, works when pasted into the original browser | PKCE ties the link to the browser that requested it. An email client's in-app browser is a different browser, so the verifier cookie is missing | Switch the Supabase email template to the browser-independent form: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` — `/auth/confirm` already handles `token_hash` |
-| "already used", or fails on first click | A corporate mail scanner (Outlook Safe Links and similar) fetched the URL first and burned the one-time token | Same `token_hash` template change, plus keep link expiry short |
-| Always invalid, any browser | The redirect target isn't allowlisted, so Supabase never issues a usable code | **Authentication → URL Configuration**: set Site URL and add `<site>/auth/confirm` to Redirect URLs |
+| `used`, or fails on first click | A corporate mail scanner (Outlook Safe Links and similar) fetched the URL first and burned the one-time token | The `token_hash` template change above, plus keep link expiry short |
+| Always invalid, any browser, no verifier error | The redirect target isn't allowlisted, so Supabase never issues a usable code | **Authentication → URL Configuration**: set Site URL and add `<site>/auth/confirm` to Redirect URLs |
 | Worked, then stopped after a while | Link expired | Send a fresh one; tune expiry under **Authentication → Email templates** |
+| Link lands on the old Vercel host | `NEXT_PUBLIC_SITE_URL` in Vercel, or Supabase's Site URL, still points at the previous domain | Update both, then redeploy — env var edits do not reach deployments already built |
 
 ### Troubleshooting: "SMTP is not working"
 

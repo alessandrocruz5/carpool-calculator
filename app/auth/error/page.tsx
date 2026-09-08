@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-type ErrorCode = "expired" | "invalid" | "used";
+type ErrorCode = "expired" | "invalid" | "used" | "wrong_browser" | "incomplete";
 
 const ERRORS: Record<ErrorCode, { title: string; body: string }> = {
   expired: {
@@ -24,11 +24,25 @@ const ERRORS: Record<ErrorCode, { title: string; body: string }> = {
     body:
       "Each sign-in link works only once. Send a new one to sign in again.",
   },
+  // The link is fine — it was opened somewhere other than the browser that
+  // asked for it, which is where the matching secret lives. Sending a new link
+  // from *this* browser is the fix, so the button below already does the right
+  // thing; the copy just has to stop calling the link broken.
+  wrong_browser: {
+    title: "Open the link where you asked for it",
+    body:
+      "Sign-in links only work in the browser that requested them. This one was opened somewhere else — often your email app's built-in browser. Send a new link from here and open it here, or paste the link into the browser you started in.",
+  },
+  incomplete: {
+    title: "That link came through incomplete",
+    body:
+      "The sign-in details were missing from the address, which usually means the link was cut short somewhere between the email and your browser. Try opening it from the email again, or send a fresh one.",
+  },
 };
 
 function pickError(value: string | string[] | undefined): ErrorCode {
   const v = Array.isArray(value) ? value[0] : value;
-  if (v === "expired" || v === "invalid" || v === "used") return v;
+  if (v && v in ERRORS) return v as ErrorCode;
   return "invalid";
 }
 

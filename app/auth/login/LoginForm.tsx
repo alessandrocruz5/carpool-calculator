@@ -14,6 +14,12 @@ const ERROR_COPY: Record<string, string> = {
   invalid: "That sign-in link isn't valid. Send a new one.",
   invalid_link: "That sign-in link isn't valid. Send a new one.",
   used: "That sign-in link has already been used. Send a new one.",
+  // Not a broken link: it was opened outside the browser that requested it,
+  // so the send-a-new-link form right here is the fix.
+  wrong_browser:
+    "Sign-in links only work in the browser that asked for them. Send a new one below and open it in this browser.",
+  incomplete:
+    "That sign-in link arrived incomplete. Send a new one and open it straight from the email.",
   rate_limited: "Too many sign-in attempts. Try again in an hour.",
 };
 
