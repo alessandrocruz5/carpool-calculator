@@ -78,12 +78,33 @@ CAPTCHA block and a rate limit would each have returned an error. One test
 separates the two remaining causes: send to an address that **is a member
 of your Supabase organization** and compare.
 
-- Member address arrives, others don't → **"Custom SMTP" is not actually
-  enabled/saved.** Supabase is still on its built-in sender, which only
-  delivers to your own org's members and silently drops everything else.
-  This is the usual cause of "the API says sent and no mail exists".
+- Member address arrives, others don't → **"Custom SMTP" is not actually in
+  effect.** Supabase is still on its built-in sender, which only delivers to
+  your own org's members and silently drops everything else. This is the
+  usual cause of "the API says sent and no mail exists". A checked *Enable
+  Custom SMTP* box does not disprove it — an unsaved form, or the setting
+  living on a different project than the one you tested, both present
+  exactly this way. **Resend → Emails is the authority**: if the send is not
+  listed there, Resend was never in the path, whatever the checkbox says.
 - Neither arrives → custom SMTP is live but Resend is dropping it. Check
   Resend → Emails for the message's status and that the domain is Verified.
+
+Because of that first case, an org address arriving proves nothing on its
+own. Always confirm with an outside address before concluding SMTP works.
+
+**If a direct send arrives but signing in through the app still doesn't**,
+the two runs differ only in whose environment they use, so test the app's
+own path with its own environment:
+
+```bash
+npx tsx scripts/diagnose-email.ts you@example.com --via-app https://your-app.vercel.app
+```
+
+A split result means the deployment points at a different Supabase project
+than your `.env.local`. Compare `NEXT_PUBLIC_SUPABASE_URL` in Vercel →
+Settings → Environment Variables against the URL the script prints, and
+confirm a redeploy has happened since it last changed — env var edits do
+not reach deployments that were already built.
 
 Then work the common causes:
 
