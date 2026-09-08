@@ -240,3 +240,52 @@ describe("updateSession public landing at /", () => {
     expect(res.headers.get("location")).toContain("/auth/login");
   });
 });
+
+describe("updateSession does not redirect API routes", () => {
+  // Redirecting an API call sends a 307 to an HTML page. fetch() follows it, so
+  // the caller reads res.ok === true off a 200 of markup and reports success
+  // for a request that never ran — which is how a broken magic-link send still
+  // showed "Check your email".
+  it("lets a signed-out /api/auth/magic-link through instead of redirecting", async () => {
+    setSupa({ auth: { userId: null } });
+    const res = await updateSession(makeRequest("/api/auth/magic-link"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("lets the unauthenticated uptime probe reach /api/health", async () => {
+    setSupa({ auth: { userId: null } });
+    const res = await updateSession(makeRequest("/api/health"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("lets the cron reach /api/push/send, which carries no session cookie", async () => {
+    setSupa({ auth: { userId: null } });
+    const res = await updateSession(makeRequest("/api/push/send"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("lets a signed-out data route through so it can answer 401 JSON itself", async () => {
+    // Not a hole: every API route runs its own requireUser/requireDriver check.
+    // The route returning 401 JSON beats middleware returning a login page.
+    setSupa({ auth: { userId: null } });
+    const res = await updateSession(makeRequest("/api/trips"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("does not forward x-user-id for a signed-out API request", async () => {
+    setSupa({ auth: { userId: null } });
+    const res = await updateSession(makeRequest("/api/trips"));
+    expect(forwardedHeader(res, "x-user-id")).toBeNull();
+  });
+
+  it("still redirects signed-out page routes that merely contain 'api'", async () => {
+    setSupa({ auth: { userId: null } });
+    const res = await updateSession(makeRequest("/rapid"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/auth/login");
+  });
+});
