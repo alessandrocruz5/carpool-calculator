@@ -89,9 +89,21 @@ export default function LoginForm() {
           "Too many sign-in attempts for this email. Try again in an hour."
         );
       }
+      const body = (await res.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null;
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? "Couldn't send the sign-in link.");
+        throw new Error(body?.error ?? "Couldn't send the sign-in link.");
+      }
+      // A 2xx is not enough. fetch follows redirects, so anything that answers
+      // ahead of the route — middleware sending a signed-out API call to the
+      // login page, a proxy or CDN error page — arrives here as a 200 of HTML
+      // and would otherwise show "Check your email" for a link never sent.
+      // Require the route's own acknowledgement.
+      if (!body?.ok) {
+        throw new Error(
+          "The sign-in service didn't respond correctly, so no link was sent. Please try again or contact support."
+        );
       }
       setStatus("sent");
     } catch (err) {
