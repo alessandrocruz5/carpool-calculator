@@ -31,6 +31,19 @@
  * rate limit — the app endpoint additionally allows only 3 per hour per
  * address. Use an address you can read.
  *
+ * !! THE LINK IN THAT EMAIL WILL NOT WORK. Clicking it reports "link is
+ * invalid", and that is expected, not a bug in the app. This script measures
+ * DELIVERY ONLY.
+ *
+ * Why: sign-in completes by pairing the emailed link with a secret the
+ * requesting client kept. In default mode this script uses plain supabase-js,
+ * whose implicit flow returns tokens in the URL fragment — which browsers never
+ * send to a server, so /auth/confirm sees nothing to verify. In --via-app mode
+ * the deployment mints a PKCE code whose verifier cookie is handed to this
+ * process and dropped when it exits. Either way the secret is gone by the time
+ * you click. Only a sign-in started in the browser produces a usable link, so
+ * test the confirm step from the real login form.
+ *
  * Note on which ADDRESS you test with: Supabase's built-in sender delivers
  * only to members of your own Supabase organization. So an org address
  * arriving proves nothing on its own — always confirm with an outside
@@ -69,6 +82,17 @@ function loadEnvFile(path: string): boolean {
 const repoRoot = resolve(__dirname, "..");
 loadEnvFile(resolve(repoRoot, ".env.local"));
 loadEnvFile(resolve(repoRoot, ".env"));
+
+/**
+ * Printed on every successful send. Without it the natural next move is to
+ * click the link, get "link is invalid", and start debugging a confirm flow
+ * that was never exercised.
+ */
+const NOT_CLICKABLE =
+  "\n  NOTE: the link in this email will NOT work — clicking it reports\n" +
+  "  'link is invalid', and that is expected. Sign-in pairs the link with a\n" +
+  "  secret the requesting client keeps, and this process discards it on exit.\n" +
+  "  This checks DELIVERY only; test the confirm step from the real login form.";
 
 /** Upstream error text -> the dashboard setting that actually causes it. */
 const CAUSES: { match: RegExp; cause: string }[] = [
@@ -130,6 +154,7 @@ async function viaApp(email: string, baseUrl: string): Promise<void> {
   console.log(`  body:   ${text.slice(0, 500)}`);
 
   if (res.ok) {
+    console.log(NOT_CLICKABLE);
     console.log(
       "\nThe deployed app ACCEPTED the send, so its Supabase call returned no error.\n" +
         "If this mail never arrives while a direct send to the same address does, the two\n" +
@@ -213,6 +238,7 @@ async function main(): Promise<void> {
 
   if (!error) {
     console.log(`\nSupabase ACCEPTED the send (${elapsed}ms).`);
+    console.log(NOT_CLICKABLE);
     console.log(
       "\nThat rules out the whole rejection class — credentials, CAPTCHA and rate limits\n" +
         "would all have returned an error here, because GoTrue sends synchronously. The\n" +

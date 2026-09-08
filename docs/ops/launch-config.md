@@ -43,6 +43,31 @@ provider with a verified sending domain.
       the message headers show `spf=pass` and `dkim=pass` (Gmail: "Show
       original" on the received email).
 
+### Troubleshooting: "the sign-in link is invalid"
+
+Mail arriving and the link failing are separate problems — a delivered email
+means SMTP is working, so stop looking at SMTP.
+
+**First rule out the diagnostic itself.** Links from
+`scripts/diagnose-email.ts` are *always* rejected, in both of its modes, and
+that is expected. Sign-in pairs the emailed link with a secret the
+requesting client keeps: plain `supabase-js` uses the implicit flow, whose
+tokens arrive in the URL fragment that browsers never send to a server, and
+`--via-app` mints a PKCE code whose verifier cookie goes to the script
+process and dies with it. `/auth/confirm` finds neither a `code` nor a
+`token_hash` and reports `invalid`. **Only a sign-in started in the browser
+produces a clickable link** — so reproduce from the real login form before
+treating this as a bug.
+
+If a link from the actual login form fails, the cause is one of:
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Fails when opened from a mail app, works when pasted into the original browser | PKCE ties the link to the browser that requested it. An email client's in-app browser is a different browser, so the verifier cookie is missing | Switch the Supabase email template to the browser-independent form: `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email` — `/auth/confirm` already handles `token_hash` |
+| "already used", or fails on first click | A corporate mail scanner (Outlook Safe Links and similar) fetched the URL first and burned the one-time token | Same `token_hash` template change, plus keep link expiry short |
+| Always invalid, any browser | The redirect target isn't allowlisted, so Supabase never issues a usable code | **Authentication → URL Configuration**: set Site URL and add `<site>/auth/confirm` to Redirect URLs |
+| Worked, then stopped after a while | Link expired | Send a fresh one; tune expiry under **Authentication → Email templates** |
+
 ### Troubleshooting: "SMTP is not working"
 
 No SMTP credentials or mail code live in this repo. Every email the app
