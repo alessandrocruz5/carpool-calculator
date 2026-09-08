@@ -43,6 +43,43 @@ provider with a verified sending domain.
       the message headers show `spf=pass` and `dkim=pass` (Gmail: "Show
       original" on the received email).
 
+### Troubleshooting: "SMTP is not working"
+
+No SMTP credentials or mail code live in this repo. Every email the app
+sends — magic-link sign-in (`/api/auth/magic-link` → `signInWithOtp`),
+group invites (`/api/members` → `admin.inviteUserByEmail`), and email
+changes (`/api/account/change-email` → `updateUser`) — is handed to
+Supabase Auth, which sends it over the SMTP configured above. **So a
+delivery failure is dashboard or Resend configuration, not a code
+change.**
+
+Read the cause first, in this order:
+
+1. **Supabase dashboard → Logs → Auth logs.** Filter for the failing
+   send. This carries the upstream SMTP error verbatim and is the single
+   most useful signal.
+2. **Resend → Emails.** If the message reached Resend, the problem is
+   downstream (bounce, spam placement, suppression) rather than SMTP auth.
+3. **Sentry.** A rejected invite send is reported as
+   `member invite email failed to send` with the upstream `reason`.
+
+Then work the common causes:
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `535` / auth failed | Username is not literally `resend`, or the password is not a Resend API key | Username must be the literal string `resend`; the password is the API key (`re_…`) |
+| `550` / sender rejected | "Sender email" is not on a domain Resend shows as **Verified** | Use an address on the verified domain, or finish DKIM/SPF verification |
+| Connection times out | Port `465` (implicit TLS) blocked upstream | Try port `587` (STARTTLS) with the same credentials |
+| `429` / "email rate limit exceeded" | Supabase Auth's own per-hour email cap, which applies **even with custom SMTP** | Dashboard → **Authentication → Rate Limits** → raise "Emails sent per hour" |
+| Sign-in says "too many requests" but no SMTP error appears | The app's own limit — 3 magic links per hour per address (`/api/auth/magic-link`) — never reached Supabase | Expected; wait out the hour or test with another address |
+| Nothing arrives after ~100 messages in a day | Resend free tier caps at 100/day, 3,000/month | Wait for the reset or upgrade the Resend plan |
+| Email arrives, but the link lands on the wrong host | `NEXT_PUBLIC_SITE_URL` unset, or the redirect is not allowlisted | Set `NEXT_PUBLIC_SITE_URL`, and add `<site>/auth/confirm` under **Authentication → URL Configuration → Redirect URLs** |
+
+A group invite whose email fails still records a durable membership — the
+invitee is claimed on first sign-in — and `/admin/members` now says so and
+prompts the driver to pass the sign-in link on by hand. Magic-link sign-in
+has no such fallback: if SMTP is down, nobody new can get in.
+
 ## 2. Leaked-password protection
 
 Supabase can reject passwords that appear in known breach databases

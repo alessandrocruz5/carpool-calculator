@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/) and this project adheres to
 semantic versioning.
 
+## [Unreleased]
+
+### Fixed
+- Email send failures are no longer silent. A rejected group-invite email logged only
+  `{ groupId }` at `warn` — dropping the upstream SMTP reason and never reaching Sentry —
+  while `/api/members` returned a bare `ok`, so `/admin/members` showed a success toast for
+  an email that was never delivered. The route now logs the upstream reason and status at
+  `error` (so a broken SMTP config surfaces in Sentry) and reports an `emailed` flag; the
+  admin UI tells the driver the member was added but the invite email failed, and to pass
+  the sign-in link on by hand. The membership itself was and remains durable — claimed on
+  first sign-in — and the request still degrades to `ok`.
+
+### Changed
+- `docs/ops/launch-config.md` gains an SMTP troubleshooting section: where the app's three
+  email paths actually send from, which logs to read in what order, and the common causes
+  (sender domain not verified, `resend` username, port 465 vs 587, Supabase's own per-hour
+  email cap, the app's 3/hour magic-link limit, Resend's free-tier daily cap, redirect-URL
+  allowlisting).
+
 ## [2.2.0] — 2026-07-18
 
 Sprint 7 — Public self-serve launch hardening. Closes the go-live gaps for opening the app
