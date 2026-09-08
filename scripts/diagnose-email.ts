@@ -173,9 +173,38 @@ async function viaApp(email: string, baseUrl: string): Promise<void> {
     process.exitCode = 1;
     return;
   }
+  if (res.status === 404 || res.status === 405) {
+    console.log(
+      "\nThat endpoint does NOT EXIST at this host — nothing was sent, and this says\n" +
+        "nothing about email. Whatever answered is not serving this app's routes.\n" +
+        "  - Is this the right origin? Try the Vercel deployment URL directly.\n" +
+        "  - Is the domain attached to THIS Vercel project, and is a build assigned\n" +
+        "    to it? A domain pointed elsewhere answers 404 for every route.\n" +
+        "  - Compare with a page route: `curl -I <host>/auth/login`. A 404 there too\n" +
+        "    means the host serves none of the app, not just this endpoint.\n" +
+        "If real users reach the app at this host, sign-in cannot work here at all,\n" +
+        "and any emailed link pointing at it (NEXT_PUBLIC_SITE_URL) is equally dead."
+    );
+    process.exitCode = 1;
+    return;
+  }
+  if (res.status === 401 || res.status === 403) {
+    console.log(
+      "\nThe host refused the request before the app saw it — typically Vercel\n" +
+        "Deployment Protection on a preview URL. Test the public production URL, or\n" +
+        "disable protection for this deployment."
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const looksJson = text.trimStart().startsWith("{");
   console.log(
-    "\nThe deployed app REJECTED the send. The body above carries Supabase's reason;\n" +
-      "match it against the causes in docs/ops/launch-config.md."
+    looksJson
+      ? "\nThe app REJECTED the send. The body above carries the upstream reason; match\n" +
+          "  it against the causes in docs/ops/launch-config.md."
+      : "\nThe response is not this app's JSON, so the request likely never reached the\n" +
+          "  route — a proxy, redirect or error page answered instead. Confirm the origin\n" +
+          "  really serves the app before reading anything into this."
   );
   process.exitCode = 1;
 }
