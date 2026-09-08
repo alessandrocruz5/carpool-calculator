@@ -13,6 +13,26 @@ semantic versioning.
   downstream at the SMTP provider.
 
 ### Fixed
+- Sign-in links reported as "invalid" when they were fine. A magic link is bound by PKCE to
+  the browser that requested it — the code verifier lives in a cookie there — so opening the
+  mail in an email app's in-app browser, or on a phone after requesting on a laptop, leaves
+  nothing to exchange the code with. `auth-js` reports that as an ordinary 400, so
+  `/auth/confirm` filed it under `invalid` and told the user the link was "mistyped, or
+  issued for a different account": both wrong, and neither hints at the one thing that
+  works. It is now classified as `wrong_browser`, with copy that says to open the link where
+  it was requested. `docs/ops/launch-config.md` documents the durable fix — switching the
+  Supabase email template to the browser-independent `token_hash` form, which
+  `/auth/confirm` already accepts.
+- `/auth/confirm` discarded every upstream reason, so a failed confirmation left no trace
+  anywhere and "the link is invalid" could not be told apart from a misconfigured dashboard
+  without guessing. It now logs `auth confirm failed: <code>` with the stage, which grant the
+  link carried, and the upstream reason verbatim — never the `code` or `token_hash`
+  themselves, which are live credentials. Only the unexplained `invalid` bucket escalates to
+  Sentry; the causes that are routine in normal use (expiry, a mail scanner burning a
+  one-time token, a link opened in the wrong browser) stay at `warn` so they cannot drown it.
+- A link arriving with neither `code` nor `token_hash` is now reported as `incomplete`
+  instead of `invalid`, separating a truncated or malformed template from a rejected
+  credential.
 - `/api/auth/magic-link` logged nothing server-side, so a dashboard misconfiguration that
   rejects every sign-in (CAPTCHA protection enabled while the client sends no Turnstile
   token, custom SMTP refusing the handoff) left no trace anywhere. It now records the
