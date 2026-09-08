@@ -6,7 +6,18 @@ semantic versioning.
 
 ## [Unreleased]
 
+### Added
+- `scripts/diagnose-email.ts` — asks Supabase to send a real magic link and prints the raw
+  upstream error, then maps it to the dashboard setting responsible. Answers the question
+  the UI cannot: whether Supabase *rejected* the send or *accepted* it and the message died
+  downstream at the SMTP provider.
+
 ### Fixed
+- `/api/auth/magic-link` logged nothing server-side, so a dashboard misconfiguration that
+  rejects every sign-in (CAPTCHA protection enabled while the client sends no Turnstile
+  token, custom SMTP refusing the handoff) left no trace anywhere. It now records the
+  upstream reason: `error` for a 5xx send failure (reaching Sentry), `warn` for a 4xx, so
+  bot traffic can't spam it. The address is not logged.
 - Email send failures are no longer silent. A rejected group-invite email logged only
   `{ groupId }` at `warn` — dropping the upstream SMTP reason and never reaching Sentry —
   while `/api/members` returned a bare `ok`, so `/admin/members` showed a success toast for

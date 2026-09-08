@@ -53,20 +53,30 @@ Supabase Auth, which sends it over the SMTP configured above. **So a
 delivery failure is dashboard or Resend configuration, not a code
 change.**
 
-Read the cause first, in this order:
+First, settle the one question that splits the diagnosis in half — did
+Supabase **reject** the send, or **accept** it and the mail died downstream?
+Those look identical from the browser. Ask Supabase directly:
 
-1. **Supabase dashboard → Logs → Auth logs.** Filter for the failing
-   send. This carries the upstream SMTP error verbatim and is the single
-   most useful signal.
-2. **Resend → Emails.** If the message reached Resend, the problem is
-   downstream (bounce, spam placement, suppression) rather than SMTP auth.
-3. **Sentry.** A rejected invite send is reported as
-   `member invite email failed to send` with the upstream `reason`.
+```bash
+npx tsx scripts/diagnose-email.ts you@example.com
+```
+
+It prints the raw upstream error and maps it to the dashboard setting
+responsible. Then corroborate with:
+
+1. **Supabase dashboard → Logs → Auth logs.** Carries the upstream SMTP
+   error verbatim.
+2. **Resend → Emails.** If the message is not listed at all, Supabase is
+   still using its built-in sender — "Custom SMTP" was never actually
+   enabled or saved. If it is listed, read its delivery status there.
+3. **Sentry.** `magic link send failed` and `member invite email failed to
+   send` both now carry the upstream `reason`.
 
 Then work the common causes:
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
+| **Every** send fails, including the very first, with a CAPTCHA-ish error | **Authentication → Attack Protection** has CAPTCHA protection on while the deployment has no `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, so the widget renders nothing and no token is ever sent | Set the Turnstile env vars in Vercel and redeploy, or turn the toggle off until they are set — see the sequencing warning in §3 |
 | `535` / auth failed | Username is not literally `resend`, or the password is not a Resend API key | Username must be the literal string `resend`; the password is the API key (`re_…`) |
 | `550` / sender rejected | "Sender email" is not on a domain Resend shows as **Verified** | Use an address on the verified domain, or finish DKIM/SPF verification |
 | Connection times out | Port `465` (implicit TLS) blocked upstream | Try port `587` (STARTTLS) with the same credentials |
