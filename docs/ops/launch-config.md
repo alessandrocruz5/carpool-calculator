@@ -43,6 +43,67 @@ provider with a verified sending domain.
       the message headers show `spf=pass` and `dkim=pass` (Gmail: "Show
       original" on the received email).
 
+### Troubleshooting: "SMTP is not working"
+
+No SMTP credentials or mail code live in this repo. Every email the app
+sends — magic-link sign-in (`/api/auth/magic-link` → `signInWithOtp`),
+group invites (`/api/members` → `admin.inviteUserByEmail`), and email
+changes (`/api/account/change-email` → `updateUser`) — is handed to
+Supabase Auth, which sends it over the SMTP configured above. **So a
+delivery failure is dashboard or Resend configuration, not a code
+change.**
+
+First, settle the one question that splits the diagnosis in half — did
+Supabase **reject** the send, or **accept** it and the mail died downstream?
+Those look identical from the browser. Ask Supabase directly:
+
+```bash
+npx tsx scripts/diagnose-email.ts you@example.com
+```
+
+It prints the raw upstream error and maps it to the dashboard setting
+responsible. Then corroborate with:
+
+1. **Supabase dashboard → Logs → Auth logs.** Carries the upstream SMTP
+   error verbatim.
+2. **Resend → Emails.** If the message is not listed at all, Supabase is
+   still using its built-in sender — "Custom SMTP" was never actually
+   enabled or saved. If it is listed, read its delivery status there.
+3. **Sentry.** `magic link send failed` and `member invite email failed to
+   send` both now carry the upstream `reason`.
+
+**If the send is accepted but nothing arrives**, the rejection causes below
+are all ruled out — GoTrue sends synchronously, so bad credentials, a
+CAPTCHA block and a rate limit would each have returned an error. One test
+separates the two remaining causes: send to an address that **is a member
+of your Supabase organization** and compare.
+
+- Member address arrives, others don't → **"Custom SMTP" is not actually
+  enabled/saved.** Supabase is still on its built-in sender, which only
+  delivers to your own org's members and silently drops everything else.
+  This is the usual cause of "the API says sent and no mail exists".
+- Neither arrives → custom SMTP is live but Resend is dropping it. Check
+  Resend → Emails for the message's status and that the domain is Verified.
+
+Then work the common causes:
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Send is accepted, but mail only ever reaches your own org's members | "Custom SMTP" is off, so the built-in sender is in use | **Authentication → Emails → SMTP Settings** → enable Custom SMTP and save (§1 above) |
+| **Every** send fails, including the very first, with a CAPTCHA-ish error | **Authentication → Attack Protection** has CAPTCHA protection on while the deployment has no `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, so the widget renders nothing and no token is ever sent | Set the Turnstile env vars in Vercel and redeploy, or turn the toggle off until they are set — see the sequencing warning in §3 |
+| `535` / auth failed | Username is not literally `resend`, or the password is not a Resend API key | Username must be the literal string `resend`; the password is the API key (`re_…`) |
+| `550` / sender rejected | "Sender email" is not on a domain Resend shows as **Verified** | Use an address on the verified domain, or finish DKIM/SPF verification |
+| Connection times out | Port `465` (implicit TLS) blocked upstream | Try port `587` (STARTTLS) with the same credentials |
+| `429` / "email rate limit exceeded" | Supabase Auth's own per-hour email cap, which applies **even with custom SMTP** | Dashboard → **Authentication → Rate Limits** → raise "Emails sent per hour" |
+| Sign-in says "too many requests" but no SMTP error appears | The app's own limit — 3 magic links per hour per address (`/api/auth/magic-link`) — never reached Supabase | Expected; wait out the hour or test with another address |
+| Nothing arrives after ~100 messages in a day | Resend free tier caps at 100/day, 3,000/month | Wait for the reset or upgrade the Resend plan |
+| Email arrives, but the link lands on the wrong host | `NEXT_PUBLIC_SITE_URL` unset, or the redirect is not allowlisted | Set `NEXT_PUBLIC_SITE_URL`, and add `<site>/auth/confirm` under **Authentication → URL Configuration → Redirect URLs** |
+
+A group invite whose email fails still records a durable membership — the
+invitee is claimed on first sign-in — and `/admin/members` now says so and
+prompts the driver to pass the sign-in link on by hand. Magic-link sign-in
+has no such fallback: if SMTP is down, nobody new can get in.
+
 ## 2. Leaked-password protection
 
 Supabase can reject passwords that appear in known breach databases

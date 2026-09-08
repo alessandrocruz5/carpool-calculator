@@ -199,6 +199,7 @@ describe("POST /api/members", () => {
     expect((inviteCalls[0].options as { redirectTo: string }).redirectTo).toMatch(
       /\/auth\/confirm$/
     );
+    expect(await res.json()).toMatchObject({ ok: true, emailed: true });
   });
 
   it("looks up a pending invite case-insensitively (mixed-case New@B.com)", async () => {
@@ -239,6 +240,8 @@ describe("POST /api/members", () => {
     );
     expect(res.status).toBe(200);
     expect(inviteCalls).toHaveLength(0);
+    // No email was owed, so this must not read as an undelivered one.
+    expect(await res.json()).toMatchObject({ ok: true, emailed: null });
   });
 
   it("still succeeds when a racing sign-up makes the invite say 'already registered'", async () => {
@@ -257,6 +260,8 @@ describe("POST /api/members", () => {
     );
     expect(res.status).toBe(200);
     expect(inviteCalls).toHaveLength(1);
+    // The account exists now, so there is nothing for the driver to work around.
+    expect(await res.json()).toMatchObject({ ok: true, emailed: true });
   });
 
   it("degrades to ok when the invite email fails to send", async () => {
@@ -276,6 +281,9 @@ describe("POST /api/members", () => {
     );
     expect(res.status).toBe(200);
     expect(inviteCalls).toHaveLength(1);
+    // Durable membership, undelivered email: the admin UI needs this to tell the
+    // driver to pass the sign-in link on by hand.
+    expect(await res.json()).toMatchObject({ ok: true, emailed: false });
   });
 });
 
