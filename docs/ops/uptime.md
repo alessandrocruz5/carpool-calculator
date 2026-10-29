@@ -45,6 +45,14 @@ Replace `<prod-url>` with the production domain (e.g. `carpool-calculator.exampl
 | Request timeout | 30 seconds |
 | Follow redirects | Yes |
 
+## Supabase keep-alive
+
+- **Why:** Supabase free tier pauses a project after 7 days of inactivity. A paused project takes the whole app down until someone restores it by hand.
+- **What:** the Vercel cron in `vercel.json` calls `GET /api/health` daily at `0 1 * * *` (01:00 UTC / 09:00 PHT). The route pings the DB with a `settings` select.
+- **Public by design:** `/api/health` is deliberately public. `lib/supabase/middleware.ts` never redirects `/api/*` to the login page, and the route returns only status JSON.
+- **Verify:** Vercel → Settings → Cron Jobs lists `/api/health` (use "Run" to trigger it once and expect `200`). Supabase → Logs → API shows the daily request.
+- **Limits:** the cron runs only on the Production deployment (not staging or previews), and it cannot wake a project that is already paused. Restore that from the Supabase dashboard.
+
 ## Alert Channels
 
 | Channel | Destination |
