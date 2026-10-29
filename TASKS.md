@@ -5,12 +5,11 @@ Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded 
 Epic: SABAY-50 · Branch base: `develop` · target version: v2.4.0 (MINOR)
 
 The free-tier Supabase project pauses after 7 days without API traffic, which takes the app down until
-it is restored by hand. A signed-out `/api/health` is currently redirected to `/auth/login` by the session
-middleware, so its DB ping never runs. This sprint exempts exactly `/api/health` from that redirect and adds a
-daily Vercel cron on it. The same redirect also blocks the `/api/push/send` cron; that fix is split out as a
-separate hotfix. Sprint 8's v2.3.0 roll-up is still outstanding, so this sprint targets v2.4.0.
+it is restored by hand. The planned middleware exemption for `/api/health` was already shipped by commit
+`7e79113` (all signed-out `/api/*` pass through, `/api/push/send` included), so this sprint only adds a daily
+Vercel cron on `/api/health`. Sprint 8's v2.3.0 roll-up is still outstanding, so this sprint targets v2.4.0.
 
-- [ ] SABAY-51 — Supabase keep-alive: public `/api/health` + daily cron · Added · plan: [[2026-10-29-supabase-keep-alive]] prompts: 01, 02 · depends: — · high-stakes (auth middleware → code-guardian) · model: opus
+- [x] SABAY-51 — Supabase keep-alive: public `/api/health` + daily cron · Added · plan: [[2026-10-29-supabase-keep-alive]] prompts: 02 (01 skipped: already in 7e79113) · depends: — · model: haiku (merged 2026-10-29, PR #198) — daily `/api/health` cron `0 1 * * *` + ops note; middleware exemption was already in 7e79113, prompt 01 skipped. Downstream: none.
 
 ## Sprint 8 — Retroactive trips with per-day snapshot   (planned 2026-08-20)
 Epic: SABAY-45 · base branch: `develop` · target version: v2.3.0 (MINOR)

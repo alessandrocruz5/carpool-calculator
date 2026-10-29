@@ -3,7 +3,7 @@ type: prompt
 plan: "[[2026-10-29-supabase-keep-alive]]"
 id: 01
 unit: SABAY-51
-status: todo
+status: skipped
 model: opus
 effort: high
 depends_on: []

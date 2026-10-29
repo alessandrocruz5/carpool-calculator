@@ -1,7 +1,7 @@
 ---
 type: plan
 kind: feature
-status: audited
+status: done
 repo: carpool-calculator
 delivery: pr
 base: develop
@@ -85,7 +85,7 @@ tags: [plan]
 ## Units
 | Unit | Title | Category | Prompts | Depends | High-stakes | Acceptance criteria |
 |---|---|---|---|---|---|---|
-| SABAY-51 | Supabase keep-alive: public `/api/health` + daily cron | Added | 01, 02 | — | yes (auth middleware → code-guardian) | R1: signed-out `GET /api/health` returns the handler's JSON (200/503), not a 307. Every other signed-out non-public path still 307s to `/auth/login`, and `/api/healthz` / `/api/health/x` are not exempt. R2: `vercel.json` declares a daily cron on `/api/health`. After the prod deploy, Vercel lists it, and Supabase API logs show a daily request. |
+| SABAY-51 | Supabase keep-alive: public `/api/health` + daily cron | Added | 01, 02 | — | yes (auth middleware → code-guardian) | R1: signed-out `GET /api/health` returns the handler's JSON (200/503), not a 307 — already met by `7e79113` (all signed-out `/api/*` pass `isApiRoute`; covered in `middleware.test.ts` "does not redirect API routes"). R2: `vercel.json` declares a daily cron on `/api/health`. After the prod deploy, Vercel lists it, and Supabase API logs show a daily request. |
 
 ## Prompts
 | # | Title | Unit | Model | Effort | Depends | Group | Files |
@@ -119,3 +119,11 @@ Revert the SABAY-51 merge commit. The middleware goes back to redirecting `/api/
 ## Log
 - 2026-10-29: planned. The user chose to split the `/api/push/send` middleware fix into a separate hotfix.
 - 2026-10-29: audited (PASS), 0 fixes applied. 6 NOTEs, see [[2026-10-29-supabase-keep-alive.audit]]. Sprint 9 targets v2.4.0, since the Sprint 8 v2.3.0 roll-up is still outstanding.
+- 2026-10-29: build started on SABAY-51; rollback point b84767baa251f99a8052f8ff32493d89e8ef268b
+- 2026-10-29: 01 skipped (opus, 0 retries): R1 already shipped in `7e79113` (Sprint-era fix, 2026-09-08) — `isApiRoute` lets every signed-out `/api/*` through, with tests. Plan and audit missed it; the exact-match predicate would be dead code and the `/api/healthz` → 307 test would fail. User chose skip. Consequences: the unit no longer touches the auth middleware; the `/api/push/send` hotfix follow-up is moot (that cron is already unblocked).
+- 2026-10-29: 02 done (haiku, 0 retries): daily `/api/health` cron (`0 1 * * *`) in vercel.json + "Supabase keep-alive" section in docs/ops/uptime.md. Doc bullet reworded to "middleware never redirects `/api/*`" to match 7e79113.
+- 2026-10-29: shipped as PR #198 (b64c23f) to develop; local lint/tsc/test/build green, e2e green in CI (not runnable locally: no service key in .env.local).
+- 2026-10-29: SABAY-51 merged (PR #198). Plan done.
+
+## Outcome
+Shipped: daily `/api/health` Vercel cron (`0 1 * * *`) and the "Supabase keep-alive" runbook section. Deviation: prompt 01 (middleware exemption) was skipped because `7e79113` (2026-09-08) already lets all signed-out `/api/*` through; the plan/audit missed it, and the separate `/api/push/send` hotfix is moot. Gotcha: before planning a middleware/auth change, check `git log -S` / the current file, not just the plan's assumptions. Still to verify after the prod deploy: Vercel Cron Jobs lists the entry, and Supabase API logs show the daily `settings` select.
