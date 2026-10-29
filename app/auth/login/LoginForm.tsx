@@ -14,6 +14,12 @@ const ERROR_COPY: Record<string, string> = {
   invalid: "That sign-in link isn't valid. Send a new one.",
   invalid_link: "That sign-in link isn't valid. Send a new one.",
   used: "That sign-in link has already been used. Send a new one.",
+  // Not a broken link: it was opened outside the browser that requested it,
+  // so the send-a-new-link form right here is the fix.
+  wrong_browser:
+    "Sign-in links only work in the browser that asked for them. Send a new one below and open it in this browser.",
+  incomplete:
+    "That sign-in link arrived incomplete. Send a new one and open it straight from the email.",
   rate_limited: "Too many sign-in attempts. Try again in an hour.",
 };
 
@@ -89,9 +95,21 @@ export default function LoginForm() {
           "Too many sign-in attempts for this email. Try again in an hour."
         );
       }
+      const body = (await res.json().catch(() => null)) as
+        | { ok?: boolean; error?: string }
+        | null;
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? "Couldn't send the sign-in link.");
+        throw new Error(body?.error ?? "Couldn't send the sign-in link.");
+      }
+      // A 2xx is not enough. fetch follows redirects, so anything that answers
+      // ahead of the route — middleware sending a signed-out API call to the
+      // login page, a proxy or CDN error page — arrives here as a 200 of HTML
+      // and would otherwise show "Check your email" for a link never sent.
+      // Require the route's own acknowledgement.
+      if (!body?.ok) {
+        throw new Error(
+          "The sign-in service didn't respond correctly, so no link was sent. Please try again or contact support."
+        );
       }
       setStatus("sent");
     } catch (err) {
