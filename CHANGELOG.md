@@ -6,13 +6,24 @@ semantic versioning.
 
 ## [Unreleased]
 
+## [2.4.0] — 2026-10-29
+
 ### Added
+- Retroactive trips: the driver can backfill a forgotten trip from the Trip page for any day in the
+  current Sunday-anchored window, and it prices as if logged that day. Each trip now stores the
+  mileage (km/L) and gas price it was priced with (two nullable columns on `trips`; older trips
+  recompute exactly as before). (Sprint 8)
+- Daily Supabase keep-alive: a Vercel cron calls `/api/health` at 01:00 UTC so the free-tier project
+  never reaches its 7-day inactivity pause. Documented in `docs/ops/uptime.md`. (Sprint 9)
 - `scripts/diagnose-email.ts` — asks Supabase to send a real magic link and prints the raw
   upstream error, then maps it to the dashboard setting responsible. Answers the question
   the UI cannot: whether Supabase *rejected* the send or *accepted* it and the message died
   downstream at the SMTP provider.
 
 ### Fixed
+- The payment split no longer uses the client's current gas price and live rolling mileage at save
+  time; it uses the trip's frozen snapshot. The Sheets export's Legs tab reads the same snapshot, so its
+  recomputed shares match the stored balances. (Sprint 8)
 - Emailed sign-in and invite links could point at a hostname the user was never on,
   which breaks sign-in completely rather than partially: the PKCE code verifier lives in a
   cookie, cookies belong to one origin, and a link returning to a different host arrives with
