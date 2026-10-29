@@ -1,7 +1,7 @@
 # Carpool Calculator — Sprints
 Status: [ ] planned · [~] in progress · [x] merged · [-] cancelled (excluded from changelog)
 
-## Sprint 9 — Keep Supabase awake   (planned 2026-10-29)
+## Sprint 9 — Keep Supabase awake   (planned 2026-10-29 · released v2.4.0 2026-10-29)
 Epic: SABAY-50 · Branch base: `develop` · target version: v2.4.0 (MINOR)
 
 The free-tier Supabase project pauses after 7 days without API traffic, which takes the app down until
@@ -11,8 +11,8 @@ Vercel cron on `/api/health`. Sprint 8's v2.3.0 roll-up is still outstanding, so
 
 - [x] SABAY-51 — Supabase keep-alive: public `/api/health` + daily cron · Added · plan: [[2026-10-29-supabase-keep-alive]] prompts: 02 (01 skipped: already in 7e79113) · depends: — · model: haiku (merged 2026-10-29, PR #198) — daily `/api/health` cron `0 1 * * *` + ops note; middleware exemption was already in 7e79113, prompt 01 skipped. Downstream: none.
 
-## Sprint 8 — Retroactive trips with per-day snapshot   (planned 2026-08-20)
-Epic: SABAY-45 · base branch: `develop` · target version: v2.3.0 (MINOR)
+## Sprint 8 — Retroactive trips with per-day snapshot   (planned 2026-08-20 · released v2.4.0 2026-10-29)
+Epic: SABAY-45 · base branch: `develop` · target version: v2.3.0 (MINOR) — shipped together with Sprint 9 as v2.4.0
 
 Let the driver backfill a forgotten trip on a later day and have it price as if logged that day.
 The snapshot grain is the **trip**, not the month: store the two calc inputs that drift — mileage
