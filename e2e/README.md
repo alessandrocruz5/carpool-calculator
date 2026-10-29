@@ -31,7 +31,6 @@ This keeps the test surface 1:1 with the real client (same SDK, same RLS,
 same cookies after SSR refresh) while skipping the email round-trip.
 
 ### Required env vars
-
 | Var                                    | Used for                                |
 | -------------------------------------- | --------------------------------------- |
 | `NEXT_PUBLIC_SUPABASE_URL`             | Supabase project URL (dev branch in CI) |
