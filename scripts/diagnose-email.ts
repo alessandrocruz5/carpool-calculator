@@ -14,13 +14,40 @@
  *
  * Usage:
  *   npx tsx scripts/diagnose-email.ts you@example.com
+ *   npx tsx scripts/diagnose-email.ts you@example.com --via-app https://your-app.vercel.app
+ *
+ * Default mode calls Supabase directly with the local env. `--via-app` instead
+ * POSTs to that deployment's own /api/auth/magic-link, which is the path real
+ * users take. Run both when a direct send works but signing in does not: they
+ * differ only in whose environment is used, so a split result means the
+ * deployment is pointed at a different Supabase project than your .env.local.
  *
  * Required env (loaded from .env.local then .env automatically):
  *   NEXT_PUBLIC_SUPABASE_URL              - Supabase project URL
  *   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY  - anon/publishable key
+ *   (not needed for --via-app, which uses the deployment's own env)
  *
  * This sends a REAL magic-link email and counts against the project's auth
- * rate limit. Use an address you can read.
+ * rate limit — the app endpoint additionally allows only 3 per hour per
+ * address. Use an address you can read.
+ *
+ * !! THE LINK IN THAT EMAIL WILL NOT WORK. Clicking it reports "link is
+ * invalid", and that is expected, not a bug in the app. This script measures
+ * DELIVERY ONLY.
+ *
+ * Why: sign-in completes by pairing the emailed link with a secret the
+ * requesting client kept. In default mode this script uses plain supabase-js,
+ * whose implicit flow returns tokens in the URL fragment — which browsers never
+ * send to a server, so /auth/confirm sees nothing to verify. In --via-app mode
+ * the deployment mints a PKCE code whose verifier cookie is handed to this
+ * process and dropped when it exits. Either way the secret is gone by the time
+ * you click. Only a sign-in started in the browser produces a usable link, so
+ * test the confirm step from the real login form.
+ *
+ * Note on which ADDRESS you test with: Supabase's built-in sender delivers
+ * only to members of your own Supabase organization. So an org address
+ * arriving proves nothing on its own — always confirm with an outside
+ * address before concluding that SMTP works.
  */
 import { readFileSync } from "fs";
 import { resolve } from "path";
@@ -55,6 +82,17 @@ function loadEnvFile(path: string): boolean {
 const repoRoot = resolve(__dirname, "..");
 loadEnvFile(resolve(repoRoot, ".env.local"));
 loadEnvFile(resolve(repoRoot, ".env"));
+
+/**
+ * Printed on every successful send. Without it the natural next move is to
+ * click the link, get "link is invalid", and start debugging a confirm flow
+ * that was never exercised.
+ */
+const NOT_CLICKABLE =
+  "\n  NOTE: the link in this email will NOT work — clicking it reports\n" +
+  "  'link is invalid', and that is expected. Sign-in pairs the link with a\n" +
+  "  secret the requesting client keeps, and this process discards it on exit.\n" +
+  "  This checks DELIVERY only; test the confirm step from the real login form.";
 
 /** Upstream error text -> the dashboard setting that actually causes it. */
 const CAUSES: { match: RegExp; cause: string }[] = [
@@ -97,11 +135,113 @@ const CAUSES: { match: RegExp; cause: string }[] = [
   },
 ];
 
+/**
+ * Exercise the deployment's own magic-link endpoint — the path real users take,
+ * using the deployment's environment rather than this machine's.
+ */
+async function viaApp(email: string, baseUrl: string): Promise<void> {
+  const endpoint = `${baseUrl.replace(/\/$/, "")}/api/auth/magic-link`;
+  console.log(`POST ${endpoint}`);
+  const startedAt = Date.now();
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const elapsed = Date.now() - startedAt;
+  const text = await res.text();
+  console.log(`\n  status: ${res.status} (${elapsed}ms)`);
+  console.log(`  body:   ${text.slice(0, 500)}`);
+
+  // A 2xx alone does not mean the route ran. Middleware redirecting an API call
+  // to the login page yields a followed redirect and a 200 of HTML, which reads
+  // as success to any caller that only checks res.ok — including the login form.
+  if (res.ok && !text.trimStart().startsWith("{")) {
+    console.log(
+      "\nStatus is 2xx but the body is NOT this route's JSON — it looks like a page.\n" +
+        "Nothing was sent. Something answered before the route did, and because fetch\n" +
+        "follows redirects a caller checking only res.ok would report success:\n" +
+        "  - Middleware redirecting the request to /auth/login (a signed-out API call\n" +
+        "    must never be redirected — it has to return JSON).\n" +
+        "  - A rewrite, proxy or CDN page in front of the app.\n" +
+        "Check the app's middleware first."
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  if (res.ok) {
+    console.log(NOT_CLICKABLE);
+    console.log(
+      "\nThe deployed app ACCEPTED the send, so its Supabase call returned no error.\n" +
+        "If this mail never arrives while a direct send to the same address does, the two\n" +
+        "runs are not talking to the same project: compare the URL printed above against\n" +
+        "NEXT_PUBLIC_SUPABASE_URL in the deployment's own environment (Vercel -> Settings\n" +
+        "-> Environment Variables), and check that a redeploy has happened since it was\n" +
+        "last changed — env changes do not apply to already-built deployments."
+    );
+    return;
+  }
+  if (res.status === 429) {
+    console.log(
+      "\nThe app's own limit: 3 magic links per hour per address. Not an SMTP fault —\n" +
+        "wait out the hour or test with a different address."
+    );
+    process.exitCode = 1;
+    return;
+  }
+  if (res.status === 404 || res.status === 405) {
+    console.log(
+      "\nThat endpoint does NOT EXIST at this host — nothing was sent, and this says\n" +
+        "nothing about email. Whatever answered is not serving this app's routes.\n" +
+        "  - Is this the right origin? Try the Vercel deployment URL directly.\n" +
+        "  - Is the domain attached to THIS Vercel project, and is a build assigned\n" +
+        "    to it? A domain pointed elsewhere answers 404 for every route.\n" +
+        "  - Compare with a page route: `curl -I <host>/auth/login`. A 404 there too\n" +
+        "    means the host serves none of the app, not just this endpoint.\n" +
+        "If real users reach the app at this host, sign-in cannot work here at all,\n" +
+        "and any emailed link pointing at it (NEXT_PUBLIC_SITE_URL) is equally dead."
+    );
+    process.exitCode = 1;
+    return;
+  }
+  if (res.status === 401 || res.status === 403) {
+    console.log(
+      "\nThe host refused the request before the app saw it — typically Vercel\n" +
+        "Deployment Protection on a preview URL. Test the public production URL, or\n" +
+        "disable protection for this deployment."
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const looksJson = text.trimStart().startsWith("{");
+  console.log(
+    looksJson
+      ? "\nThe app REJECTED the send. The body above carries the upstream reason; match\n" +
+          "  it against the causes in docs/ops/launch-config.md."
+      : "\nThe response is not this app's JSON, so the request likely never reached the\n" +
+          "  route — a proxy, redirect or error page answered instead. Confirm the origin\n" +
+          "  really serves the app before reading anything into this."
+  );
+  process.exitCode = 1;
+}
+
 async function main(): Promise<void> {
-  const email = process.argv[2];
-  if (!email) {
-    console.error("usage: npx tsx scripts/diagnose-email.ts you@example.com");
+  const args = process.argv.slice(2);
+  const flagIdx = args.indexOf("--via-app");
+  const appBaseUrl = flagIdx === -1 ? null : args[flagIdx + 1];
+  const email = args.find((a) => !a.startsWith("--") && a !== appBaseUrl);
+  if (!email || (flagIdx !== -1 && !appBaseUrl)) {
+    console.error(
+      "usage: npx tsx scripts/diagnose-email.ts you@example.com [--via-app https://your-app.vercel.app]"
+    );
     process.exit(1);
+  }
+
+  if (appBaseUrl) {
+    console.log(`Testing the deployed app's own endpoint for ${email} ...\n`);
+    await viaApp(email, appBaseUrl);
+    return;
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -144,6 +284,7 @@ async function main(): Promise<void> {
 
   if (!error) {
     console.log(`\nSupabase ACCEPTED the send (${elapsed}ms).`);
+    console.log(NOT_CLICKABLE);
     console.log(
       "\nThat rules out the whole rejection class — credentials, CAPTCHA and rate limits\n" +
         "would all have returned an error here, because GoTrue sends synchronously. The\n" +
@@ -162,7 +303,15 @@ async function main(): Promise<void> {
         "      -> Custom SMTP is live but Resend is dropping it. Open Resend -> Emails:\n" +
         "         if the message is not listed, the credentials point at a different\n" +
         "         project; if it is, read its status (bounced, suppressed, spam) and\n" +
-        "         confirm the sending domain shows Verified."
+        "         confirm the sending domain shows Verified.\n" +
+        "\n" +
+        "  A checked 'Enable Custom SMTP' box is not proof it is in effect — an unsaved\n" +
+        "  form, or the setting living on a different project than the one this script\n" +
+        "  just used, both present exactly as the built-in sender. Resend -> Emails is\n" +
+        "  the authority: if this send is not listed there, Resend was not in the path.\n" +
+        "\n" +
+        "  If mail arrives from here but not from the app, re-run with --via-app against\n" +
+        "  the deployment to test that path with ITS environment."
     );
     return;
   }

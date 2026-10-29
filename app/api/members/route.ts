@@ -7,6 +7,7 @@ import { requireGroupDriver } from "@/lib/auth/requireDriver";
 import { getActiveGroupId, requireActiveGroupId } from "@/lib/group";
 import { enforceRateLimit, getIdentifier } from "@/lib/rate-limit";
 import { log } from "@/lib/log";
+import { resolveSiteUrl } from "@/lib/auth/siteUrl";
 
 export const dynamic = "force-dynamic";
 
@@ -125,7 +126,7 @@ export async function POST(req: Request) {
   // away and never gets an invite — which is not a failure to warn about.
   let emailed: boolean | null = null;
   if (invite) {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? new URL(req.url).origin;
+    const siteUrl = resolveSiteUrl(req);
     // The pending membership is already durable (member_invites row) and will
     // be claimed on next sign-in regardless, so a failed/missing invite email
     // degrades cleanly rather than failing the request — matching the project's

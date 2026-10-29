@@ -25,8 +25,23 @@ const securityHeaders = [
   },
   {
     key: "Content-Security-Policy",
-    value:
-      "default-src 'self'; connect-src 'self' https://*.supabase.co https://*.googleapis.com https://*.sentry.io; img-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'none'",
+    // Cloudflare Turnstile (components/Turnstile.tsx) needs all three of
+    // script-src (its api.js), frame-src (the widget renders in an iframe —
+    // without an explicit directive this falls back to default-src and is
+    // blocked) and connect-src (the challenge round-trip). Missing any one of
+    // them leaves the widget unable to load, and because LoginForm keeps the
+    // submit button disabled until a token arrives, that silently makes
+    // sign-in impossible rather than merely dropping the CAPTCHA.
+    value: [
+      "default-src 'self'",
+      "connect-src 'self' https://*.supabase.co https://*.googleapis.com https://*.sentry.io https://challenges.cloudflare.com",
+      "img-src 'self' data: blob:",
+      "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+      "style-src 'self' 'unsafe-inline'",
+      "font-src 'self' data:",
+      "frame-src https://challenges.cloudflare.com",
+      "frame-ancestors 'none'",
+    ].join("; "),
   },
 ];
 
