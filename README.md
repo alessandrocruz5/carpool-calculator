@@ -2,6 +2,8 @@
 
 A PWA for splitting carpool costs per leg (morning/evening) with a driver-favored ratio.
 
+www.sabay.cc
+
 ## Split scheme
 
 - 1 passenger: 40 driver / 60 passenger
